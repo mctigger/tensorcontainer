@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rtd"
+version = "0.1.0"
+description = "Short description here"
+authors = [{name="Your Name", email="you@example.com"}]
+license = {text = "MIT"}
+dependencies = [
+    "torch"
+]
+readme = "README.md"
+requires-python = ">=3.8"
+
+[tool.setuptools.packages.find]
+where = ["src"]
