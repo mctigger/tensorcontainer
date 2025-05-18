@@ -77,7 +77,7 @@ class TensorDict(MutableMapping[str, TDCompatible]):
 
         return data
 
-    def _check_tensor_shape(self, tensor: Tensor, shape: torch.Size):
+    def _check_tensor_shape(self, tensor: TDCompatible, shape: torch.Size):
         """
         Check if the tensor shape matches the batch_shape of the tensordict.
         """
@@ -131,6 +131,17 @@ class TensorDict(MutableMapping[str, TDCompatible]):
 
     def items(self):
         return self.data.items()
+
+    def update(self, mapping: Optional[Mapping[str, TDCompatible]] = {}, **kwargs):
+        data = {**mapping, **kwargs}
+
+        update_td = TensorDict(
+            data,
+            self.shape,
+            self.device,
+        )
+        for k, v in update_td.items():
+            self.data[k] = v
 
     def _update_shape(self, shape, fn):
         dummy = torch.empty(*shape, 1)
