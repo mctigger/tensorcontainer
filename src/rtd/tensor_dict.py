@@ -119,6 +119,16 @@ class TensorDict(MutableMapping[str, TDCompatible]):
     def __setitem__(self, key, value):
         self.data[key] = value
 
+    def copy(self):
+        data = {}
+        for k, v in self.data.items():
+            if isinstance(v, TensorDict):
+                data[k] = v.copy()
+            elif isinstance(v, Tensor):
+                data[k] = v
+
+        return TensorDict(data, self.shape, self.device)
+
     def items(self):
         return self.data.items()
 
