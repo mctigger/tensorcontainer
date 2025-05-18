@@ -1,7 +1,10 @@
 from abc import ABC, abstractmethod
-from typing import Dict, Any
+from typing import Any, Dict
+
+from torch import Size, Tensor
+from torch.distributions import Distribution, Independent, Normal
+
 from rtd.tensor_dict import TensorDict
-from torch.distributions import Independent, Normal
 
 
 class TensorDistribution(TensorDict, ABC):
@@ -13,7 +16,31 @@ class TensorDistribution(TensorDict, ABC):
         self.distribution_properties = distribution_properties
 
     @abstractmethod
-    def dist(self): ...
+    def dist(self) -> Distribution: ...
+
+    def rsample(self, sample_shape: Size = Size()) -> Tensor:
+        return self.dist().rsample(sample_shape)
+
+    def sample(self, sample_shape: Size = Size()) -> Tensor:
+        return self.dist().sample(sample_shape)
+
+    def entropy(self) -> Tensor:
+        return self.dist().entropy()
+
+    def log_prob(self, value: Tensor) -> Tensor:
+        return self.dist().log_prob(value)
+
+    @property
+    def mean(self) -> Tensor:
+        return self.dist().mean
+
+    @property
+    def stddev(self) -> Tensor:
+        return self.dist().stddev
+
+    @property
+    def mode(self) -> Tensor:
+        return self.dist().mode
 
     def apply(self, fn):
         td = super().apply(fn)
