@@ -1,14 +1,18 @@
 from __future__ import annotations
+
 import functools
-from typing import Any, Callable, List, Optional, Tuple, TypeAlias, Union
+from collections.abc import MutableMapping
+from typing import Callable, Dict, List, Mapping, Optional, Tuple, TypeAlias, Union
 
 import torch
 from torch import Tensor
 
-from rtd.utils import NestedDict, apply_leaves, get_leaves, zip_apply_leaves
-from rtd.validation import check_leaves_devices_match
 from rtd import config
+from rtd.errors import ShapeMismatchError
+from rtd.utils import apply_leaves, get_leaves
 
+TDCompatible: TypeAlias = Union[Tensor, "TensorDict"]
+NestedTDCompatible: TypeAlias = Union[TDCompatible, Dict[str, TDCompatible]]
 
 HANDLED_FUNCTIONS = {}
 
@@ -24,7 +28,7 @@ def implements(torch_function):
     return decorator
 
 
-class TensorDict:
+class TensorDict(MutableMapping[str, TDCompatible]):
     """Wrapper around (nested) dictionaries of torch.Tensor that applies operations to all tensors in the dict.
 
     Note: TensorDict does not copy the input data!
@@ -36,20 +40,52 @@ class TensorDict:
 
     validate_args: bool = config.validate_args
 
-    def __init__(self, data: NestedDict, shape, device: Optional[torch.device] = None):
-        if device is None:
-            check_leaves_devices_match(data, validate_args=self.validate_args)
-
-        self.device = device
-        self.data = data
+    def __init__(
+        self,
+        dictionary: Mapping[str, NestedTDCompatible],
+        shape: Tuple[int, ...],
+        device: Optional[torch.device] = None,
+    ):
+        shape = torch.Size(shape)
         self.shape = shape
+        self.device = device
+        self.data = self._convert_dict_to_tensordict(dictionary, shape, device)
 
-    @classmethod
-    def extract(cls, tensor_dict):
-        if isinstance(tensor_dict, TensorDict):
-            return {k: TensorDict.extract(v) for k, v in tensor_dict.data.items()}
-        else:
-            return tensor_dict
+    def _convert_dict_to_tensordict(
+        self,
+        dictionary: Mapping[str, NestedTDCompatible],
+        shape,
+        device: Optional[torch.device] = None,
+    ) -> Dict[str, TDCompatible]:
+        data = {}
+        for k, v in dictionary.items():
+            #
+            try:
+                if isinstance(v, TensorDict):
+                    data[k] = TensorDict(v.data, shape, device)
+                elif isinstance(v, MutableMapping):
+                    data[k] = TensorDict(v, shape, device)
+                elif isinstance(v, Tensor):
+                    self._check_tensor_shape(v, shape)
+                    data[k] = v
+                else:
+                    raise TypeError(
+                        f"Unsupported type {type(v)} for key {k}. Expected Tensor, TensorDict, or MutableMapping."
+                    )
+            except Exception as e:
+                raise RuntimeError(f"Error adding key {k} to TensorDict. ") from e
+
+        return data
+
+    def _check_tensor_shape(self, tensor: Tensor, shape: torch.Size):
+        """
+        Check if the tensor shape matches the batch_shape of the tensordict.
+        """
+        if tensor.shape[: len(shape)] != shape:
+            raise ShapeMismatchError(
+                f"Tensor shape {tensor.shape} does not match expected batch_shape {shape}.",
+                tensor,
+            )
 
     @classmethod
     def generate_shape(cls, data):
@@ -65,7 +101,16 @@ class TensorDict:
 
         return shape
 
-    def __getitem__(self, key):
+    def __delitem__(self, key: str):
+        del self.data[key]
+
+    def __iter__(self):
+        return iter(self.data)
+
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, key: str) -> Union[Tensor, TensorDict]:
         if isinstance(key, str):
             return self.data[key]
 
@@ -85,27 +130,34 @@ class TensorDict:
         return new_shape
 
     @classmethod
-    def _zip_update_shape(self, shapes, fn):
-        dummy = [torch.empty(*s, 1) for s in shapes]
-        new_dummy = fn(*dummy)
-        new_shape = new_dummy.shape[:-1]
+    def _zip_update_shape(cls, shapes, fn):
+        dummy = [torch.empty(*s) for s in shapes]
+        new_dummy = fn(dummy)
+        new_shape = new_dummy.shape
 
         return new_shape
 
-    def apply(self, fn: Callable[[Tensor], Tensor]) -> TensorDict:
-        data = apply_leaves(self.data, fn)
+    def apply(self, fn: Callable[[TDCompatible], TDCompatible]) -> TensorDict:
+        data = {k: fn(v) for k, v in self.data.items()}
         shape = self._update_shape(self.shape, fn)
 
         return TensorDict(data, shape)
 
     @classmethod
     def zip_apply(
-        cls, tensor_dicts: List[TensorDict], fn: Callable[[Tensor], Tensor]
+        cls,
+        tensor_dicts: Union[List[TensorDict], Tuple[TensorDict]],
+        fn: Callable[[List[TDCompatible]], TDCompatible],
     ) -> TensorDict:
-        shapes = [t.shape for t in tensor_dicts]
-        datas = [t.data for t in tensor_dicts]
+        data = {}
+        for k in tensor_dicts[0].keys():
+            for t in tensor_dicts:
+                if k not in t:
+                    raise KeyError(f"Key {k} not found in all TensorDicts.")
 
-        data = zip_apply_leaves(datas, fn)
+            data[k] = fn([t[k] for t in tensor_dicts])
+
+        shapes = [t.shape for t in tensor_dicts]
         shape = TensorDict._zip_update_shape(shapes, fn)
 
         return TensorDict(data, shape)
@@ -150,17 +202,14 @@ class TensorDict:
         return key in self.data
 
 
-# torch methods that already are implemented for TensorDict
-
-
 @implements(torch.stack)
 def _stack(tensors: Union[Tuple[TensorDict, ...], List[TensorDict]], dim: int = 0):
-    return TensorDict.zip_apply(tensors, lambda *x: torch.stack(x, dim))
+    return TensorDict.zip_apply(tensors, lambda x: torch.stack(x, dim))
 
 
 @implements(torch.cat)
 def _cat(tensors: Union[Tuple[TensorDict, ...], List[TensorDict]], dim: int = 0):
-    return TensorDict.zip_apply(tensors, lambda *x: torch.cat(x, dim))
+    return TensorDict.zip_apply(tensors, lambda x: torch.cat(x, dim))
 
 
 @implements(torch.unsqueeze)
