@@ -143,6 +143,25 @@ class TensorDict(MutableMapping[str, TDCompatible]):
         for k, v in update_td.items():
             self.data[k] = v
 
+    def flatten_keys(self, sep: str = ".") -> TensorDict:
+        """Flattens the keys of the TensorDict.
+
+        Args:
+            sep (str): Separator to use for flattening keys. Defaults to '.'.
+
+        Returns:
+            TensorDict: A new TensorDict with flattened keys.
+        """
+        data = {}
+        for k, v in self.data.items():
+            if isinstance(v, TensorDict):
+                for sub_k, sub_v in v.flatten_keys(sep).items():
+                    data[f"{k}{sep}{sub_k}"] = sub_v
+            else:
+                data[k] = v
+
+        return TensorDict(data, self.shape)
+
     def _update_shape(self, shape, fn):
         dummy = torch.empty(*shape, 1)
         new_dummy = fn(dummy)
