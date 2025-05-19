@@ -70,12 +70,11 @@ class TensorDict(MutableMapping[str, TDCompatible]):
         device: Optional[torch.device] = None,
     ):
         for k, v in dictionary.items():
-            #
             try:
-                if isinstance(v, MutableMapping):
-                    self[k] = TensorDict(v, shape, device)
-                elif isinstance(v, (Tensor, TensorDict)):
+                if isinstance(v, (Tensor, TensorDict)):
                     self[k] = v
+                elif isinstance(v, MutableMapping):
+                    self[k] = TensorDict(v, shape, device)
                 else:
                     raise TypeError(
                         f"Unsupported type {type(v)} for key {k}. Expected Tensor, TensorDict, or MutableMapping."
