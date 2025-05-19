@@ -178,7 +178,7 @@ class TensorDict(MutableMapping[str, TDCompatible]):
             else:
                 data[k] = v
 
-        return TensorDict(data, self.shape)
+        return TensorDict(data, self.shape, self.device)
 
     def _update_shape_and_device(self, shape, fn):
         dummy = torch.empty(*shape, 1)
