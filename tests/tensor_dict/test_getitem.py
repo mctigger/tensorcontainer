@@ -4,6 +4,17 @@ import torch
 from rtd.tensor_dict import TensorDict
 
 
+def normalize_device(dev: torch.device) -> torch.device:
+    d = torch.device(dev)
+    # If no index was given, fill in current_device() for CUDA, leave CPU as-is
+    if d.type == "cuda" and d.index is None:
+        idx = (
+            torch.cuda.current_device()
+        )  # e.g. 0 :contentReference[oaicite:4]{index=4}
+        return torch.device(f"cuda:{idx}")
+    return d
+
+
 @pytest.fixture
 def nested_dict():
     def _make(shape):
@@ -73,3 +84,39 @@ def test_slice_leaf_tensor_content_and_shape(nested_dict):
     assert torch.equal(slice_["x"]["a"], data["x"]["a"][1, 0])
     assert torch.equal(slice_["x"]["b"], data["x"]["b"][1, 0])
     assert torch.equal(slice_["y"], data["y"][1, 0])
+
+
+@pytest.mark.parametrize("device", ["cpu", "cuda"])
+def test_slice_preserves_device(nested_dict, device):
+    if device == "cuda" and not torch.cuda.is_available():
+        pytest.skip("CUDA not available")
+
+    # prepare data on the target device
+    data = nested_dict((2, 2))
+
+    def to_device(obj):
+        if isinstance(obj, torch.Tensor):
+            return obj.to(device)
+        # dict of tensors or nested dicts
+        return {k: to_device(v) for k, v in obj.items()}
+
+    data = to_device(data)
+
+    # create and slice
+    td = TensorDict(data, shape=(2, 2), device=torch.device(device))
+    sliced = td[0]
+
+    # TensorDict.device should be unchanged
+    assert normalize_device(sliced.device) == normalize_device(td.device)
+
+    # leaf tensors should live on the same device
+    assert normalize_device(sliced["y"].device) == normalize_device(
+        torch.device(device)
+    )
+    nested = sliced["x"]
+    assert normalize_device(nested["a"].device) == normalize_device(
+        torch.device(device)
+    )
+    assert normalize_device(nested["b"].device) == normalize_device(
+        torch.device(device)
+    )

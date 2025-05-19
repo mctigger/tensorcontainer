@@ -180,8 +180,8 @@ class TensorDict(MutableMapping[str, TDCompatible]):
 
         return TensorDict(data, self.shape, self.device)
 
-    def _update_shape_and_device(self, shape, fn):
-        dummy = torch.empty(*shape, 1)
+    def _update_shape_and_device(self, shape, device, fn):
+        dummy = torch.empty(*shape, 1, device=device)
         new_dummy = fn(dummy)
         new_shape = new_dummy.shape[:-1]
         new_device = new_dummy.device
@@ -189,8 +189,8 @@ class TensorDict(MutableMapping[str, TDCompatible]):
         return new_shape, new_device
 
     @classmethod
-    def _zip_update_shape_and_device(cls, shapes, fn):
-        dummy = [torch.empty(*s) for s in shapes]
+    def _zip_update_shape_and_device(cls, shapes, device, fn):
+        dummy = [torch.empty(*s, device=device) for s in shapes]
         new_dummy = fn(dummy)
         new_shape = new_dummy.shape
         new_device = new_dummy[0].device
@@ -199,7 +199,7 @@ class TensorDict(MutableMapping[str, TDCompatible]):
 
     def apply(self, fn: Callable[[TDCompatible], TDCompatible]) -> TensorDict:
         data = {k: fn(v) for k, v in self.data.items()}
-        shape, device = self._update_shape_and_device(self.shape, fn)
+        shape, device = self._update_shape_and_device(self.shape, self.device, fn)
 
         return TensorDict(data, shape, device)
 
@@ -218,7 +218,9 @@ class TensorDict(MutableMapping[str, TDCompatible]):
             data[k] = fn([t[k] for t in tensor_dicts])
 
         shapes = [t.shape for t in tensor_dicts]
-        shape, device = TensorDict._zip_update_shape_and_device(shapes, fn)
+        shape, device = TensorDict._zip_update_shape_and_device(
+            shapes, tensor_dicts[0].device, fn
+        )
 
         return TensorDict(data, shape, device)
 
