@@ -135,11 +135,8 @@ class TensorBernoulli(TensorDistribution):
             data,
             shape,
             device,
-            {"reinterpreted_batch_ndims": reinterpreted_batch_ndims},
+            {"reinterpreted_batch_ndims": reinterpreted_batch_ndims, "soft": soft},
         )
-
-        self.reinterpreted_batch_ndims = reinterpreted_batch_ndims
-        self.soft = soft
 
     def dist(self) -> Distribution:
         kwargs = {}
@@ -147,15 +144,15 @@ class TensorBernoulli(TensorDistribution):
             kwargs["logits"] = self["logits"]
         if "probs" in self:
             kwargs["probs"] = self["probs"]
-        if self.soft:
+        if self.distribution_properties["soft"]:
             return Independent(
                 SoftBernoulli(**kwargs),
-                self.reinterpreted_batch_ndims,
+                self.distribution_properties["reinterpreted_batch_ndims"],
             )
         else:
             return Independent(
                 Bernoulli(**kwargs),
-                self.reinterpreted_batch_ndims,
+                self.distribution_properties["reinterpreted_batch_ndims"],
             )
 
 

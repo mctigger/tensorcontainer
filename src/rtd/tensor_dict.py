@@ -276,15 +276,18 @@ class TensorDict(MutableMapping[str, TDCompatible]):
 
 @implements(torch.stack)
 def _stack(tensors: Union[Tuple[TensorDict, ...], List[TensorDict]], dim: int = 0):
-    return TensorDict.zip_apply(tensors, lambda x: torch.stack(x, dim))
+    cls = type(tensors[0])
+    return cls.zip_apply(tensors, lambda x: torch.stack(x, dim))
 
 
 @implements(torch.cat)
 def _cat(tensors: Union[Tuple[TensorDict, ...], List[TensorDict]], dim: int = 0):
-    return TensorDict.zip_apply(tensors, lambda x: torch.cat(x, dim))
+    cls = type(tensors[0])
+    return cls.zip_apply(tensors, lambda x: torch.cat(x, dim))
 
 
 @implements(torch.unsqueeze)
 def _unsqueeze(tensor: TensorDict, dim: int = 0):
+    cls = type(tensor)
     assert dim <= len(tensor.shape)
-    return TensorDict.apply(tensor, lambda x: torch.unsqueeze(x, dim))
+    return cls.apply(tensor, lambda x: torch.unsqueeze(x, dim))
