@@ -2,7 +2,14 @@ from abc import ABC, abstractmethod
 from typing import Any, Dict
 
 from torch import Size, Tensor
-from torch.distributions import Distribution, Independent, Normal, Bernoulli
+from torch.distributions import (
+    Distribution,
+    Independent,
+    Normal,
+    Bernoulli,
+    register_kl,
+    kl_divergence,
+)
 import torch
 from rtd.tensor_dict import TensorDict
 
@@ -150,3 +157,24 @@ class TensorBernoulli(TensorDistribution):
                 Bernoulli(**kwargs),
                 self.reinterpreted_batch_ndims,
             )
+
+
+@register_kl(TensorDistribution, TensorDistribution)
+def registerd_td_td(
+    td_a: TensorDistribution,
+    td_b: TensorDistribution,
+):
+    return kl_divergence(td_a.dist(), td_b.dist())
+
+
+@register_kl(TensorDistribution, Distribution)
+def register_td_d(td: TensorDistribution, d: Distribution):
+    return kl_divergence(td.dist(), d)
+
+
+@register_kl(Distribution, TensorDistribution)
+def registerd_d_td(
+    d: Distribution,
+    td: TensorDistribution,
+):
+    return kl_divergence(d, td.dist())
