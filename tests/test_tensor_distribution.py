@@ -10,7 +10,9 @@ from rtd.tensor_distribution import TensorNormal, TensorDistribution
 def tensor_normal():
     loc = torch.tensor([[0.0, 1.0], [2.0, 3.0]])
     scale = torch.tensor([[1.0, 1.0], [1.0, 1.0]])
-    return TensorNormal(loc, scale, reinterpreted_batch_ndims=1, shape=[2])
+    return TensorNormal(
+        loc, scale, reinterpreted_batch_ndims=1, shape=[2], device="cpu"
+    )
 
 
 def test_tensordict_access(tensor_normal):

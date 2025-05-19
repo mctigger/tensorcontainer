@@ -33,7 +33,7 @@ def test_modify_top_level_structure_on_slice_does_not_affect_original(nested_dic
     sliced = td[0]
 
     # add a new top‐level key to the slice
-    sliced["extra"] = torch.tensor([1, 2, 3])
+    sliced["extra"] = torch.tensor([[1, 2], [1, 2]])
     assert "extra" in sliced
     assert "extra" not in td
 

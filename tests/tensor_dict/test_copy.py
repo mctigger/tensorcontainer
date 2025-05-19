@@ -49,7 +49,7 @@ def test_mutating_nested_copy_does_not_affect_original(nested_dict):
     td_copy = td.copy()
 
     # modify the copy's nested structure
-    td_copy["x"]["c"] = torch.tensor([[42], [43], [44]])
+    td_copy["x"]["c"] = torch.tensor([[42], [43], [44], [45]])
     assert "c" in td_copy["x"]
     # original remains unchanged
     assert "c" not in td["x"]

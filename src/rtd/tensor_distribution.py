@@ -3,15 +3,15 @@ from typing import Any, Dict
 
 from torch import Size, Tensor
 from torch.distributions import Distribution, Independent, Normal
-
+import torch
 from rtd.tensor_dict import TensorDict
 
 
 class TensorDistribution(TensorDict, ABC):
     distribution_properties: Dict[str, Any]
 
-    def __init__(self, data, shape, distribution_properties):
-        super().__init__(data, shape)
+    def __init__(self, data, shape, device, distribution_properties):
+        super().__init__(data, shape, device)
 
         self.distribution_properties = distribution_properties
 
@@ -48,7 +48,7 @@ class TensorDistribution(TensorDict, ABC):
         cls = type(self)
         obj = cls.__new__(cls)
         TensorDistribution.__init__(
-            obj, td.data, td.shape, self.distribution_properties
+            obj, td.data, td.shape, td.device, self.distribution_properties
         )
 
         return obj
@@ -59,17 +59,25 @@ class TensorDistribution(TensorDict, ABC):
 
         obj = cls.__new__(cls)
         TensorDistribution.__init__(
-            obj, td.data, td.shape, tensor_dicts[0].distribution_properties
+            obj, td.data, td.shape, td.device, tensor_dicts[0].distribution_properties
         )
 
         return obj
 
 
 class TensorNormal(TensorDistribution):
-    def __init__(self, loc, scale, reinterpreted_batch_ndims, shape=...):
+    def __init__(
+        self,
+        loc,
+        scale,
+        reinterpreted_batch_ndims,
+        shape=...,
+        device=torch.device("cpu"),
+    ):
         super().__init__(
             {"loc": loc, "scale": scale},
             shape,
+            device,
             {"reinterpreted_batch_ndims": reinterpreted_batch_ndims},
         )
 
