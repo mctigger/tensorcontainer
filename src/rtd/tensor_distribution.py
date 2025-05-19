@@ -61,6 +61,19 @@ class TensorDistribution(TensorDict, ABC):
     def mode(self) -> Tensor:
         return self.dist().mode
 
+    def copy(self):
+        td = super().copy()
+        cls = type(self)
+        obj = cls.__new__(cls)
+        TensorDistribution.__init__(
+            obj,
+            td.data,
+            td.shape,
+            td.device,
+            self.distribution_properties,
+        )
+        return obj
+
     def apply(self, fn):
         td = super().apply(fn)
 
