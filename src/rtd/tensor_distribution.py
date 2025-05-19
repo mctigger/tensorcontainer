@@ -2,9 +2,21 @@ from abc import ABC, abstractmethod
 from typing import Any, Dict
 
 from torch import Size, Tensor
-from torch.distributions import Distribution, Independent, Normal
+from torch.distributions import Distribution, Independent, Normal, Bernoulli
 import torch
 from rtd.tensor_dict import TensorDict
+
+
+class SoftBernoulli(Bernoulli):
+    def log_prob(self, value):
+        # Compute log probabilities
+        log_p = super().log_prob(torch.ones_like(value))  # log(p)
+        log_1_p = super().log_prob(torch.zeros_like(value))  # log(1 - p)
+
+        # Compute soft BCE using the original formula
+        log_probs = value * log_p + (1 - value) * log_1_p
+
+        return log_probs
 
 
 class TensorDistribution(TensorDict, ABC):
@@ -89,3 +101,52 @@ class TensorNormal(TensorDistribution):
             ),
             self.distribution_properties["reinterpreted_batch_ndims"],
         )
+
+
+class TensorBernoulli(TensorDistribution):
+    def __init__(
+        self,
+        logits=None,
+        probs=None,
+        soft: bool = False,
+        reinterpreted_batch_ndims=1,
+        shape=...,
+        device=torch.device("cpu"),
+    ):
+        if logits is None and probs is None:
+            raise ValueError("Either logits or probs must be provided.")
+        if logits is not None and probs is not None:
+            raise ValueError("Only one of logits or probs should be provided.")
+
+        data = {}
+        if logits is not None:
+            data["logits"] = logits
+        if probs is not None:
+            data["probs"] = probs
+
+        super().__init__(
+            data,
+            shape,
+            device,
+            {"reinterpreted_batch_ndims": reinterpreted_batch_ndims},
+        )
+
+        self.reinterpreted_batch_ndims = reinterpreted_batch_ndims
+        self.soft = soft
+
+    def dist(self) -> Distribution:
+        kwargs = {}
+        if "logits" in self:
+            kwargs["logits"] = self["logits"]
+        if "probs" in self:
+            kwargs["probs"] = self["probs"]
+        if self.soft:
+            return Independent(
+                SoftBernoulli(**kwargs),
+                self.reinterpreted_batch_ndims,
+            )
+        else:
+            return Independent(
+                Bernoulli(**kwargs),
+                self.reinterpreted_batch_ndims,
+            )
