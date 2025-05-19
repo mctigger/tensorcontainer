@@ -6,8 +6,7 @@ from typing import Callable, Dict, List, Mapping, Optional, Tuple, TypeAlias, Un
 
 import torch
 from torch import Tensor
-
-from rtd import config
+import torch._dynamo as dynamo
 from rtd.errors import ShapeMismatchError
 from rtd.utils import apply_leaves, get_leaves
 
@@ -49,8 +48,7 @@ class TensorDict(MutableMapping[str, TDCompatible]):
     on a TensorDict
     """
 
-    validate_args: bool = config.validate_args
-
+    @dynamo.disable
     def __init__(
         self,
         dictionary: Mapping[str, NestedTDCompatible],
