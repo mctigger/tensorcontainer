@@ -1,127 +1,216 @@
+# tests/test_tensordict_compile.py
+
 import pytest
 import torch
-from torch import Tensor
+import torch.utils._pytree as pytree
 
+# Adjust the import path to match your project structure
 from rtd.tensor_dict import TensorDict
 
-# Skip these tests if torch.compile is not available (requires PyTorch ≥2.0)
-compile_fn = getattr(torch, "compile", None)
+
+# Helper function for comprehensive TensorDict comparison
+def assert_td_equal(td_a: TensorDict, td_b: TensorDict):
+    """
+    Asserts that two TensorDicts are equal in shape, device, structure, and values.
+    """
+    assert td_a.shape == td_b.shape, "Shape mismatch"
+    assert td_a.device == td_b.device, "Device mismatch"
+
+    leaves_a, spec_a = pytree.tree_flatten(td_a)
+    leaves_b, spec_b = pytree.tree_flatten(td_b)
+
+    assert spec_a == spec_b, "PyTree spec mismatch (keys or nesting)"
+
+    for tensor_a, tensor_b in zip(leaves_a, leaves_b):
+        assert torch.allclose(tensor_a, tensor_b), "Tensor values mismatch"
+
+    print(f"Assertion successful for TensorDicts with shape {td_a.shape}")
 
 
-@pytest.mark.skipif(compile_fn is None, reason="torch.compile not available")
-def test_compile_tensor_dict_creation():
-    a = torch.randn(5, 2)
-
-    def make_td():
-        data = {
-            "a": a,
-            "b": torch.arange(10, dtype=torch.float32).reshape(5, 2),
-        }
-        # create a new TensorDict inside the compiled function
-        return TensorDict(data, shape=(5,), device=torch.device("cpu"))
-
-    # compile the constructor
-    make_td_compiled = torch.compile(make_td)
-
-    td_ref = make_td()
-    td_cmp = make_td_compiled()
-
-    # Both outputs must be TensorDict with same keys, shape, and contents
-    assert isinstance(td_cmp, TensorDict)
-    assert td_cmp.shape == td_ref.shape
-    assert td_cmp.device == td_ref.device
-    assert set(td_cmp.data.keys()) == set(td_ref.data.keys())
-
-    for k in td_ref.data:
-        v_ref = td_ref.data[k]
-        v_cmp = td_cmp.data[k]
-        assert torch.allclose(v_cmp, v_ref), f"Mismatch in key '{k}'"
+# --- Fixtures for reusable TensorDicts ---
 
 
-@pytest.mark.skipif(compile_fn is None, reason="torch.compile not available")
-def test_compile_simple_arithmetic():
-    # Create a TensorDict with two tensors
-    data = {
-        "a": torch.arange(6, dtype=torch.float32).reshape(2, 3),
-        "b": torch.ones(2, 3, dtype=torch.float32) * 2.0,
+@pytest.fixture
+def base_td_data():
+    """Provides raw data for a simple TensorDict."""
+    return {
+        "obs": torch.randn(4, 5, 3, 32, 32),
+        "reward": torch.randn(4, 5, 1),
     }
-    td = TensorDict(data, shape=(2,), device=torch.device("cpu"))
-
-    # Define a simple function that uses TensorDict operations
-    def fn(x: TensorDict) -> TensorDict:
-        # element‐wise add and multiply
-        y = x.copy()
-        y["sum"] = x["a"] + x["b"]
-        y["scaled"] = (x["a"] * 3.0).view(2, 3)
-        return y
-
-    # Compile the function
-    fn_compiled = torch.compile(fn)
-
-    # Execute both compiled and uncompiled
-    out_ref = fn(td)
-    out_cmp = fn_compiled(td)
-
-    # Both should be TensorDict of same class
-    assert isinstance(out_ref, TensorDict)
-    assert isinstance(out_cmp, TensorDict)
-    # keys match
-    assert set(out_cmp.data.keys()) == set(out_ref.data.keys())
-
-    # values equal
-    for k in out_ref.data:
-        assert torch.allclose(out_cmp.data[k], out_ref.data[k]), f"Mismatch in key {k}"
 
 
-@pytest.mark.skipif(compile_fn is None, reason="torch.compile not available")
-def test_compile_stack_and_to():
-    # Create two TensorDicts
-    td1 = TensorDict({"x": torch.randn(4, 5)}, shape=(4,), device=torch.device("cpu"))
-    td2 = TensorDict({"x": torch.randn(4, 5)}, shape=(4,), device=torch.device("cpu"))
+@pytest.fixture
+def simple_td(base_td_data):
+    """A simple TensorDict instance."""
+    return TensorDict(base_td_data, shape=torch.Size([4, 5]))
 
-    # Function that stacks, moves to CPU, and clones
-    def fn(a: TensorDict, b: TensorDict) -> TensorDict:
-        s = torch.stack([a, b], dim=0)
-        s = s.to(torch.device("cpu"))
-        return s.clone()
 
-    fn_compiled = torch.compile(fn)
+@pytest.fixture
+def nested_td():
+    """A TensorDict with nested structures."""
+    B, T = 2, 3
+    return TensorDict(
+        {
+            "obs": torch.randn(B, T, 10),
+            "nested": TensorDict(
+                {"state": torch.randn(B, T, 5)}, shape=torch.Size([B, T])
+            ),
+        },
+        shape=torch.Size([B, T]),
+    )
 
-    out_ref = fn(td1, td2)
-    out_cmp = fn_compiled(td1, td2)
 
-    # Both should be TensorDict
-    assert isinstance(out_cmp, TensorDict)
-    # Shape should be (2, 4)
-    assert out_cmp.shape == out_ref.shape == (2, 4)
-    # Underlying tensor data equal
-    for k in out_ref.data:
-        assert torch.allclose(out_cmp.data[k], out_ref.data[k])
+# --- Test Cases ---
+
+
+def test_creation_in_compiled_fn(base_td_data):
+    """Tests if a TensorDict can be created inside a compiled function."""
+
+    def fn(obs, reward):
+        # Create from raw tensors
+        td = TensorDict({"obs": obs, "reward": reward}, shape=torch.Size([4, 5]))
+        # Simple modification
+        td["reward"] = td["reward"] * 2.0
+        return td
+
+    compiled_fn = torch.compile(fn)
+
+    obs, reward = base_td_data["obs"], base_td_data["reward"]
+
+    eager_result = fn(obs, reward)
+    compiled_result = compiled_fn(obs, reward)
+
+    assert_td_equal(eager_result, compiled_result)
+
+
+def test_set_compiled(simple_td):
+    """Tests various forms of setetting values in a compiled function."""
+
+    def fn(td):
+        td["reward"] = td["reward"] * 2.0
+        return td["reward"]
+
+    compiled_fn = torch.compile(fn)
+
+    eager_result = fn(simple_td)
+    compiled_result = compiled_fn(simple_td)
+
+    assert_td_equal(eager_result, compiled_result)
+
+
+def test_stack_compiled(simple_td):
+    """Tests torch.stack on TensorDicts within a compiled function."""
+
+    td_a = simple_td
+    td_b = td_a.clone()
+    td_b["reward"] += 1.0  # Make it different
+
+    def fn(d1, d2):
+        return torch.stack([d1, d2], dim=0)
+
+    compiled_fn = torch.compile(fn)
+
+    eager_result = fn(td_a, td_b)
+    compiled_result = compiled_fn(td_a, td_b)
+
+    # Expected shape is new_dim + old_shape
+    assert eager_result.shape == torch.Size([2, 4, 5])
+    assert_td_equal(eager_result, compiled_result)
+
+
+def test_cat_compiled(simple_td):
+    """Tests torch.cat on TensorDicts within a compiled function."""
+
+    td_a = simple_td
+    td_b = td_a.clone()
+
+    def fn(d1, d2):
+        # Concatenate along the second batch dimension (dim=1)
+        return torch.cat([d1, d2], dim=1)
+
+    compiled_fn = torch.compile(fn)
+
+    eager_result = fn(td_a, td_b)
+    compiled_result = compiled_fn(td_a, td_b)
+
+    # Shape: [4, 5+5] -> [4, 10]
+    assert eager_result.shape == torch.Size([4, 10])
+    assert_td_equal(eager_result, compiled_result)
+
+
+@pytest.mark.parametrize(
+    "index",
+    [
+        0,
+        slice(1, 3),
+        torch.tensor([0, 3]),  # advanced indexing
+    ],
+)
+def test_indexing_compiled(simple_td, index):
+    """Tests various forms of indexing within a compiled function."""
+
+    def fn(td):
+        return td[index]
+
+    compiled_fn = torch.compile(fn)
+
+    eager_result = fn(simple_td)
+    compiled_result = compiled_fn(simple_td)
+
+    assert_td_equal(eager_result, compiled_result)
+
+
+def test_nested_td_compiled(nested_td):
+    """Tests operations on a nested TensorDict inside a compiled function."""
+
+    def fn(td):
+        # Slice the nested structure
+        sliced_td = td[0]
+        # Modify a leaf in the nested part
+        sliced_td["nested"]["state"] = sliced_td["nested"]["state"] + 5.0
+        return sliced_td
+
+    compiled_fn = torch.compile(fn)
+
+    eager_result = fn(nested_td)
+    compiled_result = compiled_fn(nested_td)
+
+    # The shape should be the remainder of the original batch shape
+    assert eager_result.shape == torch.Size([3])
+    # The nested TD's shape should also be updated
+    assert eager_result["nested"].shape == torch.Size([3])
+    assert_td_equal(eager_result, compiled_result)
 
 
 @pytest.mark.skipif(
-    compile_fn is None or not torch.cuda.is_available(),
-    reason="torch.compile or CUDA not available",
+    not torch.cuda.is_available(), reason="This test requires a CUDA device"
 )
-def test_compile_on_cuda():
-    # Test that compile works on GPU
-    td = TensorDict(
-        {"y": torch.randn(3, 3, device="cuda")},
-        shape=(3,),
-        device=torch.device("cuda"),
-    )
+def test_device_move_compiled(simple_td):
+    """Tests moving a TensorDict to another device in a compiled function."""
 
-    def fn(x: TensorDict) -> Tensor:
-        # sample a simple operation and return a Tensor
-        return (x["y"] * 0.5).sum()
+    def fn(td):
+        return td.to("cuda")
 
-    fn_compiled = torch.compile(fn)
+    compiled_fn = torch.compile(fn)
 
-    out_ref = fn(td)
-    out_cmp = fn_compiled(td)
+    eager_result = fn(simple_td)
+    compiled_result = compiled_fn(simple_td)
 
-    assert torch.is_tensor(out_cmp)
-    assert torch.allclose(out_cmp, out_ref)
+    assert eager_result.device.type == "cuda"
+    assert_td_equal(eager_result, compiled_result)
 
-    # Ensure the result is on CUDA
-    assert out_cmp.device.type == "cuda"
+
+def test_dtype_move_compiled(simple_td):
+    """Tests changing the dtype of a TensorDict in a compiled function."""
+
+    def fn(td):
+        return td.to(torch.float16)
+
+    compiled_fn = torch.compile(fn)
+
+    eager_result = fn(simple_td)
+    compiled_result = compiled_fn(simple_td)
+
+    # Check one of the leaves for its dtype
+    assert eager_result["obs"].dtype == torch.float16
+    assert_td_equal(eager_result, compiled_result)
