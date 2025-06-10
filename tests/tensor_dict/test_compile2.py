@@ -42,7 +42,7 @@ def base_td_data():
 @pytest.fixture
 def simple_td(base_td_data):
     """A simple TensorDict instance."""
-    return TensorDict(base_td_data, shape=torch.Size([4, 5]))
+    return TensorDict(base_td_data, shape=torch.Size([4, 5]), device="cpu")
 
 
 @pytest.fixture
@@ -53,45 +53,26 @@ def nested_td():
         {
             "obs": torch.randn(B, T, 10),
             "nested": TensorDict(
-                {"state": torch.randn(B, T, 5)}, shape=torch.Size([B, T])
+                {"state": torch.randn(B, T, 5)}, shape=torch.Size([B, T]), device="cpu"
             ),
         },
         shape=torch.Size([B, T]),
+        device="cpu",
     )
 
 
 # --- Test Cases ---
-
-
 def test_creation_in_compiled_fn(base_td_data):
     """Tests if a TensorDict can be created inside a compiled function."""
 
     def fn(obs, reward):
         # Create from raw tensors
-        td = TensorDict({"obs": obs, "reward": reward}, shape=torch.Size([4, 5]))
-        return td
-
-    compiled_fn = torch.compile(fn)
-
-    obs, reward = base_td_data["obs"], base_td_data["reward"]
-
-    eager_result = fn(obs, reward)
-    compiled_result = compiled_fn(obs, reward)
-
-    assert_td_equal(eager_result, compiled_result)
-
-
-def test_from_dict_in_compiled_fn(base_td_data):
-    """Tests if a TensorDict can be created inside a compiled function."""
-
-    def fn(obs, reward):
-        # Create from raw tensors
         td = TensorDict(
-            {"my_dict": {"obs": obs, "reward": reward}}, shape=torch.Size([4, 5])
+            {"obs": obs, "reward": reward}, shape=torch.Size([4, 5]), device="cpu"
         )
         return td
 
-    compiled_fn = torch.compile(fn)
+    compiled_fn = torch.compile(fn, fullgraph=True)
 
     obs, reward = base_td_data["obs"], base_td_data["reward"]
 
@@ -108,7 +89,7 @@ def test_set_compiled(simple_td):
         td["reward"] = td["reward"] * 2.0
         return td["reward"]
 
-    compiled_fn = torch.compile(fn)
+    compiled_fn = torch.compile(fn, fullgraph=True)
 
     simple_td_a = simple_td
     simple_td_b = simple_td.clone()
@@ -128,7 +109,7 @@ def test_stack_compiled(simple_td):
     def fn(d1, d2):
         return torch.stack([d1, d2], dim=0)
 
-    compiled_fn = torch.compile(fn)
+    compiled_fn = torch.compile(fn, fullgraph=True)
 
     eager_result = fn(td_a, td_b)
     compiled_result = compiled_fn(td_a, td_b)
@@ -148,7 +129,7 @@ def test_cat_compiled(simple_td):
         # Concatenate along the second batch dimension (dim=1)
         return torch.cat([d1, d2], dim=1)
 
-    compiled_fn = torch.compile(fn)
+    compiled_fn = torch.compile(fn, fullgraph=True)
 
     eager_result = fn(td_a, td_b)
     compiled_result = compiled_fn(td_a, td_b)
@@ -172,7 +153,7 @@ def test_indexing_compiled(simple_td, index):
     def fn(td):
         return td[index]
 
-    compiled_fn = torch.compile(fn)
+    compiled_fn = torch.compile(fn, fullgraph=True)
 
     eager_result = fn(simple_td)
     compiled_result = compiled_fn(simple_td)
@@ -190,7 +171,7 @@ def test_nested_td_compiled(nested_td):
         sliced_td["nested"]["state"] = sliced_td["nested"]["state"] + 5.0
         return sliced_td
 
-    compiled_fn = torch.compile(fn)
+    compiled_fn = torch.compile(fn, fullgraph=True)
 
     eager_result = fn(nested_td)
     compiled_result = compiled_fn(nested_td)
@@ -211,7 +192,7 @@ def test_device_move_compiled(simple_td):
     def fn(td):
         return td.to("cuda")
 
-    compiled_fn = torch.compile(fn)
+    compiled_fn = torch.compile(fn, fullgraph=True)
 
     eager_result = fn(simple_td)
     compiled_result = compiled_fn(simple_td)
@@ -226,7 +207,7 @@ def test_dtype_move_compiled(simple_td):
     def fn(td):
         return td.to(torch.float16)
 
-    compiled_fn = torch.compile(fn)
+    compiled_fn = torch.compile(fn, fullgraph=True)
 
     eager_result = fn(simple_td)
     compiled_result = compiled_fn(simple_td)

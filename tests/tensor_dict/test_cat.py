@@ -44,9 +44,11 @@ def nested_dict():
 def test_cat_valid(nested_dict, shape, dim):
     data = nested_dict(shape)
     td = TensorDict(data, shape)
+    print("TENSORDICT", td)
 
     # concatenate two copies
     cat_td = torch.cat([td, td], dim=dim)
+    print(cat_td)
 
     # compute expected shape
     ndim = len(shape)

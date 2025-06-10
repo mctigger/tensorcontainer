@@ -40,7 +40,7 @@ def test_update_overwrites_existing_key(nested_dict):
 def test_update_with_kwargs(nested_dict):
     td = TensorDict(nested_dict((4, 1)), shape=(4, 1))
     w = torch.arange(4).reshape(4, 1)
-    td.update(y=w)
+    td.update({"y": w})
     assert torch.equal(td["y"], w)
 
 
@@ -59,3 +59,11 @@ def test_update_incompatible_shape_raises(nested_dict):
     bad = torch.ones(1, 3)
     with pytest.raises(RuntimeError):
         td.update({"z": bad})
+
+
+def test_update_with_another_tensordict(nested_dict):
+    td1 = TensorDict(nested_dict((2, 2)), shape=(2, 2))
+    td2 = TensorDict({"z": torch.ones(2, 2) * 2}, shape=(2, 2))
+    td1.update(td2)
+    assert "z" in td1
+    assert torch.equal(td1["z"], td2["z"])

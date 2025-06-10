@@ -24,11 +24,14 @@ def test_tensordict_repr():
 
     # Check keys
     assert "obs:" in repr_str
-    assert "action: Tensor(shape=(8,)," in repr_str
+    assert "action: Tensor(shape=torch.Size([8]), dtype=torch.int64)" in repr_str
 
     # Check nested keys
-    assert "image: Tensor(shape=(8, 3, 64, 64)" in repr_str
-    assert "state: Tensor(shape=(8, 10)" in repr_str
+    assert (
+        "image: Tensor(shape=torch.Size([8, 3, 64, 64]), dtype=torch.float32)"
+        in repr_str
+    )
+    assert "state: Tensor(shape=torch.Size([8, 10]), dtype=torch.float32)" in repr_str
 
     # Check dtypes
     assert "dtype=torch.float32" in repr_str or "dtype=torch.float" in repr_str
