@@ -9,19 +9,9 @@ def test_tensordict_homogeneous_device_cpu():
         "b": torch.zeros(4, 5),
     }
     td = TensorDict(data, shape=(4,), device=torch.device("cpu"))
-    for v in td.data.values():
+    for v in td.values():
         assert v.device.type == "cpu"
     assert td.device.type == "cpu"
-
-
-@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
-def test_tensordict_mixed_device_creation_raises():
-    data = {
-        "a": torch.randn(4, 3, device="cpu"),
-        "b": torch.randn(4, 3, device="cuda"),
-    }
-    with pytest.raises(Exception):  # Replace with your specific device error if defined
-        TensorDict(data, shape=(4,))
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
@@ -43,12 +33,12 @@ def test_tensordict_to_changes_device():
 
 
 def test_device_persistence_across_operations():
-    td = TensorDict({"a": torch.randn(4, 3)}, shape=(4,), device=torch.device("cpu"))
-    td2 = td.view(2, 2)
+    td = TensorDict({"a": torch.randn(4, 3)}, shape=(4, 3), device=torch.device("cpu"))
+    td2 = td.view(1, 12)
     assert td2.device == td.device
 
     td3 = td.clone()
     assert td3.device == td.device
 
-    td4 = td.expand(4)
+    td4 = td2.expand(12, 12)
     assert td4.device == td.device

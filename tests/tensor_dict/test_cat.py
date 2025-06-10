@@ -2,21 +2,11 @@ import pytest
 import torch
 
 from rtd.tensor_dict import TensorDict  # adjust import as needed
+from tests.tensor_dict import common
+from tests.tensor_dict.common import compute_cat_shape, compare_nested_dict
+from tests.tensor_dict.compile_utils import run_and_compare_compiled
 
-
-@pytest.fixture
-def nested_dict():
-    def _make(shape):
-        nested_dict = {
-            "x": {
-                "a": torch.arange(0, 4).reshape(*shape),
-                "b": torch.arange(4, 8).reshape(*shape),
-            },
-            "y": torch.arange(8, 12).reshape(*shape),
-        }
-        return nested_dict
-
-    return _make
+nested_dict = common.nested_dict
 
 
 # ——— Valid concatenation dims across several shapes ———
@@ -44,34 +34,19 @@ def nested_dict():
 def test_cat_valid(nested_dict, shape, dim):
     data = nested_dict(shape)
     td = TensorDict(data, shape)
-    print("TENSORDICT", td)
 
-    # concatenate two copies
-    cat_td = torch.cat([td, td], dim=dim)
-    print(cat_td)
+    def cat_fn(td, dim):
+        return torch.cat([td, td], dim=dim)
+
+    # concatenate two copies and compare compiled
+    run_and_compare_compiled(cat_fn, td, dim)
 
     # compute expected shape
-    ndim = len(shape)
-    # normalize negative dim
-    pos_dim = dim if dim >= 0 else dim + ndim
-    expected_shape = list(shape)
-    expected_shape[pos_dim] = expected_shape[pos_dim] * 2
-    assert cat_td.shape == tuple(expected_shape)
+    expected_shape = compute_cat_shape(shape, dim)
+    cat_td = torch.cat([td, td], dim=dim)
+    assert cat_td.shape == expected_shape
 
-    # compare every leaf
-    for key, val in data.items():
-        if isinstance(val, dict):
-            for subkey, orig in val.items():
-                out = cat_td[key][subkey]
-                expect = torch.cat([orig, orig], dim=dim)
-                assert out.shape == expect.shape
-                assert torch.equal(out, expect)
-        else:
-            orig = val
-            out = cat_td[key]
-            expect = torch.cat([orig, orig], dim=dim)
-            assert out.shape == expect.shape
-            assert torch.equal(out, expect)
+    compare_nested_dict(data, cat_td, lambda orig: torch.cat([orig, orig], dim=dim))
 
 
 # ——— Error on invalid dims ———

@@ -47,6 +47,8 @@ class TensorDict:
         self.shape = shape
         self.device = device
 
+        self._validate_shape()
+
     @classmethod
     def data_from_dict(cls, data, shape, device=None):
         result = {}
@@ -59,6 +61,21 @@ class TensorDict:
                 result[k] = v
 
         return result
+
+    def _validate_shape(self):
+        """Validates that the shapes of the tensors in the TensorDict match the expected shape."""
+        for key, value in self.data.items():
+            if isinstance(value, (torch.Tensor, TensorDict)):
+                if not (
+                    value.shape == self.shape
+                    or (
+                        len(value.shape) >= len(self.shape)
+                        and tuple(value.shape[: len(self.shape)]) == tuple(self.shape)
+                    )
+                ):
+                    raise ValueError(
+                        f"Shape mismatch for key '{key}': expected {self.shape} or a prefix, got {value.shape}"
+                    )
 
     def _pytree_flatten(self) -> Tuple[List[Tensor], Tuple]:
         """
@@ -145,7 +162,15 @@ class TensorDict:
     def keys(self):
         return self.data.keys()
 
+    def values(self):
+        return self.data.values()
+
+    def items(self):
+        return self.data.items()
+
     # --- Overloaded methods leveraging PyTrees ---
+    def view(self, *shape: int) -> TensorDict:
+        return pytree.tree_map(lambda x: x.view(*shape), self)
 
     def to(self, *args, **kwargs) -> TensorDict:
         return pytree.tree_map(lambda x: x.to(*args, **kwargs), self)
@@ -155,6 +180,9 @@ class TensorDict:
 
     def clone(self) -> TensorDict:
         return pytree.tree_map(lambda x: x.clone(), self)
+
+    def expand(self, *shape: int) -> TensorDict:
+        return pytree.tree_map(lambda x: x.expand(*shape), self)
 
     @classmethod
     def __torch_function__(cls, func, types, args=(), kwargs=None):
@@ -217,6 +245,20 @@ class TensorDict:
         data = pytree.tree_map(copy_item, self.data)
         return TensorDict(data, self.shape, self.device)
 
+    def flatten_keys(self) -> TensorDict:
+        """
+        Returns a TensorDict with flattened keys.
+        """
+        out = {}
+        for key, value in self.data.items():
+            if isinstance(value, TensorDict):
+                sub_dict = value.flatten_keys()
+                for sub_key, sub_value in sub_dict.data.items():
+                    out[f"{key}.{sub_key}"] = sub_value
+            else:
+                out[key] = value
+        return TensorDict(out, self.shape, self.device)
+
 
 # --- PyTree-aware implementations of torch functions ---
 
@@ -238,56 +280,3 @@ pytree.register_pytree_node(
     lambda td: td._pytree_flatten(),
     TensorDict._pytree_unflatten,
 )
-
-if __name__ == "__main__":
-    # --- Setup Example Data ---
-    B, T = 4, 10
-    batch_shape = torch.Size([B, T])
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-
-    td1 = TensorDict(
-        {
-            "obs": torch.randn(B, T, 3, 64, 64, device=device),
-            "action": torch.randn(B, T, 8, device=device),
-            "nested": TensorDict(
-                {"state": torch.randn(B, T, 128, device=device)},
-                shape=batch_shape,
-                device=device,
-            ),
-        },
-        shape=batch_shape,
-        device=device,
-    )
-    td2 = td1.clone()
-
-    print("--- Eager Mode Verification ---")
-    eager_stacked_td = torch.stack([td1, td2], dim=0)
-    print(f"Eager Stacked TensorDict: {eager_stacked_td}")
-    expected_shape = torch.Size([2, B, T])
-    assert eager_stacked_td.shape == expected_shape
-    print("\nEager shape check passed!")
-
-    print("\n" + "=" * 50 + "\n")
-
-    # --- `torch.compile` Verification ---
-    print("--- `torch.compile` Verification ---")
-
-    @torch.compile
-    def compiled_stack_fn(d1: TensorDict, d2: TensorDict) -> TensorDict:
-        return torch.stack([d1, d2], dim=0)
-
-    # Run the compiled function
-    compiled_stacked_td = compiled_stack_fn(td1, td2)
-
-    explanation = torch._dynamo.explain(compiled_stack_fn)(td1, td2)
-
-    print("EXPLANATION", explanation.graph_break_count, explanation.break_reasons)
-
-    print(f"Compiled Stacked TensorDict: {compiled_stacked_td}")
-    assert compiled_stacked_td.shape == eager_stacked_td.shape
-    assert torch.equal(compiled_stacked_td["obs"], eager_stacked_td["obs"])
-    assert torch.equal(
-        compiled_stacked_td["nested"]["state"], eager_stacked_td["nested"]["state"]
-    )
-
-    print("\n`torch.compile` verification successful!")

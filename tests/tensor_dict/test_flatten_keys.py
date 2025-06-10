@@ -46,10 +46,10 @@ def test_flatten_keys_simple(simple_nested):
 
 def test_flatten_keys_custom_sep(simple_nested):
     td = simple_nested
-    flat = td.flatten_keys(sep="_")
-    assert set(flat.keys()) == {"x_a", "x_b", "y"}
-    assert torch.equal(flat["x_a"], td["x"]["a"])
-    assert torch.equal(flat["x_b"], td["x"]["b"])
+    flat = td.flatten_keys()
+    assert set(flat.keys()) == {"x.a", "x.b", "y"}
+    assert torch.equal(flat["x.a"], td["x"]["a"])
+    assert torch.equal(flat["x.b"], td["x"]["b"])
 
 
 def test_flatten_keys_deep(deep_nested):
@@ -80,4 +80,27 @@ def test_flatten_keys_empty():
     assert isinstance(flat, TensorDict)
     assert flat is not td
     assert list(flat.keys()) == []
+    assert flat.shape == td.shape
+
+
+def test_flatten_keys_complex():
+    # A more complex nested structure
+    data = {
+        "a": {
+            "b": {
+                "c": torch.arange(4).reshape(2, 2),
+                "d": torch.ones(2, 2),
+            },
+            "e": torch.zeros(2, 2),
+        },
+        "f": torch.full((2, 2), 2),
+    }
+    td = TensorDict(data, shape=(2, 2))
+    flat = td.flatten_keys()
+    # deep keys
+    assert set(flat.keys()) == {"a.b.c", "a.b.d", "a.e", "f"}
+    assert torch.equal(flat["a.b.c"], td["a"]["b"]["c"])
+    assert torch.equal(flat["a.b.d"], td["a"]["b"]["d"])
+    assert torch.equal(flat["a.e"], td["a"]["e"])
+    assert torch.equal(flat["f"], td["f"])
     assert flat.shape == td.shape

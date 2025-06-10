@@ -73,3 +73,13 @@ def test_some_function(tensor_normal):
 
     assert isinstance(out, torch.Tensor)
     assert torch.allclose(out, value)
+
+
+def test_shape_validation():
+    loc = torch.tensor([[0.0, 1.0], [2.0, 3.0]])
+    scale = torch.tensor([[1.0, 1.0], [1.0, 1.0]])
+    shape = (2,)
+    device = "cpu"
+    data = {"loc": loc, "scale": scale, "invalid": torch.randn(3, 3)}
+    with pytest.raises(ValueError, match="Shape mismatch for key 'invalid'"):
+        TensorDict(data, shape, device)

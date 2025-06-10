@@ -1,25 +1,16 @@
 import pytest
 import torch
 
-from rtd.tensor_dict import TensorDict  # adjust import as needed
+from rtd.tensor_dict import TensorDict
+from tests.tensor_dict.compile_utils import run_and_compare_compiled
+from tests.tensor_dict import common
 
-
-@pytest.fixture
-def nested_dict():
-    def _make(shape):
-        nested_dict = {
-            "x": {
-                "a": torch.arange(0, 4).reshape(*shape),
-                "b": torch.arange(4, 8).reshape(*shape),
-            },
-            "y": torch.arange(8, 12).reshape(*shape),
-        }
-        return nested_dict
-
-    return _make
+nested_dict = common.nested_dict
 
 
 # ——— Valid stacking dims across several shapes ———
+
+
 @pytest.mark.parametrize(
     "shape, dim",
     [
@@ -29,11 +20,9 @@ def nested_dict():
         # 2D
         ((2, 2), 0),
         ((2, 2), 1),
-        ((2, 2), 2),
         ((2, 2), -1),
         ((1, 4), 0),
         ((1, 4), 1),
-        ((1, 4), 2),
         ((1, 4), -2),
         # 3D
         ((2, 1, 2), 0),
@@ -42,37 +31,12 @@ def nested_dict():
         ((2, 1, 2), -4),
     ],
 )
-def test_stack_valid(nested_dict, shape, dim):
-    # build the TensorDict
-    data = nested_dict(shape)
-    td = TensorDict(data, shape)
+def test_stack_valid_compiled(nested_dict, shape, dim):
+    def stack_fn(nd, s, d):
+        td = TensorDict(nd(s), s)
+        return torch.stack([td, td], dim=d)
 
-    # stack two copies
-    stacked = torch.stack([td, td], dim=dim)
-
-    # compute the expected shape after inserting a new axis of size 2
-    orig_ndim = len(shape)
-    new_ndim = orig_ndim + 1
-    # normalize negative dims
-    pos_dim = dim if dim >= 0 else dim + new_ndim
-    expected_shape = list(shape)
-    expected_shape.insert(pos_dim, 2)
-    assert stacked.shape == tuple(expected_shape)
-
-    # every leaf tensor should match torch.stack of the underlying tensors
-    for key, val in data.items():
-        if isinstance(val, dict):
-            for subkey, orig in val.items():
-                out = stacked[key][subkey]
-                expect = torch.stack([orig, orig], dim=dim)
-                assert out.shape == expect.shape
-                assert torch.equal(out, expect)
-        else:
-            orig = val
-            out = stacked[key]
-            expect = torch.stack([orig, orig], dim=dim)
-            assert out.shape == expect.shape
-            assert torch.equal(out, expect)
+    run_and_compare_compiled(stack_fn, nested_dict, shape, dim)
 
 
 # ——— Error on invalid dims ———

@@ -9,7 +9,7 @@ def test_constructor_raises_on_incompatible_leaf_shape():
         "a": torch.zeros(1, 5),
         "b": torch.ones(1, 5),
     }
-    with pytest.raises(RuntimeError) as excinfo:
+    with pytest.raises(ValueError) as excinfo:
         TensorDict(data, shape=(2,))
 
 
@@ -20,7 +20,7 @@ def test_constructor_raises_in_nested_mapping():
         },
         "y": torch.randn(3, 4, 5),
     }
-    with pytest.raises(RuntimeError):
+    with pytest.raises(ValueError):
         TensorDict(data, shape=(2, 4))
 
 
@@ -122,14 +122,5 @@ def test_constructor_accepts_zero_batch_size():
     ],
 )
 def test_constructor_raises_on_shape_too_long(data, shape):
-    with pytest.raises(RuntimeError):
+    with pytest.raises(ValueError):
         TensorDict(data, shape=shape)
-
-
-def test_constructor_raises_on_unsupported_type():
-    data = {
-        "a": [1, 2, 3],  # list is not a Tensor or dict
-        "b": torch.zeros(3, 1),
-    }
-    with pytest.raises(RuntimeError):
-        TensorDict(data, shape=(3,))

@@ -1,33 +1,8 @@
-# tests/test_tensordict_compile.py
-
 import pytest
 import torch
-import torch.utils._pytree as pytree
 
-# Adjust the import path to match your project structure
 from rtd.tensor_dict import TensorDict
-
-
-# Helper function for comprehensive TensorDict comparison
-def assert_td_equal(td_a: TensorDict, td_b: TensorDict):
-    """
-    Asserts that two TensorDicts are equal in shape, device, structure, and values.
-    """
-    assert td_a.shape == td_b.shape, "Shape mismatch"
-    assert td_a.device == td_b.device, "Device mismatch"
-
-    leaves_a, spec_a = pytree.tree_flatten(td_a)
-    leaves_b, spec_b = pytree.tree_flatten(td_b)
-
-    assert spec_a == spec_b, "PyTree spec mismatch (keys or nesting)"
-
-    for tensor_a, tensor_b in zip(leaves_a, leaves_b):
-        assert torch.allclose(tensor_a, tensor_b), "Tensor values mismatch"
-
-    print(f"Assertion successful for TensorDicts with shape {td_a.shape}")
-
-
-# --- Fixtures for reusable TensorDicts ---
+from tests.tensor_dict.compile_utils import assert_td_equal, run_and_compare_compiled
 
 
 @pytest.fixture
@@ -42,7 +17,7 @@ def base_td_data():
 @pytest.fixture
 def simple_td(base_td_data):
     """A simple TensorDict instance."""
-    return TensorDict(base_td_data, shape=torch.Size([4, 5]))
+    return TensorDict(base_td_data, shape=torch.Size([4, 5]), device="cpu")
 
 
 @pytest.fixture
@@ -53,184 +28,174 @@ def nested_td():
         {
             "obs": torch.randn(B, T, 10),
             "nested": TensorDict(
-                {"state": torch.randn(B, T, 5)}, shape=torch.Size([B, T])
+                {"state": torch.randn(B, T, 5)}, shape=torch.Size([B, T]), device="cpu"
             ),
         },
         shape=torch.Size([B, T]),
+        device="cpu",
     )
 
 
-# --- Test Cases ---
+class TestTensorDictCompilation:
+    """
+    Tests for TensorDict operations under torch.compile.
+    """
 
+    def test_creation_from_tensors_in_compiled_function(self, base_td_data):
+        """
+        Verifies that a TensorDict can be successfully created from raw tensors
+        within a torch.compile'd function.
+        """
 
-def test_creation_in_compiled_fn(base_td_data):
-    """Tests if a TensorDict can be created inside a compiled function."""
+        def create_td_from_tensors(obs_arg, reward_arg):
+            td = TensorDict(
+                {"obs": obs_arg, "reward": reward_arg},
+                shape=torch.Size([4, 5]),
+                device="cpu",
+            )
+            return td
 
-    def fn(obs, reward):
-        # Create from raw tensors
-        td = TensorDict({"obs": obs, "reward": reward}, shape=torch.Size([4, 5]))
-        return td
+        obs, reward = base_td_data["obs"], base_td_data["reward"]
+        run_and_compare_compiled(create_td_from_tensors, obs, reward)
 
-    compiled_fn = torch.compile(fn)
+    def test_creation_from_nested_dict_in_compiled_function(self, base_td_data):
+        """
+        Verifies that a TensorDict can be successfully created from a nested dictionary
+        within a torch.compile'd function.
+        """
 
-    obs, reward = base_td_data["obs"], base_td_data["reward"]
+        def create_td_from_nested_dict(obs_arg, reward_arg):
+            td = TensorDict(
+                {"my_dict": {"obs": obs_arg, "reward": reward_arg}},
+                shape=torch.Size([4, 5]),
+                device="cpu",
+            )
+            return td
 
-    eager_result = fn(obs, reward)
-    compiled_result = compiled_fn(obs, reward)
+        obs, reward = base_td_data["obs"], base_td_data["reward"]
+        run_and_compare_compiled(create_td_from_nested_dict, obs, reward)
 
-    assert_td_equal(eager_result, compiled_result)
+    def test_setting_values_in_compiled_function(self, simple_td):
+        """
+        Tests that setting and modifying values within a TensorDict
+        works correctly inside a compiled function.
+        """
 
+        def modify_reward_in_td(td):
+            td["reward"] = td["reward"] * 2.0
+            return td["reward"]
 
-def test_from_dict_in_compiled_fn(base_td_data):
-    """Tests if a TensorDict can be created inside a compiled function."""
+        compiled_fn = torch.compile(modify_reward_in_td, fullgraph=True)
 
-    def fn(obs, reward):
-        # Create from raw tensors
-        td = TensorDict(
-            {"my_dict": {"obs": obs, "reward": reward}}, shape=torch.Size([4, 5])
+        # Clone to ensure independent eager and compiled runs
+        simple_td_eager = simple_td.clone()
+        simple_td_compiled = simple_td.clone()
+
+        eager_result = modify_reward_in_td(simple_td_eager)
+        compiled_result = compiled_fn(simple_td_compiled)
+
+        # Compare the returned tensor directly
+        assert torch.allclose(eager_result, compiled_result)
+        # Also compare the modified TensorDicts
+        assert_td_equal(simple_td_eager, simple_td_compiled)
+
+    def test_stacking_tensordicts_in_compiled_function(self, simple_td):
+        """
+        Tests torch.stack operation on TensorDicts within a compiled function.
+        """
+        td_a = simple_td.clone()
+        td_b = simple_td.clone()
+        td_b["reward"] += 1.0  # Make it different for stacking
+
+        def stack_tensordicts(d1, d2):
+            return torch.stack([d1, d2], dim=0)
+
+        eager_result, compiled_result = run_and_compare_compiled(
+            stack_tensordicts, td_a, td_b
         )
-        return td
+        assert eager_result.shape == torch.Size([2, 4, 5])
 
-    compiled_fn = torch.compile(fn)
+    def test_concatenating_tensordicts_in_compiled_function(self, simple_td):
+        """
+        Tests torch.cat operation on TensorDicts within a compiled function.
+        """
+        td_a = simple_td.clone()
+        td_b = simple_td.clone()
 
-    obs, reward = base_td_data["obs"], base_td_data["reward"]
+        def concatenate_tensordicts(d1, d2):
+            return torch.cat([d1, d2], dim=1)
 
-    eager_result = fn(obs, reward)
-    compiled_result = compiled_fn(obs, reward)
+        eager_result, compiled_result = run_and_compare_compiled(
+            concatenate_tensordicts, td_a, td_b
+        )
+        assert eager_result.shape == torch.Size([4, 10])
 
-    assert_td_equal(eager_result, compiled_result)
+    @pytest.mark.parametrize(
+        "index",
+        [
+            0,
+            slice(1, 3),
+            torch.tensor([0, 3]),  # advanced indexing
+        ],
+    )
+    def test_indexing_tensordict_in_compiled_function(self, simple_td, index):
+        """
+        Tests various forms of indexing a TensorDict within a compiled function.
+        """
 
+        def index_tensordict(td_arg):
+            return td_arg[index]
 
-def test_set_compiled(simple_td):
-    """Tests various forms of setetting values in a compiled function."""
+        run_and_compare_compiled(index_tensordict, simple_td)
 
-    def fn(td):
-        td["reward"] = td["reward"] * 2.0
-        return td["reward"]
+    def test_operations_on_nested_tensordict_in_compiled_function(self, nested_td):
+        """
+        Tests slicing and modifying a nested TensorDict within a compiled function.
+        """
 
-    compiled_fn = torch.compile(fn)
+        def operate_on_nested_td(td):
+            sliced_td = td[0]
+            sliced_td["nested"]["state"] = sliced_td["nested"]["state"] + 5.0
+            return sliced_td
 
-    simple_td_a = simple_td
-    simple_td_b = simple_td.clone()
-    eager_result = fn(simple_td)
-    compiled_result = compiled_fn(simple_td_b)
+        compiled_fn = torch.compile(operate_on_nested_td, fullgraph=True)
 
-    assert_td_equal(eager_result, compiled_result)
+        # Clone to ensure independent eager and compiled runs
+        nested_td_eager = nested_td.clone()
+        nested_td_compiled = nested_td.clone()
 
+        eager_result = operate_on_nested_td(nested_td_eager)
+        compiled_result = compiled_fn(nested_td_compiled)
 
-def test_stack_compiled(simple_td):
-    """Tests torch.stack on TensorDicts within a compiled function."""
+        assert eager_result.shape == torch.Size([3])
+        assert eager_result["nested"].shape == torch.Size([3])
+        assert_td_equal(eager_result, compiled_result)
 
-    td_a = simple_td
-    td_b = td_a.clone()
-    td_b["reward"] += 1.0  # Make it different
+    @pytest.mark.skipif(
+        not torch.cuda.is_available(), reason="This test requires a CUDA device"
+    )
+    def test_device_move_in_compiled_function(self, simple_td):
+        """
+        Tests moving a TensorDict to a CUDA device within a compiled function.
+        """
 
-    def fn(d1, d2):
-        return torch.stack([d1, d2], dim=0)
+        def move_td_to_cuda(td_arg):
+            return td_arg.to("cuda")
 
-    compiled_fn = torch.compile(fn)
+        eager_result, compiled_result = run_and_compare_compiled(
+            move_td_to_cuda, simple_td
+        )
+        assert eager_result.device.type == "cuda"
 
-    eager_result = fn(td_a, td_b)
-    compiled_result = compiled_fn(td_a, td_b)
+    def test_dtype_change_in_compiled_function(self, simple_td):
+        """
+        Tests changing the dtype of a TensorDict's tensors within a compiled function.
+        """
 
-    # Expected shape is new_dim + old_shape
-    assert eager_result.shape == torch.Size([2, 4, 5])
-    assert_td_equal(eager_result, compiled_result)
+        def change_td_dtype(td_arg):
+            return td_arg.to(torch.float16)
 
-
-def test_cat_compiled(simple_td):
-    """Tests torch.cat on TensorDicts within a compiled function."""
-
-    td_a = simple_td
-    td_b = td_a.clone()
-
-    def fn(d1, d2):
-        # Concatenate along the second batch dimension (dim=1)
-        return torch.cat([d1, d2], dim=1)
-
-    compiled_fn = torch.compile(fn)
-
-    eager_result = fn(td_a, td_b)
-    compiled_result = compiled_fn(td_a, td_b)
-
-    # Shape: [4, 5+5] -> [4, 10]
-    assert eager_result.shape == torch.Size([4, 10])
-    assert_td_equal(eager_result, compiled_result)
-
-
-@pytest.mark.parametrize(
-    "index",
-    [
-        0,
-        slice(1, 3),
-        torch.tensor([0, 3]),  # advanced indexing
-    ],
-)
-def test_indexing_compiled(simple_td, index):
-    """Tests various forms of indexing within a compiled function."""
-
-    def fn(td):
-        return td[index]
-
-    compiled_fn = torch.compile(fn)
-
-    eager_result = fn(simple_td)
-    compiled_result = compiled_fn(simple_td)
-
-    assert_td_equal(eager_result, compiled_result)
-
-
-def test_nested_td_compiled(nested_td):
-    """Tests operations on a nested TensorDict inside a compiled function."""
-
-    def fn(td):
-        # Slice the nested structure
-        sliced_td = td[0]
-        # Modify a leaf in the nested part
-        sliced_td["nested"]["state"] = sliced_td["nested"]["state"] + 5.0
-        return sliced_td
-
-    compiled_fn = torch.compile(fn)
-
-    eager_result = fn(nested_td)
-    compiled_result = compiled_fn(nested_td)
-
-    # The shape should be the remainder of the original batch shape
-    assert eager_result.shape == torch.Size([3])
-    # The nested TD's shape should also be updated
-    assert eager_result["nested"].shape == torch.Size([3])
-    assert_td_equal(eager_result, compiled_result)
-
-
-@pytest.mark.skipif(
-    not torch.cuda.is_available(), reason="This test requires a CUDA device"
-)
-def test_device_move_compiled(simple_td):
-    """Tests moving a TensorDict to another device in a compiled function."""
-
-    def fn(td):
-        return td.to("cuda")
-
-    compiled_fn = torch.compile(fn)
-
-    eager_result = fn(simple_td)
-    compiled_result = compiled_fn(simple_td)
-
-    assert eager_result.device.type == "cuda"
-    assert_td_equal(eager_result, compiled_result)
-
-
-def test_dtype_move_compiled(simple_td):
-    """Tests changing the dtype of a TensorDict in a compiled function."""
-
-    def fn(td):
-        return td.to(torch.float16)
-
-    compiled_fn = torch.compile(fn)
-
-    eager_result = fn(simple_td)
-    compiled_result = compiled_fn(simple_td)
-
-    # Check one of the leaves for its dtype
-    assert eager_result["obs"].dtype == torch.float16
-    assert_td_equal(eager_result, compiled_result)
+        eager_result, compiled_result = run_and_compare_compiled(
+            change_td_dtype, simple_td
+        )
+        assert eager_result["obs"].dtype == torch.float16
