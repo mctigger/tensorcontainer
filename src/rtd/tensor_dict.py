@@ -9,6 +9,8 @@ import torch
 import torch.utils._pytree as pytree
 from torch import Tensor
 
+from rtd.utils import PytreeRegistered
+
 # TypeAlias definitions remain the same
 TDCompatible: TypeAlias = Union[Tensor, "TensorDict"]
 NestedTDCompatible: TypeAlias = Union[TDCompatible, Dict[str, TDCompatible]]
@@ -27,7 +29,7 @@ def implements(torch_function):
     return decorator
 
 
-class TensorDict:
+class TensorDict(PytreeRegistered):
     """
     A dictionary-like container for torch.Tensors that is compatible with
     torch.compile and standard PyTorch functions.
@@ -137,6 +139,16 @@ class TensorDict:
         obj.device = new_device
         return obj
 
+    @classmethod
+    def __torch_function__(cls, func, types, args=(), kwargs=None):
+        if kwargs is None:
+            kwargs = {}
+        if func not in HANDLED_FUNCTIONS or not all(
+            issubclass(t, (torch.Tensor, TensorDict)) for t in types
+        ):
+            return NotImplemented
+        return HANDLED_FUNCTIONS[func](*args, **kwargs)
+
     # --- Standard MutableMapping methods ---
     def __getitem__(self, key: Union[str, Any]) -> TDCompatible:
         if isinstance(key, str):
@@ -172,6 +184,9 @@ class TensorDict:
     def view(self, *shape: int) -> TensorDict:
         return pytree.tree_map(lambda x: x.view(*shape), self)
 
+    def reshape(self, *shape: int) -> TensorDict:
+        return pytree.tree_map(lambda x: x.reshape(*shape), self)
+
     def to(self, *args, **kwargs) -> TensorDict:
         return pytree.tree_map(lambda x: x.to(*args, **kwargs), self)
 
@@ -183,16 +198,6 @@ class TensorDict:
 
     def expand(self, *shape: int) -> TensorDict:
         return pytree.tree_map(lambda x: x.expand(*shape), self)
-
-    @classmethod
-    def __torch_function__(cls, func, types, args=(), kwargs=None):
-        if kwargs is None:
-            kwargs = {}
-        if func not in HANDLED_FUNCTIONS or not all(
-            issubclass(t, (torch.Tensor, TensorDict)) for t in types
-        ):
-            return NotImplemented
-        return HANDLED_FUNCTIONS[func](*args, **kwargs)
 
     def __repr__(self) -> str:
         # Infer device for representation if not set
@@ -261,8 +266,6 @@ class TensorDict:
 
 
 # --- PyTree-aware implementations of torch functions ---
-
-
 @implements(torch.stack)
 def _stack(tensors: Union[Tuple[TensorDict, ...], List[TensorDict]], dim: int = 0):
     returns = pytree.tree_map(lambda *x: torch.stack(x, dim), *tensors)
@@ -272,11 +275,3 @@ def _stack(tensors: Union[Tuple[TensorDict, ...], List[TensorDict]], dim: int = 
 @implements(torch.cat)
 def _cat(tensors: Union[Tuple[TensorDict, ...], List[TensorDict]], dim: int = 0):
     return pytree.tree_map(lambda *x: torch.cat(x, dim), *tensors)
-
-
-# --- Register TensorDict as a PyTree node with PyTorch ---
-pytree.register_pytree_node(
-    TensorDict,
-    lambda td: td._pytree_flatten(),
-    TensorDict._pytree_unflatten,
-)

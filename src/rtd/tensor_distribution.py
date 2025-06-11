@@ -1,4 +1,4 @@
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 from typing import Any, Dict
 
 from torch import Size, Tensor
@@ -6,33 +6,21 @@ from torch.distributions import (
     Distribution,
     Independent,
     Normal,
-    Bernoulli,
     register_kl,
     kl_divergence,
 )
 import torch
 from rtd.tensor_dict import TensorDict
+from rtd.utils import PytreeRegistered
 
 
-class SoftBernoulli(Bernoulli):
-    def log_prob(self, value):
-        # Compute log probabilities
-        log_p = super().log_prob(torch.ones_like(value))  # log(p)
-        log_1_p = super().log_prob(torch.zeros_like(value))  # log(1 - p)
+class TensorDistribution(TensorDict, PytreeRegistered):
+    meta_data: Dict[str, Any]
 
-        # Compute soft BCE using the original formula
-        log_probs = value * log_p + (1 - value) * log_1_p
-
-        return log_probs
-
-
-class TensorDistribution(TensorDict, ABC):
-    distribution_properties: Dict[str, Any]
-
-    def __init__(self, data, shape, device, distribution_properties):
+    def __init__(self, data, shape, device, meta_data):
         super().__init__(data, shape, device)
 
-        self.distribution_properties = distribution_properties
+        self.meta_data = meta_data
 
     @abstractmethod
     def dist(self) -> Distribution: ...
@@ -61,41 +49,6 @@ class TensorDistribution(TensorDict, ABC):
     def mode(self) -> Tensor:
         return self.dist().mode
 
-    def copy(self):
-        td = super().copy()
-        cls = type(self)
-        obj = cls.__new__(cls)
-        TensorDistribution.__init__(
-            obj,
-            td.data,
-            td.shape,
-            td.device,
-            self.distribution_properties,
-        )
-        return obj
-
-    def apply(self, fn):
-        td = super().apply(fn)
-
-        cls = type(self)
-        obj = cls.__new__(cls)
-        TensorDistribution.__init__(
-            obj, td.data, td.shape, td.device, self.distribution_properties
-        )
-
-        return obj
-
-    @classmethod
-    def zip_apply(cls, tensor_dicts, fn):
-        td = TensorDict.zip_apply(tensor_dicts, fn)
-
-        obj = cls.__new__(cls)
-        TensorDistribution.__init__(
-            obj, td.data, td.shape, td.device, tensor_dicts[0].distribution_properties
-        )
-
-        return obj
-
 
 class TensorNormal(TensorDistribution):
     def __init__(
@@ -119,54 +72,8 @@ class TensorNormal(TensorDistribution):
                 loc=self["loc"],
                 scale=self["scale"],
             ),
-            self.distribution_properties["reinterpreted_batch_ndims"],
+            self.meta_data["reinterpreted_batch_ndims"],
         )
-
-
-class TensorBernoulli(TensorDistribution):
-    def __init__(
-        self,
-        logits=None,
-        probs=None,
-        soft: bool = False,
-        reinterpreted_batch_ndims=1,
-        shape=...,
-        device=torch.device("cpu"),
-    ):
-        if logits is None and probs is None:
-            raise ValueError("Either logits or probs must be provided.")
-        if logits is not None and probs is not None:
-            raise ValueError("Only one of logits or probs should be provided.")
-
-        data = {}
-        if logits is not None:
-            data["logits"] = logits
-        if probs is not None:
-            data["probs"] = probs
-
-        super().__init__(
-            data,
-            shape,
-            device,
-            {"reinterpreted_batch_ndims": reinterpreted_batch_ndims, "soft": soft},
-        )
-
-    def dist(self) -> Distribution:
-        kwargs = {}
-        if "logits" in self:
-            kwargs["logits"] = self["logits"]
-        if "probs" in self:
-            kwargs["probs"] = self["probs"]
-        if self.distribution_properties["soft"]:
-            return Independent(
-                SoftBernoulli(**kwargs),
-                self.distribution_properties["reinterpreted_batch_ndims"],
-            )
-        else:
-            return Independent(
-                Bernoulli(**kwargs),
-                self.distribution_properties["reinterpreted_batch_ndims"],
-            )
 
 
 @register_kl(TensorDistribution, TensorDistribution)

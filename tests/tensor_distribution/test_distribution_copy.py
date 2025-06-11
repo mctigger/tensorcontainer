@@ -57,7 +57,7 @@ def test_copy_returns_same_subclass_and_preserves_properties(TDClass, init_kwarg
 
     # Distribution‐specific properties preserved
     assert hasattr(td_copy, "distribution_properties")
-    assert td_copy.distribution_properties == td.distribution_properties
+    assert td_copy.distribution_properties == td.meta_data
 
     # Data keys and tensor contents preserved
     assert set(td_copy.data.keys()) == set(td.data.keys())
