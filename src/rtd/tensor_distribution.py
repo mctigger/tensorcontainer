@@ -23,6 +23,9 @@ class TensorDistribution(TensorDict, PytreeRegistered):
 
         self.meta_data = meta_data
 
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}(data={self.data}, shape={self.shape}, device={self.device}, meta_data={self.meta_data})"
+
     @abstractmethod
     def dist(self) -> Distribution: ...
 
