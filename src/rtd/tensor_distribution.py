@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from abc import abstractmethod
 from typing import Any, Dict
 
@@ -14,6 +16,12 @@ import torch
 from rtd.tensor_dict import TensorDict
 from rtd.utils import PytreeRegistered
 
+from typing import List, Tuple
+
+
+# Use the official PyTree utility from torch
+import torch.utils._pytree as pytree
+
 
 class TensorDistribution(TensorDict, PytreeRegistered):
     meta_data: Dict[str, Any]
@@ -22,6 +30,95 @@ class TensorDistribution(TensorDict, PytreeRegistered):
         super().__init__(data, shape, device)
 
         self.meta_data = meta_data
+
+    def _get_pytree_context(
+        self, flat_leaves: List[Tensor], children_spec: pytree.TreeSpec
+    ) -> Tuple:
+        """
+        Private helper to compute the pytree context for this TensorDict.
+
+        The context captures the necessary metadata to reconstruct the TensorDict
+        from its leaves: the original structure of the contained data and the
+        event dimensions of each tensor.
+        """
+        batch_ndim = len(self.shape)
+        event_ndims = tuple(leaf.ndim - batch_ndim for leaf in flat_leaves)
+        return (children_spec, event_ndims, self.meta_data)
+
+    def _pytree_flatten(self) -> Tuple[List[Tensor], Tuple]:
+        """
+        Flattens the TensorDict into its tensor leaves and static metadata.
+        (Implementation for `flatten_fn` in `register_pytree_node`)
+        """
+        # Get the leaves and the spec describing the structure of self.data
+        flat_leaves, children_spec = pytree.tree_flatten(self.data)
+
+        # Use the helper to compute and return the context
+        context = self._get_pytree_context(flat_leaves, children_spec)
+        return flat_leaves, context
+
+    def _pytree_flatten_with_keys_fn(
+        self,
+    ) -> Tuple[List[Tuple[pytree.KeyPath, Tensor]], Tuple]:
+        """
+        Flattens the TensorDict into key-path/leaf pairs and static metadata.
+        (Implementation for `flatten_with_keys_fn` in `register_pytree_node`)
+        """
+        # Use the public API to robustly get key paths, leaves, and the spec
+        keypath_leaf_list, children_spec = pytree.tree_flatten_with_path(self.data)
+
+        # Extract just the leaves to pass to the context helper
+        flat_leaves = [leaf for _, leaf in keypath_leaf_list]
+
+        # Use the helper to compute and return the context
+        context = self._get_pytree_context(flat_leaves, children_spec)
+        return keypath_leaf_list, context
+
+    @classmethod
+    def _pytree_unflatten(cls, leaves: List[Tensor], context: Tuple) -> TensorDict:
+        """
+        Reconstructs a TensorDict by creating a new instance and manually
+        populating its attributes. This approach is more robust for torch.compile's
+        code generation phase.
+        """
+        (children_spec, event_ndims, meta_data) = context  # Unpack the context
+
+        if not leaves:
+            # Handle the empty case explicitly with direct instantiation
+            obj = cls.__new__(cls)
+            obj.data = {}
+            obj.shape = []  # Or a sensible default for empty
+            obj.device = None
+            obj.meta_data = {}
+            return obj
+
+        # Reconstruct the nested dictionary structure using the unflattened leaves
+        data = pytree.tree_unflatten(leaves, children_spec)
+
+        # Infer new_shape and new_device
+        first_leaf_reconstructed = leaves[0]
+
+        # Simplified inference (common and works for stack/cat):
+        new_device = first_leaf_reconstructed.device
+
+        # Calculate new_shape based on the structure and first leaf.
+        # For operations like `stack`, the batch shape changes.
+        # If `_pytree_flatten` correctly passes `event_ndims`, then:
+        if event_ndims[0] == 0:
+            new_shape = first_leaf_reconstructed.shape
+        else:
+            new_shape = first_leaf_reconstructed.shape[: -event_ndims[0]]
+
+        # Instead of calling `_reconstruct_tensordict` which wraps `cls(...)`,
+        # directly use `cls.__new__` and set attributes.
+        obj = cls.__new__(cls)
+        obj.data = (
+            data  # This is the reconstructed nested dictionary of tensors/TensorDicts
+        )
+        obj.shape = new_shape
+        obj.device = new_device
+        obj.meta_data = meta_data
+        return obj
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}(data={self.data}, shape={self.shape}, device={self.device}, meta_data={self.meta_data})"
