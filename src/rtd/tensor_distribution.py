@@ -8,6 +8,7 @@ from torch.distributions import (
     Normal,
     register_kl,
     kl_divergence,
+    OneHotCategoricalStraightThrough,
 )
 import torch
 from rtd.tensor_dict import TensorDict
@@ -115,6 +116,33 @@ class TensorBernoulli(TensorDistribution):
             shape=self.shape,
             device=self.device,
         )
+
+
+class TensorCategorical(TensorDistribution):
+    def __init__(
+        self,
+        logits,
+        output_shape,
+        shape=...,
+        device=torch.device("cpu"),
+    ):
+        super().__init__(
+            {"logits": logits},
+            shape,
+            device,
+            {
+                "output_shape": output_shape,
+            },
+        )
+
+    def dist(self):
+        output_shape = self.meta_data["output_shape"]
+        logits = self["logits"].float()
+        logits = logits.view(*logits.shape[:-1], -1, *output_shape)
+
+        one_hot = OneHotCategoricalStraightThrough(logits=logits)
+
+        return Independent(one_hot, len(output_shape))
 
 
 @register_kl(TensorDistribution, TensorDistribution)
