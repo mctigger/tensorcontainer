@@ -19,7 +19,7 @@ def test_view_reshape():
 
 def test_view_nested():
     td = TensorDict(
-        {"a": TensorDict({"b": torch.randn(2, 2)}, shape=[2, 2])}, shape=[2, 2]
+        {"a": TensorDict({"b": torch.randn(2, 2)}, shape=(2, 2))}, shape=(2, 2)
     )
     td_view = td.view(4)
     assert td_view.shape == (4,)

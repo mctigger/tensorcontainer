@@ -9,10 +9,12 @@ import torch
 import torch.utils._pytree as pytree
 from torch import Tensor
 
+from rtd.tensor_container import TensorContainer
 from rtd.utils import PytreeRegistered
 
+
 # TypeAlias definitions remain the same
-TDCompatible: TypeAlias = Union[Tensor, "TensorDict"]
+TDCompatible: TypeAlias = Union[Tensor, TensorContainer]
 NestedTDCompatible: TypeAlias = Union[TDCompatible, Dict[str, TDCompatible]]
 
 HANDLED_FUNCTIONS = {}
@@ -29,7 +31,7 @@ def implements(torch_function):
     return decorator
 
 
-class TensorDict(PytreeRegistered):
+class TensorDict(TensorContainer, PytreeRegistered):
     """
     A dictionary-like container for torch.Tensors that is compatible with
     torch.compile and standard PyTorch functions.
@@ -40,16 +42,20 @@ class TensorDict(PytreeRegistered):
         data: Mapping[str, NestedTDCompatible],
         shape: Tuple[int],
         device: Optional[Union[str, torch.device]] = None,
+        validate_args: bool = True,
     ):
         """
         Initializes the TensorDict. This constructor is kept simple for
         `torch.compile` compatibility, performing direct attribute assignment.
         """
+        super().__init__(shape)
+
         self.data = TensorDict.data_from_dict(data, shape, device)
         self.shape = shape
         self.device = device
 
-        self._validate_shape()
+        if validate_args:
+            self._tree_validate_shape(data)
 
     @classmethod
     def data_from_dict(cls, data, shape, device=None):
@@ -64,30 +70,106 @@ class TensorDict(PytreeRegistered):
 
         return result
 
-    def _validate_shape(self):
-        """Validates that the shapes of the tensors in the TensorDict match the expected shape."""
-        for key, value in self.data.items():
-            if isinstance(value, (torch.Tensor, TensorDict)):
-                if not (
-                    value.shape == self.shape
-                    or (
-                        len(value.shape) >= len(self.shape)
-                        and tuple(value.shape[: len(self.shape)]) == tuple(self.shape)
-                    )
-                ):
-                    raise ValueError(
-                        f"Shape mismatch for key '{key}': expected {self.shape} or a prefix, got {value.shape}"
-                    )
+    def _is_shape_compatible(self, shape):
+        batch_ndim = len(self.shape)
+        leaf_ndim = len(shape)
+
+        return leaf_ndim >= batch_ndim and shape[:batch_ndim] == self.shape
+
+    def _is_device_compatible(self, device):
+        if self.device is None:
+            return True
+
+        return self.device == device
+
+    def _tree_validate_shape(self, data):
+        """
+        Validates that the shapes of all nested tensors in the TensorDict start
+        with the expected batch shape.
+
+        This method recursively traverses the entire data structure.
+        """
+
+        # Use tree_flatten_with_path to get a list of (path, leaf) pairs for
+        # all leaves in the nested structure of self.data.
+        keypath_leaf_pairs = pytree.tree_leaves_with_path(data)
+
+        batch_shape = self.shape
+
+        for key_path, leaf in keypath_leaf_pairs:
+            path_str = pytree.keystr(key_path)
+
+            if leaf.ndim > 0 and not self._is_shape_compatible(leaf.shape):
+                # Use pytree.keystr to generate a readable path for the error message.
+                raise ValueError(
+                    f"Shape mismatch at '{path_str}': The tensor shape {leaf.shape} "
+                    f"is not compatible with the TensorDict's batch shape {batch_shape}."
+                )
+
+    def _tree_validate_device(self, data):
+        """
+        Validates that the shapes of all nested tensors in the TensorDict start
+        with the expected batch shape.
+
+        This method recursively traverses the entire data structure.
+        """
+
+        # Use tree_flatten_with_path to get a list of (path, leaf) pairs for
+        # all leaves in the nested structure of self.data.
+        keypath_leaf_pairs = pytree.tree_leaves_with_path(data)
+
+        for key_path, leaf in keypath_leaf_pairs:
+            path_str = pytree.keystr(key_path)
+
+            if not self._is_device_compatible(leaf.device):
+                # Use pytree.keystr to generate a readable path for the error message.
+                raise ValueError(
+                    f"Device mismatch at '{path_str}': The tensor device {leaf.device} "
+                    f"is not compatible with the TensorDict's device {self.device}."
+                )
+
+    def _get_pytree_context(
+        self, flat_leaves: List[Tensor], children_spec: pytree.TreeSpec
+    ) -> Tuple:
+        """
+        Private helper to compute the pytree context for this TensorDict.
+
+        The context captures the necessary metadata to reconstruct the TensorDict
+        from its leaves: the original structure of the contained data and the
+        event dimensions of each tensor.
+        """
+        batch_ndim = len(self.shape)
+        event_ndims = tuple(leaf.ndim - batch_ndim for leaf in flat_leaves)
+        return (children_spec, event_ndims)
 
     def _pytree_flatten(self) -> Tuple[List[Tensor], Tuple]:
         """
         Flattens the TensorDict into its tensor leaves and static metadata.
+        (Implementation for `flatten_fn` in `register_pytree_node`)
         """
+        # Get the leaves and the spec describing the structure of self.data
         flat_leaves, children_spec = pytree.tree_flatten(self.data)
-        batch_ndim = len(self.shape)
-        event_ndims = tuple(leaf.ndim - batch_ndim for leaf in flat_leaves)
-        context = (children_spec, event_ndims)
+
+        # Use the helper to compute and return the context
+        context = self._get_pytree_context(flat_leaves, children_spec)
         return flat_leaves, context
+
+    def _pytree_flatten_with_keys_fn(
+        self,
+    ) -> Tuple[List[Tuple[pytree.KeyPath, Tensor]], Tuple]:
+        """
+        Flattens the TensorDict into key-path/leaf pairs and static metadata.
+        (Implementation for `flatten_with_keys_fn` in `register_pytree_node`)
+        """
+        # Use the public API to robustly get key paths, leaves, and the spec
+        keypath_leaf_list, children_spec = pytree.tree_flatten_with_path(self.data)
+
+        # Extract just the leaves to pass to the context helper
+        flat_leaves = [leaf for _, leaf in keypath_leaf_list]
+
+        # Use the helper to compute and return the context
+        context = self._get_pytree_context(flat_leaves, children_spec)
+        return keypath_leaf_list, context
 
     @classmethod
     def _pytree_unflatten(cls, leaves: List[Tensor], context: Tuple) -> TensorDict:
@@ -139,16 +221,6 @@ class TensorDict(PytreeRegistered):
         obj.device = new_device
         return obj
 
-    @classmethod
-    def __torch_function__(cls, func, types, args=(), kwargs=None):
-        if kwargs is None:
-            kwargs = {}
-        if func not in HANDLED_FUNCTIONS or not all(
-            issubclass(t, (torch.Tensor, TensorDict)) for t in types
-        ):
-            return NotImplemented
-        return HANDLED_FUNCTIONS[func](*args, **kwargs)
-
     # --- Standard MutableMapping methods ---
     def __getitem__(self, key: Union[str, Any]) -> TDCompatible:
         if isinstance(key, str):
@@ -157,6 +229,12 @@ class TensorDict(PytreeRegistered):
         return pytree.tree_map(lambda x: x[key], self)
 
     def __setitem__(self, key: str, value: TDCompatible):
+        if not isinstance(value, (Tensor, TensorContainer)):
+            raise ValueError("value must be a Tensor or TensorContainer")
+
+        self._tree_validate_shape(value)
+        self._tree_validate_device(value)
+
         self.data[key] = value
 
     def __delitem__(self, key: str):
@@ -180,45 +258,6 @@ class TensorDict(PytreeRegistered):
     def items(self):
         return self.data.items()
 
-    # --- Overloaded methods leveraging PyTrees ---
-    def view(self, *shape: int) -> TensorDict:
-        return pytree.tree_map(lambda x: x.view(*shape), self)
-
-    def reshape(self, *shape: int) -> TensorDict:
-        return pytree.tree_map(lambda x: x.reshape(*shape), self)
-
-    def to(self, *args, **kwargs) -> TensorDict:
-        return pytree.tree_map(lambda x: x.to(*args, **kwargs), self)
-
-    def detach(self) -> TensorDict:
-        return pytree.tree_map(lambda x: x.detach(), self)
-
-    def clone(self) -> TensorDict:
-        return pytree.tree_map(lambda x: x.clone(), self)
-
-    def expand(self, *shape: int) -> TensorDict:
-        return pytree.tree_map(lambda x: x.expand(*shape), self)
-
-    def __repr__(self) -> str:
-        # Infer device for representation if not set
-        device = self.device
-        if device is None and self.data:
-            try:
-                device = pytree.tree_leaves(self.data)[0].device
-            except IndexError:
-                pass
-
-        def _format_item(key, value):
-            if isinstance(value, TensorDict):
-                return f"{key}: {value.__repr__()}"
-            elif isinstance(value, torch.Tensor):
-                return f"{key}: Tensor(shape={value.shape}, dtype={value.dtype})"
-            else:
-                return f"{key}: {repr(value)}"
-
-        items_str = ", ".join(_format_item(k, v) for k, v in self.data.items())
-        return f"TensorDict(shape={self.shape}, device={device}, {items_str})"
-
     def update(self, other: Union[Dict[str, NestedTDCompatible], TensorDict]):
         """
         Updates the TensorDict with values from another dictionary or TensorDict.
@@ -226,13 +265,6 @@ class TensorDict(PytreeRegistered):
         if isinstance(other, TensorDict):
             other = other.data
         for key, value in other.items():
-            if isinstance(value, dict):
-                value = TensorDict(value, shape=self.shape, device=self.device)
-            if isinstance(value, torch.Tensor):
-                if value.shape != self.shape:
-                    raise RuntimeError(
-                        f"Shape mismatch: value shape is {value.shape}, expected {self.shape}"
-                    )
             self[key] = value
 
     def copy(self) -> TensorDict:
@@ -264,14 +296,22 @@ class TensorDict(PytreeRegistered):
                 out[key] = value
         return TensorDict(out, self.shape, self.device)
 
+    def __repr__(self) -> str:
+        # Infer device for representation if not set
+        device = self.device
+        if device is None and self.data:
+            try:
+                device = pytree.tree_leaves(self.data)[0].device
+            except IndexError:
+                pass
 
-# --- PyTree-aware implementations of torch functions ---
-@implements(torch.stack)
-def _stack(tensors: Union[Tuple[TensorDict, ...], List[TensorDict]], dim: int = 0):
-    returns = pytree.tree_map(lambda *x: torch.stack(x, dim), *tensors)
-    return returns
+        def _format_item(key, value):
+            if isinstance(value, TensorDict):
+                return f"{key}: {value.__repr__()}"
+            elif isinstance(value, Tensor):
+                return f"{key}: Tensor(shape={value.shape}, dtype={value.dtype})"
+            else:
+                return f"{key}: {repr(value)}"
 
-
-@implements(torch.cat)
-def _cat(tensors: Union[Tuple[TensorDict, ...], List[TensorDict]], dim: int = 0):
-    return pytree.tree_map(lambda *x: torch.cat(x, dim), *tensors)
+        items_str = ", ".join(_format_item(k, v) for k, v in self.data.items())
+        return f"TensorDict(shape={self.shape}, device={device}, {items_str})"

@@ -22,7 +22,12 @@ class PytreeRegistered(ABC):
         # from PytreeRegistered is defined. `cls` is the new subclass.
         super().__init_subclass__(**kwargs)
 
-        pytree.register_pytree_node(cls, cls._pytree_flatten, cls._pytree_unflatten)
+        pytree.register_pytree_node(
+            cls,
+            cls._pytree_flatten,
+            cls._pytree_unflatten,
+            flatten_with_keys_fn=cls._pytree_flatten_with_keys_fn,
+        )
 
     @abstractmethod
     def _pytree_flatten(self) -> Tuple[List[Tensor], Tuple]:

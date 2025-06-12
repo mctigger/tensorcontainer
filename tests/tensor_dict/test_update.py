@@ -47,17 +47,18 @@ def test_update_with_kwargs(nested_dict):
 def test_update_nested_mapping(nested_dict):
     td = TensorDict(nested_dict((2, 2)), shape=(2, 2))
     nested_map = {"x": {"c": torch.ones(2, 2) * 7}}
-    td.update(nested_map)
+    nested_td = TensorDict(nested_map, shape=td.shape)
+    td.update(nested_td)
     # ensure the nested dict was converted into a TensorDict
     assert isinstance(td["x"], TensorDict)
     assert "c" in td["x"]
-    assert torch.equal(td["x"]["c"], nested_map["x"]["c"])
+    assert torch.equal(td["x"]["c"], nested_td["x"]["c"])
 
 
 def test_update_incompatible_shape_raises(nested_dict):
     td = TensorDict(nested_dict((2, 2)), shape=(2, 2))
     bad = torch.ones(1, 3)
-    with pytest.raises(RuntimeError):
+    with pytest.raises(ValueError):
         td.update({"z": bad})
 
 
