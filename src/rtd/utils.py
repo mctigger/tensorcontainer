@@ -1,6 +1,10 @@
 from abc import ABC, abstractmethod
+from typing import List, Tuple, TypeVar, Type
 
+from torch import Tensor
 import torch.utils._pytree as pytree
+
+_PytreeRegistered = TypeVar("_PytreeRegistered", bound="PytreeRegistered")
 
 
 class PytreeRegistered(ABC):
@@ -21,10 +25,12 @@ class PytreeRegistered(ABC):
         pytree.register_pytree_node(cls, cls._pytree_flatten, cls._pytree_unflatten)
 
     @abstractmethod
-    def _pytree_flatten(cls):
+    def _pytree_flatten(self) -> Tuple[List[Tensor], Tuple]:
         pass
 
     @classmethod
     @abstractmethod
-    def _pytree_unflatten(cls, leaves, context):
+    def _pytree_unflatten(
+        cls: Type[_PytreeRegistered], leaves, context
+    ) -> _PytreeRegistered:
         pass

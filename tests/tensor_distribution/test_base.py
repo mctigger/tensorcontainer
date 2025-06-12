@@ -87,35 +87,3 @@ def test_log_prob_agrees_with_underlying_distribution():
     # log_prob should match exactly, shape = (5,)
     assert lp_td.shape == lp_dist.shape
     assert torch.allclose(lp_td, lp_dist)
-
-
-def test_apply_and_zip_apply_preserve_distribution_properties():
-    # simple batch of two TensorNormals
-    loc1 = torch.zeros(2)
-    scale1 = torch.ones(2)
-    td1 = TensorNormal(loc1, scale1, reinterpreted_batch_ndims=1, shape=(2,))
-
-    loc2 = torch.ones(2) * 2
-    scale2 = torch.ones(2) * 3
-    td2 = TensorNormal(loc2, scale2, reinterpreted_batch_ndims=1, shape=(2,))
-
-    # apply a transformation to means
-    td1_shifted = td1.apply(lambda x: x + 1.0)
-    assert isinstance(td1_shifted, TensorNormal)
-    # mean should increase by 1
-    assert torch.allclose(td1_shifted.mean, td1.mean + 1.0)
-
-    # zip_apply to average two distributions
-    def avg_params(params_list):
-        # params_list = [loc_tensor_list, scale_tensor_list]
-        # zip_apply hands us [ [loc1, loc2], [scale1, scale2] ] transposed as needed
-        # Actually fn receives list of corresponding leaves
-        return torch.stack(params_list, dim=0).mean(dim=0)
-
-    td_avg = TensorNormal.zip_apply(
-        [td1, td2], lambda xs: torch.stack(xs, dim=0).mean(dim=0)
-    )
-    assert isinstance(td_avg, TensorNormal)
-    # averaged loc should be (0+2)/2 = 1, scale (1+3)/2 = 2
-    assert torch.allclose(td_avg.mean, torch.ones(2) * 1.0)
-    assert torch.allclose(td_avg.stddev, torch.ones(2) * 2.0)

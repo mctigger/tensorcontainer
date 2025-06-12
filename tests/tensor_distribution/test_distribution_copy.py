@@ -11,19 +11,7 @@ from rtd.tensor_distribution import TensorBernoulli, TensorNormal, TensorDistrib
             TensorBernoulli,
             {
                 "probs": torch.tensor([0.1, 0.9]),
-                "soft": False,
                 "reinterpreted_batch_ndims": 1,
-                "shape": (2,),
-                "device": torch.device("cpu"),
-            },
-        ),
-        # Bernoulli via logits, soft
-        (
-            TensorBernoulli,
-            {
-                "logits": torch.tensor([-2.0, 2.0]),
-                "soft": True,
-                "reinterpreted_batch_ndims": 0,
                 "shape": (2,),
                 "device": torch.device("cpu"),
             },
@@ -56,8 +44,8 @@ def test_copy_returns_same_subclass_and_preserves_properties(TDClass, init_kwarg
     assert td_copy.device == td.device
 
     # Distribution‐specific properties preserved
-    assert hasattr(td_copy, "distribution_properties")
-    assert td_copy.distribution_properties == td.meta_data
+    assert hasattr(td_copy, "meta_data")
+    assert td_copy.meta_data == td.meta_data
 
     # Data keys and tensor contents preserved
     assert set(td_copy.data.keys()) == set(td.data.keys())
@@ -71,7 +59,6 @@ def test_copy_independent_modification_does_not_affect_original():
     # Create an original Bernoulli TensorDistribution
     orig = TensorBernoulli(
         probs=torch.tensor([0.3, 0.7]),
-        soft=False,
         reinterpreted_batch_ndims=1,
         shape=(2,),
         device=torch.device("cpu"),

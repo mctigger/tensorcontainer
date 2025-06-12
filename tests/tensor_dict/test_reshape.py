@@ -1,10 +1,15 @@
 import torch
 import pytest
+
 from rtd.tensor_dict import TensorDict
 
 
 def test_reshape_basic():
-    td = TensorDict({"a": torch.randn(4, 4)}, shape=(4, 4), device=torch.device("cpu"))
+    td = TensorDict(
+        {"a": torch.randn(4, 4)},
+        shape=(4, 4),
+        device=torch.device("cpu"),
+    )
     td_reshape = td.reshape(16)
     assert td_reshape.shape == (16,)
     assert torch.equal(td_reshape["a"], td["a"].reshape(16))
@@ -12,7 +17,11 @@ def test_reshape_basic():
 
 
 def test_reshape_reshape():
-    td = TensorDict({"a": torch.randn(4, 4)}, shape=(4, 4), device=torch.device("cpu"))
+    td = TensorDict(
+        {"a": torch.randn(4, 4)},
+        shape=(4, 4),
+        device=torch.device("cpu"),
+    )
     td_reshape = td.reshape(2, 8)
     assert td_reshape.shape == (2, 8)
     assert torch.equal(td_reshape["a"], td["a"].reshape(2, 8))

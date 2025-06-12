@@ -75,6 +75,47 @@ class TensorNormal(TensorDistribution):
             self.meta_data["reinterpreted_batch_ndims"],
         )
 
+    def copy(self):
+        return TensorNormal(
+            loc=self["loc"],
+            scale=self["scale"],
+            reinterpreted_batch_ndims=self.meta_data["reinterpreted_batch_ndims"],
+            shape=self.shape,
+            device=self.device,
+        )
+
+
+class TensorBernoulli(TensorDistribution):
+    def __init__(
+        self,
+        probs,
+        reinterpreted_batch_ndims,
+        shape=...,
+        device=torch.device("cpu"),
+    ):
+        super().__init__(
+            {"probs": probs},
+            shape,
+            device,
+            {"reinterpreted_batch_ndims": reinterpreted_batch_ndims},
+        )
+
+    def dist(self):
+        return Independent(
+            torch.distributions.Bernoulli(
+                probs=self["probs"],
+            ),
+            self.meta_data["reinterpreted_batch_ndims"],
+        )
+
+    def copy(self):
+        return TensorBernoulli(
+            probs=self["probs"].clone(),
+            reinterpreted_batch_ndims=self.meta_data["reinterpreted_batch_ndims"],
+            shape=self.shape,
+            device=self.device,
+        )
+
 
 @register_kl(TensorDistribution, TensorDistribution)
 def registerd_td_td(

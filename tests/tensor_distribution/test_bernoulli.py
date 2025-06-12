@@ -17,18 +17,17 @@ def normalize_device(dev: torch.device) -> torch.device:
 @pytest.mark.parametrize(
     "args,kwargs",
     [
-        ({}, {}),  # no probs or logits
         ({"probs": 0.3, "logits": 0.1}, {}),  # both provided
     ],
 )
 def test_init_invalid_params(args, kwargs):
-    with pytest.raises(ValueError):
+    with pytest.raises(TypeError):
         TensorBernoulli(**args, **kwargs)
 
 
 def test_sample_shape_and_dtype_and_values():
     probs = torch.rand(4, 3)
-    dist = TensorBernoulli(probs=probs, shape=probs.shape)
+    dist = TensorBernoulli(probs=probs, shape=probs.shape, reinterpreted_batch_ndims=0)
     # draw 5 i.i.d. samples
     samples = dist.sample(sample_shape=(5,))
     # shape = (5, *batch_shape)

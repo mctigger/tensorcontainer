@@ -17,7 +17,7 @@ def base_td_data():
 @pytest.fixture
 def simple_td(base_td_data):
     """A simple TensorDict instance."""
-    return TensorDict(base_td_data, shape=torch.Size([4, 5]), device="cpu")
+    return TensorDict(base_td_data, shape=(4, 5), device="cpu")
 
 
 @pytest.fixture
@@ -28,10 +28,10 @@ def nested_td():
         {
             "obs": torch.randn(B, T, 10),
             "nested": TensorDict(
-                {"state": torch.randn(B, T, 5)}, shape=torch.Size([B, T]), device="cpu"
+                {"state": torch.randn(B, T, 5)}, shape=(B, T), device="cpu"
             ),
         },
-        shape=torch.Size([B, T]),
+        shape=(B, T),
         device="cpu",
     )
 
@@ -50,7 +50,7 @@ class TestTensorDictCompilation:
         def create_td_from_tensors(obs_arg, reward_arg):
             td = TensorDict(
                 {"obs": obs_arg, "reward": reward_arg},
-                shape=torch.Size([4, 5]),
+                shape=(4, 5),
                 device="cpu",
             )
             return td
@@ -67,7 +67,7 @@ class TestTensorDictCompilation:
         def create_td_from_nested_dict(obs_arg, reward_arg):
             td = TensorDict(
                 {"my_dict": {"obs": obs_arg, "reward": reward_arg}},
-                shape=torch.Size([4, 5]),
+                shape=(4, 5),
                 device="cpu",
             )
             return td
@@ -113,7 +113,7 @@ class TestTensorDictCompilation:
         eager_result, compiled_result = run_and_compare_compiled(
             stack_tensordicts, td_a, td_b
         )
-        assert eager_result.shape == torch.Size([2, 4, 5])
+        assert eager_result.shape == (2, 4, 5)
 
     def test_concatenating_tensordicts_in_compiled_function(self, simple_td):
         """
@@ -128,7 +128,7 @@ class TestTensorDictCompilation:
         eager_result, compiled_result = run_and_compare_compiled(
             concatenate_tensordicts, td_a, td_b
         )
-        assert eager_result.shape == torch.Size([4, 10])
+        assert eager_result.shape == (4, 10)
 
     @pytest.mark.parametrize(
         "index",
@@ -167,8 +167,8 @@ class TestTensorDictCompilation:
         eager_result = operate_on_nested_td(nested_td_eager)
         compiled_result = compiled_fn(nested_td_compiled)
 
-        assert eager_result.shape == torch.Size([3])
-        assert eager_result["nested"].shape == torch.Size([3])
+        assert eager_result.shape == (3,)
+        assert eager_result["nested"].shape == (3,)
         assert_td_equal(eager_result, compiled_result)
 
     @pytest.mark.skipif(

@@ -39,7 +39,7 @@ class TensorDict(PytreeRegistered):
         self,
         data: Mapping[str, NestedTDCompatible],
         shape: Tuple[int],
-        device: Optional[torch.device] = None,
+        device: Optional[Union[str, torch.device]] = None,
     ):
         """
         Initializes the TensorDict. This constructor is kept simple for
@@ -90,7 +90,7 @@ class TensorDict(PytreeRegistered):
         return flat_leaves, context
 
     @classmethod
-    def _pytree_unflatten(cls, flat_leaves: List[Tensor], context: Tuple) -> TensorDict:
+    def _pytree_unflatten(cls, leaves: List[Tensor], context: Tuple) -> TensorDict:
         """
         Reconstructs a TensorDict by creating a new instance and manually
         populating its attributes. This approach is more robust for torch.compile's
@@ -98,7 +98,7 @@ class TensorDict(PytreeRegistered):
         """
         (children_spec, event_ndims) = context  # Unpack the context
 
-        if not flat_leaves:
+        if not leaves:
             # Handle the empty case explicitly with direct instantiation
             obj = cls.__new__(cls)
             obj.data = {}
@@ -113,10 +113,10 @@ class TensorDict(PytreeRegistered):
         )
 
         # Reconstruct the nested dictionary structure using the unflattened leaves
-        data = pytree.tree_unflatten(flat_leaves, children_spec)
+        data = pytree.tree_unflatten(leaves, children_spec)
 
         # Infer new_shape and new_device
-        first_leaf_reconstructed = flat_leaves[0]
+        first_leaf_reconstructed = leaves[0]
 
         # Simplified inference (common and works for stack/cat):
         new_device = first_leaf_reconstructed.device
