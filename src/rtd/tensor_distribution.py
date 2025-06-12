@@ -136,10 +136,9 @@ class TensorCategorical(TensorDistribution):
         )
 
     def dist(self):
-        output_shape = self.meta_data["output_shape"]
         logits = self["logits"].float()
+        output_shape = self.meta_data["output_shape"]
         logits = logits.view(*logits.shape[:-1], -1, *output_shape)
-
         one_hot = OneHotCategoricalStraightThrough(logits=logits)
 
         return Independent(one_hot, len(output_shape))

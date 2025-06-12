@@ -50,9 +50,11 @@ def run_and_compare_compiled(fn, *args, **kwargs):
     torch._dynamo.utils.reset_graph_break_dup_checker()
 
     # Eager run
+    torch.manual_seed(0)
     eager_result = fn(*args, **kwargs)
 
     # Compiled run
+    torch.manual_seed(0)
     compiled_fn = torch.compile(fn)
     compiled_result = compiled_fn(*args, **kwargs)
 
