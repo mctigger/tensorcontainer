@@ -238,6 +238,9 @@ class TensorDict(TensorContainer, PytreeRegistered):
     @overload
     def __getitem__(self, key: slice) -> TensorDict: ...
 
+    @overload
+    def __getitem__(self, key: Tensor) -> TensorDict: ...
+
     def __getitem__(self, key: Any) -> TDCompatible:
         if isinstance(key, str):
             return self.data[key]
