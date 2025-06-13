@@ -27,7 +27,7 @@ class TensorContainer:
     def __init__(self, shape):
         super().__init__()
 
-        self._shape = shape
+        self.shape = shape
 
     @classmethod
     def __torch_function__(cls, func, types, args=(), kwargs=None):
@@ -45,14 +45,19 @@ class TensorContainer:
             raise ValueError()
 
     def _has_shape_prefix(self, shape):
-        return shape == self._shape[: len(shape)]
+        return shape == self.shape[: len(shape)]
+
+
+    @property
+    def ndim(self):
+        return len(self.shape)
 
     # --- Overloaded methods leveraging PyTrees ---
     def view(self, *shape: int) -> TensorContainer:
-        return pytree.tree_map(lambda x: x.view(*shape), self)
+        return pytree.tree_map(lambda x: x.view(*shape, *x.shape[self.ndim:]), self)
 
     def reshape(self, *shape: int) -> TensorContainer:
-        return pytree.tree_map(lambda x: x.reshape(*shape), self)
+        return pytree.tree_map(lambda x: x.reshape(*shape, *x.shape[self.ndim:]), self)
 
     def to(self, *args, **kwargs) -> TensorContainer:
         return pytree.tree_map(lambda x: x.to(*args, **kwargs), self)
@@ -64,7 +69,7 @@ class TensorContainer:
         return pytree.tree_map(lambda x: x.clone(), self)
 
     def expand(self, *shape: int) -> TensorContainer:
-        return pytree.tree_map(lambda x: x.expand(*shape), self)
+        return pytree.tree_map(lambda x: x.expand(*shape, *x.shape[self.ndim:]), self)
 
 
 # --- PyTree-aware implementations of torch functions ---

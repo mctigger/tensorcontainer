@@ -61,7 +61,6 @@ class TensorDict(TensorContainer, PytreeRegistered):
         super().__init__(shape)
 
         self.data = TensorDict.data_from_dict(data, shape, device)
-        self.shape = shape
         self.device = device
 
         if validate_args:
