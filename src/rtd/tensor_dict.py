@@ -246,7 +246,7 @@ class TensorDict(TensorContainer, PytreeRegistered):
 
     def __setitem__(self, key: str, value: TDCompatible):
         if not isinstance(value, (Tensor, TensorContainer)):
-            raise ValueError("value must be a Tensor or TensorContainer")
+            raise ValueError(f"value must be a Tensor or TensorContainer, got value of type {type(value)}")
 
         self._tree_validate_shape(value)
         self._tree_validate_device(value)

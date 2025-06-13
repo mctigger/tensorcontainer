@@ -133,3 +133,53 @@ def test_flatten_keys_torch_compile(simple_nested, deep_nested):
     td_empty_flat = td_empty.flatten_keys()
     run_and_compare_compiled(td_empty.flatten_keys)
     assert len(td_empty_flat.keys()) == 0
+
+
+
+def test_flatten_keys_items_correctly_mapped(simple_nested):
+    """Uses .items() to check that values are in the correct keys after flattening."""
+    td_original = simple_nested
+    td_flat = td_original.flatten_keys()
+
+    # Expected key-value pairs after flattening
+    expected_data = {
+        "x.a": td_original["x"]["a"],
+        "x.b": td_original["x"]["b"],
+        "y": td_original["y"],
+    }
+
+    # Check that the number of items in the flattened TensorDict is as expected.
+    assert len(td_flat.keys()) == len(expected_data)
+
+    # Iterate over the .items() of the flattened TensorDict
+    for key, value in td_flat.items():
+        # Check that the flattened key is one of the expected keys
+        assert key in expected_data
+
+        # Check that the tensor value is correct
+        torch.testing.assert_close(value, expected_data[key])
+
+        # Check that it's the same tensor object, not a copy.
+        # This is an important property of flatten_keys.
+        assert value is expected_data[key]
+
+
+def test_flatten_keys_getitem_access(simple_nested):
+    """Checks that accessing values by key on a flattened TensorDict works correctly."""
+    td_original = simple_nested
+    td_flat = td_original.flatten_keys()
+
+    # Get original values for comparison
+    original_value_xa = td_original["x"]["a"]
+    original_value_xb = td_original["x"]["b"]
+    original_value_y = td_original["y"]
+
+    # Access values using __getitem__ (i.e., td[key]) and assert correctness
+    torch.testing.assert_close(td_flat["x.a"], original_value_xa)
+    torch.testing.assert_close(td_flat["x.b"], original_value_xb)
+    torch.testing.assert_close(td_flat["y"], original_value_y)
+
+    # Also assert that the retrieved values are the same tensor objects, not copies
+    assert td_flat["x.a"] is original_value_xa
+    assert td_flat["x.b"] is original_value_xb
+    assert td_flat["y"] is original_value_y
