@@ -1,7 +1,18 @@
 from __future__ import annotations
 
 import functools
-from typing import Any, Dict, List, Mapping, Optional, Tuple, TypeAlias, Union
+from typing import (
+    Any,
+    Dict,
+    List,
+    Mapping,
+    Optional,
+    Tuple,
+    TypeAlias,
+    Union,
+    TypeVar,
+    overload,
+)
 
 import torch
 
@@ -13,7 +24,6 @@ from rtd.tensor_container import TensorContainer
 from rtd.utils import PytreeRegistered
 
 
-# TypeAlias definitions remain the same
 TDCompatible: TypeAlias = Union[Tensor, TensorContainer]
 NestedTDCompatible: TypeAlias = Union[TDCompatible, Dict[str, TDCompatible]]
 
@@ -40,7 +50,7 @@ class TensorDict(TensorContainer, PytreeRegistered):
     def __init__(
         self,
         data: Mapping[str, NestedTDCompatible],
-        shape: Tuple[int],
+        shape: Tuple[int, ...],
         device: Optional[Union[str, torch.device]] = None,
         validate_args: bool = True,
     ):
@@ -58,7 +68,7 @@ class TensorDict(TensorContainer, PytreeRegistered):
             self._tree_validate_shape(data)
 
     @classmethod
-    def data_from_dict(cls, data, shape, device=None):
+    def data_from_dict(cls, data, shape, device=None) -> Dict[str, TDCompatible]:
         result = {}
         for k, v in data.items():
             if isinstance(v, dict):
@@ -222,7 +232,13 @@ class TensorDict(TensorContainer, PytreeRegistered):
         return obj
 
     # --- Standard MutableMapping methods ---
-    def __getitem__(self, key: Union[str, Any]) -> TDCompatible:
+    @overload
+    def __getitem__(self, key: str) -> TDCompatible: ...
+
+    @overload
+    def __getitem__(self, key: slice) -> TensorDict: ...
+
+    def __getitem__(self, key: Any) -> TDCompatible:
         if isinstance(key, str):
             return self.data[key]
 
@@ -258,7 +274,7 @@ class TensorDict(TensorContainer, PytreeRegistered):
     def items(self):
         return self.data.items()
 
-    def update(self, other: Union[Dict[str, NestedTDCompatible], TensorDict]):
+    def update(self, other: Union[Dict[str, TDCompatible], TensorDict]):
         """
         Updates the TensorDict with values from another dictionary or TensorDict.
         """
@@ -282,18 +298,22 @@ class TensorDict(TensorContainer, PytreeRegistered):
         data = pytree.tree_map(copy_item, self.data)
         return TensorDict(data, self.shape, self.device)
 
-    def flatten_keys(self) -> TensorDict:
+    def flatten_keys(self, separator: str = '.') -> TensorDict:
         """
         Returns a TensorDict with flattened keys.
         """
         out = {}
-        for key, value in self.data.items():
-            if isinstance(value, TensorDict):
-                sub_dict = value.flatten_keys()
-                for sub_key, sub_value in sub_dict.data.items():
-                    out[f"{key}.{sub_key}"] = sub_value
+
+        def _flatten(data, prefix=""):
+            if isinstance(data, TensorDict):
+                for key, value in data.items():
+                    new_prefix = prefix + key + separator
+                    _flatten(value, new_prefix)
             else:
-                out[key] = value
+                out[prefix[:-1]] = data
+
+        _flatten(self)
+        
         return TensorDict(out, self.shape, self.device)
 
     def __repr__(self) -> str:
