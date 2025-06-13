@@ -8,11 +8,15 @@ from torch.distributions import (
     Distribution,
     Independent,
     Normal,
+    TransformedDistribution,
     register_kl,
     kl_divergence,
     OneHotCategoricalStraightThrough,
+    transforms,
 )
+from rtd.distributions.sampling import SamplingDistribution
 import torch
+from rtd.distributions.truncated_normal import TruncatedNormal
 from rtd.tensor_dict import TensorDict
 from rtd.utils import PytreeRegistered
 
@@ -22,6 +26,32 @@ from typing import List, Tuple
 # Use the official PyTree utility from torch
 import torch.utils._pytree as pytree
 
+class ClampedTanhTransform(torch.distributions.transforms.Transform):
+    """
+    Transform that applies tanh and clamps the output between -1 and 1.
+    """
+    domain = torch.distributions.constraints.real
+    codomain = torch.distributions.constraints.interval(-1.0, 1.0)
+    bijective = True
+    
+    @property
+    def sign(self):
+        return +1
+
+    def __init__(self):
+        super().__init__()
+
+    def _call(self, x):
+        return torch.tanh(x)
+
+    def _inverse(self, y):
+        # Arctanh
+        return torch.atanh(y)
+
+    def log_abs_det_jacobian(self, x, y):
+        # |det J| = 1 - tanh^2(x)
+        # log|det J| = log(1 - tanh^2(x))
+        return torch.log(1 - y.pow(2) + 1e-6)  # Adding small epsilon for numerical stability
 
 class TensorDistribution(TensorDict, PytreeRegistered):
     meta_data: Dict[str, Any]
@@ -157,7 +187,7 @@ class TensorNormal(TensorDistribution):
         loc,
         scale,
         reinterpreted_batch_ndims,
-        shape=...,
+        shape,
         device=torch.device("cpu"),
     ):
         super().__init__(
@@ -185,6 +215,31 @@ class TensorNormal(TensorDistribution):
             device=self.device,
         )
 
+class TensorTruncatedNormal(TensorDistribution):
+    def __init__(self, loc, scale, low, high, reinterpreted_batch_ndims, shape=..., device=torch.device("cpu")):
+        super().__init__(
+            {"loc": loc, "scale": scale},
+            shape,
+            device,
+            {"reinterpreted_batch_ndims": reinterpreted_batch_ndims, "low": low, "high": high},
+        )
+
+    def dist(self) -> Distribution:
+        return Independent(
+            TruncatedNormal(self["loc"].float(), self["scale"].float(), self.meta_data["low"], self.meta_data["high"]),
+            self.meta_data["reinterpreted_batch_ndims"],
+        )
+    
+    def copy(self):
+        return TensorTruncatedNormal(
+            loc=self["loc"],
+            scale=self["scale"],
+            low=self.meta_data["low"],
+            high=self.meta_data["high"],
+            reinterpreted_batch_ndims=self.meta_data["reinterpreted_batch_ndims"],
+            shape=self.shape,
+            device=self.device,
+        )
 
 class TensorBernoulli(TensorDistribution):
     def __init__(
@@ -263,3 +318,41 @@ def registerd_d_td(
     td: TensorDistribution,
 ):
     return kl_divergence(d, td.dist())
+
+class TensorTanhNormal(TensorDistribution):
+    def __init__(
+        self,
+        loc,
+        scale,
+        reinterpreted_batch_ndims=1,
+        shape=...,
+        device=torch.device("cpu"),
+    ):
+        super().__init__(
+            {"loc": loc, "scale": scale},
+            shape,
+            device,
+            {"reinterpreted_batch_ndims": reinterpreted_batch_ndims},
+        )
+
+    def dist(self) -> Distribution:
+        return Independent(
+            SamplingDistribution(
+                TransformedDistribution(
+                    Normal(self["loc"].float(), self["scale"].float()),
+                    [
+                        ClampedTanhTransform(),
+                    ],
+                ),
+            ),
+            self.meta_data["reinterpreted_batch_ndims"],
+        )
+
+    def copy(self):
+        return TensorTanhNormal(
+            loc=self["loc"],
+            scale=self["scale"],
+            reinterpreted_batch_ndims=self.meta_data["reinterpreted_batch_ndims"],
+            shape=self.shape,
+            device=self.device,
+        )
