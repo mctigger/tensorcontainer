@@ -10,7 +10,6 @@ from typing import (
     Tuple,
     TypeAlias,
     Union,
-    TypeVar,
     overload,
 )
 
@@ -98,7 +97,6 @@ class TensorDict(TensorContainer, PytreeRegistered):
 
         This method recursively traverses the entire data structure.
         """
-
         # Use tree_flatten_with_path to get a list of (path, leaf) pairs for
         # all leaves in the nested structure of self.data.
         keypath_leaf_pairs = pytree.tree_leaves_with_path(data)
@@ -248,7 +246,9 @@ class TensorDict(TensorContainer, PytreeRegistered):
 
     def __setitem__(self, key: str, value: TDCompatible):
         if not isinstance(value, (Tensor, TensorContainer)):
-            raise ValueError(f"value must be a Tensor or TensorContainer, got value of type {type(value)}")
+            raise ValueError(
+                f"value must be a Tensor or TensorContainer, got value of type {type(value)}"
+            )
 
         self._tree_validate_shape(value)
         self._tree_validate_device(value)
@@ -300,7 +300,7 @@ class TensorDict(TensorContainer, PytreeRegistered):
         data = pytree.tree_map(copy_item, self.data)
         return TensorDict(data, self.shape, self.device)
 
-    def flatten_keys(self, separator: str = '.') -> TensorDict:
+    def flatten_keys(self, separator: str = ".") -> TensorDict:
         """
         Returns a TensorDict with flattened keys.
         """
@@ -315,7 +315,7 @@ class TensorDict(TensorContainer, PytreeRegistered):
                 out[prefix[:-1]] = data
 
         _flatten(self)
-        
+
         return TensorDict(out, self.shape, self.device)
 
     def __repr__(self) -> str:
