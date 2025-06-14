@@ -185,7 +185,7 @@ class TestTensorDictCompilation:
         eager_result, compiled_result = run_and_compare_compiled(
             move_td_to_cuda, simple_td
         )
-        assert eager_result.device.type == "cuda"
+        assert eager_result.device == "cuda"
 
     def test_dtype_change_in_compiled_function(self, simple_td):
         """

@@ -163,41 +163,35 @@ class TensorDict(TensorContainer, PytreeRegistered):
         populating its attributes. This approach is more robust for torch.compile's
         code generation phase.
         """
-        children_spec, event_ndims, shape, device = context  # Unpack the context
+        children_spec, event_ndims, shape_context, device_context = context
+
+        obj = cls.__new__(cls)
+        obj.device = device_context  # Use device from context
 
         if not leaves:
-            # Handle the empty case explicitly with direct instantiation
-            obj = cls.__new__(cls)
+            # Handle the empty case
             obj.data = {}
-            obj.shape = []  # Or a sensible default for empty
-            obj.device = None
+            obj.shape = shape_context  # Use shape from context
             return obj
 
         # Reconstruct the nested dictionary structure using the unflattened leaves
         data = pytree.tree_unflatten(leaves, children_spec)
+        obj.data = data
 
-        # Infer new_shape and new_device
+        # Calculate new_shape based on the (potentially transformed) leaves and event_ndims from context.
+        # This correctly determines the batch shape of the TensorDict after operations like stack/cat.
+        # For copy(), where leaves are original, this also correctly yields the original shape.
         first_leaf_reconstructed = leaves[0]
+        # event_ndims[0] is the event_ndim for the first leaf, relative to original batch shape.
+        if (
+            event_ndims[0] == 0
+        ):  # Leaf was a scalar or had only batch dimensions originally
+            reconstructed_shape = first_leaf_reconstructed.shape
+        else:  # Leaf had event dimensions originally
+            reconstructed_shape = first_leaf_reconstructed.shape[: -event_ndims[0]]
 
-        # Simplified inference (common and works for stack/cat):
-        new_device = first_leaf_reconstructed.device
+        obj.shape = reconstructed_shape
 
-        # Calculate new_shape based on the structure and first leaf.
-        # For operations like `stack`, the batch shape changes.
-        # If `_pytree_flatten` correctly passes `event_ndims`, then:
-        if event_ndims[0] == 0:
-            new_shape = first_leaf_reconstructed.shape
-        else:
-            new_shape = first_leaf_reconstructed.shape[: -event_ndims[0]]
-
-        # Instead of calling `_reconstruct_tensordict` which wraps `cls(...)`,
-        # directly use `cls.__new__` and set attributes.
-        obj = cls.__new__(cls)
-        obj.data = (
-            data  # This is the reconstructed nested dictionary of tensors/TensorDicts
-        )
-        obj.shape = new_shape
-        obj.device = new_device
         return obj
 
     # --- Standard MutableMapping methods ---
@@ -286,11 +280,17 @@ class TensorDict(TensorContainer, PytreeRegistered):
 
     def __repr__(self) -> str:
         # Infer device for representation if not set
-        device = self.device
-        if device is None and self.data:
+        device_repr = self.device
+        if device_repr is None and self.data:
             try:
-                device = pytree.tree_leaves(self.data)[0].device
-            except IndexError:
+                # Ensure there are leaves before trying to access device
+                # pytree.tree_leaves can return an empty list
+                leaves = pytree.tree_leaves(self.data)
+                if leaves:
+                    device_repr = leaves[0].device
+            except IndexError:  # Should not happen if leaves is checked
+                pass
+            except Exception:  # Catch any other pytree or attribute errors
                 pass
 
         def _format_item(key, value):
@@ -302,4 +302,4 @@ class TensorDict(TensorContainer, PytreeRegistered):
                 return f"{key}: {repr(value)}"
 
         items_str = ", ".join(_format_item(k, v) for k, v in self.data.items())
-        return f"TensorDict(shape={self.shape}, device={device}, {items_str})"
+        return f"TensorDict(shape={self.shape}, device={device_repr}, {items_str})"
