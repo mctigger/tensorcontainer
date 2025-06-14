@@ -84,11 +84,33 @@ class TensorDict(TensorContainer, PytreeRegistered):
 
         return leaf_ndim >= batch_ndim and shape[:batch_ndim] == self.shape
 
-    def _is_device_compatible(self, device):
+    def _is_device_compatible(self, leaf_device: torch.device):
+        """Checks if the leaf_device is compatible with the TensorDict's device."""
         if self.device is None:
+            # If TensorDict's device is not specified, any leaf device is considered compatible.
             return True
 
-        return self.device == device
+        # Normalize self.device to a torch.device object for comparison.
+        # self.device can be a string (e.g., "cpu", "cuda") or a torch.device object.
+        # leaf_device is expected to be a torch.device object.
+
+        td_device_obj = self.device
+        if isinstance(self.device, str):
+            try:
+                # Convert string representation to a torch.device object
+                td_device_obj = torch.device(self.device)
+            except RuntimeError:
+                # Invalid device string for self.device, so consider it incompatible.
+                return False
+
+        # After potential conversion, td_device_obj should be a torch.device object
+        # if self.device was a valid string or already a torch.device object.
+        if not isinstance(td_device_obj, torch.device):
+            # This case should ideally not be reached if self.device is always
+            # a valid device string, a torch.device object, or None.
+            return False
+
+        return td_device_obj == leaf_device
 
     def _tree_validate_shape(self, data):
         """
@@ -166,13 +188,15 @@ class TensorDict(TensorContainer, PytreeRegistered):
         children_spec, event_ndims, shape_context, device_context = context
 
         obj = cls.__new__(cls)
-        obj.device = device_context  # Use device from context
-
         if not leaves:
             # Handle the empty case
             obj.data = {}
             obj.shape = shape_context  # Use shape from context
+            obj.device = device_context  # For empty TD, use context device
             return obj
+
+        first_leaf_device = leaves[0].device
+        obj.device = first_leaf_device
 
         # Reconstruct the nested dictionary structure using the unflattened leaves
         data = pytree.tree_unflatten(leaves, children_spec)
@@ -258,6 +282,8 @@ class TensorDict(TensorContainer, PytreeRegistered):
         """
         flat_leaves, context = self._pytree_flatten()
         new_td = TensorDict._pytree_unflatten(flat_leaves, context)
+        # Ensure device is preserved from the original TensorDict
+        new_td.device = self.device
         return new_td
 
     def flatten_keys(self, separator: str = ".") -> TensorDict:

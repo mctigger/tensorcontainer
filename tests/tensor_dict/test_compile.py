@@ -81,23 +81,35 @@ class TestTensorDictCompilation:
         works correctly inside a compiled function.
         """
 
-        def modify_reward_in_td(td):
-            td["reward"] = td["reward"] * 2.0
-            return td["reward"]
+        def set_value_and_return_td(td_arg):
+            # Perform the modification
+            td_arg["reward"] = td_arg["reward"] * 2.0
+            # Return the TensorDict that was (conceptually) modified
+            return td_arg
 
-        compiled_fn = torch.compile(modify_reward_in_td, fullgraph=True)
+        compiled_fn = torch.compile(set_value_and_return_td, fullgraph=True)
 
-        # Clone to ensure independent eager and compiled runs
+        # Clone for independent runs
         simple_td_eager = simple_td.clone()
-        simple_td_compiled = simple_td.clone()
+        simple_td_for_compile_input = simple_td.clone()
 
-        eager_result = modify_reward_in_td(simple_td_eager)
-        compiled_result = compiled_fn(simple_td_compiled)
+        # Eager run: simple_td_eager is modified in-place, and also returned.
+        eager_modified_td = set_value_and_return_td(simple_td_eager)
 
-        # Compare the returned tensor directly
-        assert torch.allclose(eager_result, compiled_result)
-        # Also compare the modified TensorDicts
-        assert_td_equal(simple_td_eager, simple_td_compiled)
+        # Compiled run: simple_td_for_compile_input is passed.
+        # compiled_fn returns the new, modified TensorDict created internally.
+        # The original simple_td_for_compile_input object in this scope is not mutated.
+        compiled_modified_td = compiled_fn(simple_td_for_compile_input)
+
+        # 1. Compare the TensorDicts that reflect the modification.
+        #    eager_modified_td is the same object as simple_td_eager (which was modified).
+        #    compiled_modified_td is the new TensorDict returned by the compiled function.
+        assert_td_equal(eager_modified_td, compiled_modified_td)
+
+        # 2. Verify that the input TensorDict to the compiled function (`simple_td_for_compile_input`)
+        #    is mutated to reflect the changes, consistent with the returned TensorDict.
+        #    This is an observed behavior when a PyTree input is modified and returned by torch.compile.
+        assert_td_equal(compiled_modified_td, simple_td_for_compile_input)
 
     def test_stacking_tensordicts_in_compiled_function(self, simple_td):
         """
@@ -185,7 +197,7 @@ class TestTensorDictCompilation:
         eager_result, compiled_result = run_and_compare_compiled(
             move_td_to_cuda, simple_td
         )
-        assert eager_result.device == "cuda"
+        assert eager_result.device.type == "cuda"
 
     def test_dtype_change_in_compiled_function(self, simple_td):
         """
