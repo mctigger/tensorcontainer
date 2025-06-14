@@ -64,6 +64,7 @@ class TensorDict(TensorContainer, PytreeRegistered):
 
         if validate_args:
             self._tree_validate_shape(data)
+            self._tree_validate_device(data)
 
     @classmethod
     def data_from_dict(cls, data, shape, device=None) -> Dict[str, TDCompatible]:
@@ -90,27 +91,48 @@ class TensorDict(TensorContainer, PytreeRegistered):
             # If TensorDict's device is not specified, any leaf device is considered compatible.
             return True
 
-        # Normalize self.device to a torch.device object for comparison.
-        # self.device can be a string (e.g., "cpu", "cuda") or a torch.device object.
-        # leaf_device is expected to be a torch.device object.
-
         td_device_obj = self.device
         if isinstance(self.device, str):
             try:
-                # Convert string representation to a torch.device object
                 td_device_obj = torch.device(self.device)
             except RuntimeError:
-                # Invalid device string for self.device, so consider it incompatible.
                 return False
 
-        # After potential conversion, td_device_obj should be a torch.device object
-        # if self.device was a valid string or already a torch.device object.
         if not isinstance(td_device_obj, torch.device):
-            # This case should ideally not be reached if self.device is always
-            # a valid device string, a torch.device object, or None.
             return False
 
-        return td_device_obj == leaf_device
+        # Compare device types
+        if td_device_obj.type != leaf_device.type:
+            return False
+
+        # Compare device indices
+        # If both have an index, they must match
+        if td_device_obj.index is not None and leaf_device.index is not None:
+            return td_device_obj.index == leaf_device.index
+        # If td_device_obj has no index (e.g., "cuda") and leaf_device has index 0 (e.g., "cuda:0"), they are compatible
+        elif td_device_obj.index is None and leaf_device.index == 0:
+            return True
+        # If leaf_device has no index (e.g., "cuda") and td_device_obj has index 0 (e.g., "cuda:0"), they are compatible
+        elif td_device_obj.index == 0 and leaf_device.index is None:
+            return True
+        # If neither has an index (e.g., both "cpu"), they are compatible
+        elif td_device_obj.index is None and leaf_device.index is None:
+            return True
+        # Otherwise, they are not compatible (e.g., "cuda" vs "cuda:1")
+        else:
+            return False
+
+    def _get_path_str(self, key_path):
+        """Helper to construct path string from key_path, robust to torch.compile."""
+        path_parts = []
+        for k in key_path:
+            if isinstance(k, tuple):  # Handle nested KeyPath tuples
+                path_parts.append(self._get_path_str(k))
+            elif hasattr(k, "key"):  # Access the 'key' attribute of the Key object
+                path_parts.append(str(k.key))
+            else:  # Fallback for unexpected elements
+                path_parts.append(str(k))
+        return ".".join(path_parts)
 
     def _tree_validate_shape(self, data):
         """
@@ -123,7 +145,7 @@ class TensorDict(TensorContainer, PytreeRegistered):
         batch_shape = self.shape
 
         for key_path, leaf in keypath_leaf_pairs:
-            path_str = pytree.keystr(key_path)
+            path_str = self._get_path_str(key_path)
 
             if leaf.ndim > 0 and not self._is_shape_compatible(leaf.shape):
                 raise ValueError(
@@ -139,7 +161,7 @@ class TensorDict(TensorContainer, PytreeRegistered):
         keypath_leaf_pairs = pytree.tree_leaves_with_path(data)
 
         for key_path, leaf in keypath_leaf_pairs:
-            path_str = pytree.keystr(key_path)
+            path_str = self._get_path_str(key_path)
 
             if not self._is_device_compatible(leaf.device):
                 raise ValueError(

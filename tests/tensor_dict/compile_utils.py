@@ -55,7 +55,7 @@ def run_and_compare_compiled(fn, *args, **kwargs):
 
     # Compiled run
     torch.manual_seed(0)
-    compiled_fn = torch.compile(fn, fullgraph=False)
+    compiled_fn = torch.compile(fn, fullgraph=True)
     compiled_result = compiled_fn(*args, **kwargs)
 
     # Assert results are equal

@@ -72,7 +72,7 @@ class TestGraphBreaks:
     def test_iter(self, sample_tensordict):
         def f(args, *kwargs):
             td = args[0]
-            return list(td)
+            return list(td.keys())
 
         run_and_compare_compiled(f, (sample_tensordict,))
 
