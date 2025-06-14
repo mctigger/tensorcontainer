@@ -97,17 +97,13 @@ class TensorDict(TensorContainer, PytreeRegistered):
 
         This method recursively traverses the entire data structure.
         """
-        # Use tree_flatten_with_path to get a list of (path, leaf) pairs for
-        # all leaves in the nested structure of self.data.
         keypath_leaf_pairs = pytree.tree_leaves_with_path(data)
-
         batch_shape = self.shape
 
         for key_path, leaf in keypath_leaf_pairs:
             path_str = pytree.keystr(key_path)
 
             if leaf.ndim > 0 and not self._is_shape_compatible(leaf.shape):
-                # Use pytree.keystr to generate a readable path for the error message.
                 raise ValueError(
                     f"Shape mismatch at '{path_str}': The tensor shape {leaf.shape} "
                     f"is not compatible with the TensorDict's batch shape {batch_shape}."
@@ -115,66 +111,48 @@ class TensorDict(TensorContainer, PytreeRegistered):
 
     def _tree_validate_device(self, data):
         """
-        Validates that the shapes of all nested tensors in the TensorDict start
-        with the expected batch shape.
-
-        This method recursively traverses the entire data structure.
+        Validates that the devices of all nested tensors in the TensorDict match
+        the TensorDict's device if specified.
         """
-
-        # Use tree_flatten_with_path to get a list of (path, leaf) pairs for
-        # all leaves in the nested structure of self.data.
         keypath_leaf_pairs = pytree.tree_leaves_with_path(data)
 
         for key_path, leaf in keypath_leaf_pairs:
             path_str = pytree.keystr(key_path)
 
             if not self._is_device_compatible(leaf.device):
-                # Use pytree.keystr to generate a readable path for the error message.
                 raise ValueError(
                     f"Device mismatch at '{path_str}': The tensor device {leaf.device} "
                     f"is not compatible with the TensorDict's device {self.device}."
                 )
 
     def _get_pytree_context(
-        self, flat_leaves: List[Tensor], children_spec: pytree.TreeSpec
+        self, flat_leaves: List[TDCompatible], children_spec: pytree.TreeSpec
     ) -> Tuple:
         """
         Private helper to compute the pytree context for this TensorDict.
-
-        The context captures the necessary metadata to reconstruct the TensorDict
-        from its leaves: the original structure of the contained data and the
-        event dimensions of each tensor.
+        The context captures metadata to reconstruct the TensorDict:
+        children_spec, event_ndims, original shape, and original device.
         """
         batch_ndim = len(self.shape)
         event_ndims = tuple(leaf.ndim - batch_ndim for leaf in flat_leaves)
-        return (children_spec, event_ndims)
+        return (children_spec, event_ndims, self.shape, self.device)
 
-    def _pytree_flatten(self) -> Tuple[List[Tensor], Tuple]:
+    def _pytree_flatten(self) -> Tuple[List[TDCompatible], Tuple]:
         """
         Flattens the TensorDict into its tensor leaves and static metadata.
-        (Implementation for `flatten_fn` in `register_pytree_node`)
         """
-        # Get the leaves and the spec describing the structure of self.data
         flat_leaves, children_spec = pytree.tree_flatten(self.data)
-
-        # Use the helper to compute and return the context
         context = self._get_pytree_context(flat_leaves, children_spec)
         return flat_leaves, context
 
     def _pytree_flatten_with_keys_fn(
         self,
-    ) -> Tuple[List[Tuple[pytree.KeyPath, Tensor]], Tuple]:
+    ) -> Tuple[List[Tuple[pytree.KeyPath, TDCompatible]], Tuple]:
         """
         Flattens the TensorDict into key-path/leaf pairs and static metadata.
-        (Implementation for `flatten_with_keys_fn` in `register_pytree_node`)
         """
-        # Use the public API to robustly get key paths, leaves, and the spec
         keypath_leaf_list, children_spec = pytree.tree_flatten_with_path(self.data)
-
-        # Extract just the leaves to pass to the context helper
         flat_leaves = [leaf for _, leaf in keypath_leaf_list]
-
-        # Use the helper to compute and return the context
         context = self._get_pytree_context(flat_leaves, children_spec)
         return keypath_leaf_list, context
 
@@ -185,7 +163,7 @@ class TensorDict(TensorContainer, PytreeRegistered):
         populating its attributes. This approach is more robust for torch.compile's
         code generation phase.
         """
-        (children_spec, event_ndims) = context  # Unpack the context
+        children_spec, event_ndims, shape, device = context  # Unpack the context
 
         if not leaves:
             # Handle the empty case explicitly with direct instantiation
@@ -194,12 +172,6 @@ class TensorDict(TensorContainer, PytreeRegistered):
             obj.shape = []  # Or a sensible default for empty
             obj.device = None
             return obj
-
-        # 1. Infer dynamic attributes (shape, device) from the new tensor leaves.
-        # The fix: Manually reconstruct the object.
-        children_spec, event_ndims = (
-            context  # This unpacking should match flatten's context
-        )
 
         # Reconstruct the nested dictionary structure using the unflattened leaves
         data = pytree.tree_unflatten(leaves, children_spec)
@@ -249,7 +221,6 @@ class TensorDict(TensorContainer, PytreeRegistered):
             raise ValueError(
                 f"value must be a Tensor or TensorContainer, got value of type {type(value)}"
             )
-
         self._tree_validate_shape(value)
         self._tree_validate_device(value)
 
@@ -288,17 +259,12 @@ class TensorDict(TensorContainer, PytreeRegistered):
     def copy(self) -> TensorDict:
         """
         Creates a new TensorDict where all children anywhere in the data tree are also
-        copied, but the leaves are the same. Implemented using pytree.
+        copied, but the leaves are the same. Implemented using _pytree_flatten and
+        _pytree_unflatten for torch.compile compatibility.
         """
-
-        def copy_item(item):
-            if isinstance(item, TensorDict):
-                return item.copy()
-            else:
-                return item
-
-        data = pytree.tree_map(copy_item, self.data)
-        return TensorDict(data, self.shape, self.device)
+        flat_leaves, context = self._pytree_flatten()
+        new_td = TensorDict._pytree_unflatten(flat_leaves, context)
+        return new_td
 
     def flatten_keys(self, separator: str = ".") -> TensorDict:
         """
