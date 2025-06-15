@@ -300,15 +300,15 @@ class TensorBernoulli(TensorDistribution):
 
     @property
     def probs(self):
-        if self._probs is None:
-            self._probs = torch.sigmoid(self["logits"])
-        return self._probs
+        if "probs" not in self.data:
+            self.data["probs"] = torch.sigmoid(self["logits"])
+        return self["probs"]
 
     @property
     def logits(self):
-        if self._logits is None:
-            self._logits = torch.log(self["probs"] / (1 - self["probs"]))
-        return self._logits
+        if "logits" not in self.data:
+            self.data["logits"] = torch.log(self["probs"] / (1 - self["probs"]))
+        return self["logits"]
 
     def dist(self):
         if self._probs is not None:

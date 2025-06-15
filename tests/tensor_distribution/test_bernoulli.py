@@ -100,3 +100,19 @@ def test_log_prob_logits():
     td = torch.distributions.Bernoulli(logits=logits)
     ref = td.log_prob(x)
     assert torch.allclose(lp, ref)
+
+
+@pytest.mark.parametrize("shape", [(4,), (2, 2)])
+def test_view_probs(shape):
+    probs = torch.rand(*shape)
+    dist = TensorBernoulli(probs=probs, shape=probs.shape)
+    dist_view = dist.view(torch.Size([4]).numel())
+    assert torch.equal(dist_view.probs, probs.view(torch.Size([4]).numel()))
+
+
+@pytest.mark.parametrize("shape", [(4,), (2, 2)])
+def test_view_logits(shape):
+    logits = torch.randn(*shape)
+    dist = TensorBernoulli(logits=logits, shape=logits.shape)
+    dist_view = dist.view(torch.Size([4]).numel())
+    assert torch.equal(dist_view.logits, logits.view(torch.Size([4]).numel()))
