@@ -1,14 +1,198 @@
-import pytest
 import torch
 
+import pytest
+from torch._dynamo import exc as dynamo_exc
+
 from rtd.tensor_dict import TensorDict
-from tests.tensor_dict.compile_utils import run_and_compare_compiled
 from tests.tensor_dict import common
+from tests.tensor_dict.common import compute_stack_shape, compare_nested_dict
+from tests.tensor_dict.compile_utils import run_and_compare_compiled
+
+
+@pytest.fixture(autouse=True)
+def dynamo_reset():
+    """
+    A pytest fixture that automatically resets torch._dynamo state
+    before and after every test function.
+    """
+    # Code before the test runs
+    torch._dynamo.reset()
+    yield
+    # Code after the test runs (optional cleanup)
+    torch._dynamo.reset()
+
 
 nested_dict = common.nested_dict
 
+# Define parameter sets
+SHAPE_DIM_PARAMS_VALID_STACK = [
+    # 1D (input ndim=1), stack dim can be 0, 1. Negative: -1 (becomes 1), -2 (becomes 0)
+    ((4,), 0),
+    ((4,), 1),
+    ((4,), -1),
+    ((4,), -2),
+    # 2D (input ndim=2), stack dim can be 0, 1, 2. Negative: -1 (->2), -2 (->1), -3 (->0)
+    ((2, 2), 0),
+    ((2, 2), 1),
+    ((2, 2), 2),
+    ((2, 2), -1),
+    ((2, 2), -2),
+    ((2, 2), -3),
+    # 3D (input ndim=3), stack dim can be 0, 1, 2, 3. Negative: -1 (->3), -2 (->2), -3 (->1), -4 (->0)
+    ((2, 1, 2), 0),  # (2,1,2) has 4 elements, compatible with arange(0,4)
+    ((2, 1, 2), 1),
+    ((2, 1, 2), 2),
+    ((2, 1, 2), 3),
+    ((2, 1, 2), -1),
+    ((2, 1, 2), -2),
+    ((2, 1, 2), -3),
+    ((2, 1, 2), -4),
+]
+
+SHAPE_DIM_PARAMS_INVALID_STACK = [
+    # 1D: valid stack dims are 0, 1 (or -1, -2). So 2 and -3 are out of range.
+    ((4,), 2),
+    ((4,), -3),
+    # 2D: valid stack dims are 0, 1, 2 (or -1, -2, -3). So 3 and -4 are out of range.
+    ((2, 2), 3),
+    ((2, 2), -4),
+    # 3D: valid stack dims are 0, 1, 2, 3 (or -1, -2, -3, -4). So 4 and -5 are out of range.
+    ((2, 1, 2), 4),
+    ((2, 1, 2), -5),
+]
+
 
 # ——— Valid stacking dims across several shapes ———
+@pytest.mark.parametrize("mode", ["eager", "compile"])
+@pytest.mark.parametrize("shape, dim", SHAPE_DIM_PARAMS_VALID_STACK)
+def test_stack_valid(nested_dict, shape, dim, mode):
+    data = nested_dict(shape)
+    td1 = TensorDict(data, shape)
+    # Create a second TensorDict with slightly different data for a robust check
+    data2_contents = {
+        "x": {
+            "a": data["x"]["a"] + 100,
+            "b": data["x"]["b"] + 100,
+        },
+        "y": data["y"] + 100,
+    }
+    td2 = TensorDict(data2_contents, shape)
+
+    def stack_operation(tensor_dict_list, stack_dimension):
+        return torch.stack(tensor_dict_list, dim=stack_dimension)
+
+    if mode == "compile":
+        compiled_stack_op = torch.compile(stack_operation, fullgraph=True)
+        stacked_td = compiled_stack_op([td1, td2], dim)
+    else:  # mode == "eager"
+        stacked_td = stack_operation([td1, td2], dim)
+
+    # compute expected shape
+    expected_shape = compute_stack_shape(shape, dim, num_tensors=2)
+    assert stacked_td.shape == expected_shape, (
+        f"Expected shape {expected_shape}, got {stacked_td.shape}"
+    )
+
+    # Calculate the actual dimension index in stacked_td where stacking occurred
+    original_ndim = len(shape)
+    if dim >= 0:
+        actual_stack_dim_idx = dim
+    else:  # dim < 0, for stack, it's relative to original_ndim + 1
+        actual_stack_dim_idx = dim + original_ndim + 1
+
+    # Create slicers for __getitem__
+    slicers_td1 = [slice(None)] * stacked_td.ndim
+    slicers_td1[actual_stack_dim_idx] = 0
+    td1_slice_from_stack = stacked_td[tuple(slicers_td1)]
+
+    slicers_td2 = [slice(None)] * stacked_td.ndim
+    slicers_td2[actual_stack_dim_idx] = 1
+    td2_slice_from_stack = stacked_td[tuple(slicers_td2)]
+
+    compare_nested_dict(
+        data,
+        td1_slice_from_stack,
+        lambda orig_tensor: orig_tensor,  # Expect the original tensor as it's a slice
+    )
+    compare_nested_dict(
+        data2_contents,
+        td2_slice_from_stack,
+        lambda orig_tensor: orig_tensor,  # Expect the original tensor
+    )
+
+
+# ——— Error on invalid dims ———
+@pytest.mark.parametrize("mode", ["eager", "compile"])
+@pytest.mark.parametrize("shape, dim", SHAPE_DIM_PARAMS_INVALID_STACK)
+def test_stack_invalid_dim_raises(shape, dim, nested_dict, mode):
+    td = TensorDict(nested_dict(shape), shape)
+
+    def stack_operation(tensor_dict_instance, stack_dimension):
+        # This is the operation that is expected to raise an error
+        return torch.stack(
+            [tensor_dict_instance, tensor_dict_instance], dim=stack_dimension
+        )
+
+    if mode == "compile":
+        compiled_stack_op = torch.compile(stack_operation, fullgraph=True)
+        with pytest.raises(dynamo_exc.TorchRuntimeError) as excinfo:
+            compiled_stack_op(td, dim)
+        assert "IndexError" in str(excinfo.value) and "Dimension out of range" in str(
+            excinfo.value
+        )
+    else:  # mode == "eager"
+        with pytest.raises(IndexError):
+            stack_operation(td, dim)
+
+
+# --- Test TD creation and stacking inside torch.compile ---
+def test_stack_td_creation_and_stack_inside_compile(nested_dict):
+    input_shape = (
+        2,
+        2,
+    )  # Changed to (2,2) to be compatible with arange(0,4) -> 4 elements
+    stack_dim = 0  # Example dimension
+
+    # Define the raw data that will be used inside the compiled function
+    raw_data1 = nested_dict(input_shape)
+    raw_data2 = {
+        "x": {
+            "a": raw_data1["x"]["a"] + 100,
+            "b": raw_data1["x"]["b"] + 100,
+        },
+        "y": raw_data1["y"] + 100,
+    }
+
+    def create_and_stack_tds(data1, data2, shape_val, dim_val):
+        td1 = TensorDict(data1, shape_val)
+        td2 = TensorDict(data2, shape_val)
+        return torch.stack([td1, td2], dim=dim_val)
+
+    compiled_fn = torch.compile(create_and_stack_tds, fullgraph=True)
+
+    # Pass raw data and parameters to the compiled function
+    # Tensors within raw_data1 and raw_data2 will be captured as constants or inputs
+    stacked_td_result = compiled_fn(raw_data1, raw_data2, input_shape, stack_dim)
+
+    # Assertions
+    expected_overall_shape = compute_stack_shape(input_shape, stack_dim, num_tensors=2)
+    assert stacked_td_result.shape == expected_overall_shape
+
+    # Verify content of the first stacked TensorDict
+    # Calculate the actual dimension index in stacked_td where stacking occurred
+    # This logic is similar to test_stack_valid, using stack_dim directly as it's positive here.
+    actual_stack_dim_idx_for_slicing = stack_dim
+
+    slicers1 = [slice(None)] * len(expected_overall_shape)
+    slicers1[actual_stack_dim_idx_for_slicing] = 0
+    td1_slice = stacked_td_result[tuple(slicers1)]
+    compare_nested_dict(raw_data1, td1_slice, lambda x: x)
+
+    # Verify content of the second stacked TensorDict
+    slicers2 = [slice(None)] * len(expected_overall_shape)
+    slicers2[actual_stack_dim_idx_for_slicing] = 1
+    td2_slice = stacked_td_result[tuple(slicers2)]
+    compare_nested_dict(raw_data2, td2_slice, lambda x: x)
 
 
 @pytest.mark.parametrize(
@@ -33,28 +217,7 @@ nested_dict = common.nested_dict
 )
 def test_stack_valid_compiled(nested_dict, shape, dim):
     def stack_fn(nd, s, d):
-        td = TensorDict(nd(s), s)
+        td = TensorDict(nd, s)
         return torch.stack([td, td], dim=d)
 
-    run_and_compare_compiled(stack_fn, nested_dict, shape, dim)
-
-
-# ——— Error on invalid dims ———
-@pytest.mark.parametrize(
-    "shape, dim",
-    [
-        # 1D: valid dims are in [-2..1], so 2 and -3 are out of range
-        ((4,), 2),
-        ((4,), -3),
-        # 2D: valid dims are in [-3..2], so 3 and -4 are out of range
-        ((2, 2), 3),
-        ((2, 2), -4),
-        # 3D: valid dims are in [-4..3], so 4 and -5 are out of range
-        ((2, 1, 2), 4),
-        ((2, 1, 2), -5),
-    ],
-)
-def test_stack_invalid_dim_raises(shape, dim, nested_dict):
-    td = TensorDict(nested_dict(shape), shape)
-    with pytest.raises(IndexError):
-        torch.stack([td, td], dim=dim)
+    run_and_compare_compiled(stack_fn, nested_dict(shape), shape, dim)

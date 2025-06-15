@@ -137,15 +137,24 @@ def test_constructor_accepts_nested_dict(data, shape):
 def test_constructor_accepts_tensordict_inputs(data, shape):
     base = TensorDict({"a": torch.arange(8).reshape(4, 2)}, shape=(4,))
 
-    def constructor_fn(data, shape):
-        td = TensorDict({"nested": base}, shape=shape)
-        # nested TensorDict re-wrapped with same batch_shape
-        assert isinstance(td["nested"], TensorDict)
-        assert td["nested"].shape == torch.Size([shape[0]])
-        return td
+    def constructor_fn(data_arg, shape_arg):  # Renamed args to avoid conflict
+        # This function will be compiled. Only include traceable operations.
+        td_internal = TensorDict({"nested": base}, shape=shape_arg)
+        return td_internal
 
-    td, _ = run_and_compare_compiled(constructor_fn, data, shape)
-    assert torch.equal(td["nested"]["a"], base["a"])
+    # Run the compiled function and get the result
+    td_eager, td_compiled = run_and_compare_compiled(constructor_fn, data, shape)
+
+    # Perform assertions on the results outside the compiled function
+    # Assertions for eager result
+    assert isinstance(td_eager["nested"], TensorDict)
+    assert td_eager["nested"].shape == torch.Size([shape[0]])
+    assert torch.equal(td_eager["nested"]["a"], base["a"])
+
+    # Assertions for compiled result (should be consistent with eager)
+    assert isinstance(td_compiled["nested"], TensorDict)
+    assert td_compiled["nested"].shape == torch.Size([shape[0]])
+    assert torch.equal(td_compiled["nested"]["a"], base["a"])
 
 
 @pytest.mark.parametrize(
