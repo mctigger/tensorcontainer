@@ -21,7 +21,7 @@ def normalize_device(dev: torch.device) -> torch.device:
     ],
 )
 def test_init_invalid_params(args, kwargs):
-    with pytest.raises(TypeError):
+    with pytest.raises(ValueError):
         TensorBernoulli(**args, **kwargs)
 
 
@@ -70,3 +70,33 @@ def test_device_normalization_helper():
     # they compare equal under the same normalization logic used by TensorBernoulli
 
     assert normalize_device(a) == normalize_device(b)
+
+
+def test_init_logits():
+    logits = torch.randn(4, 3)
+    dist = TensorBernoulli(logits=logits)
+    assert torch.allclose(dist.logits, logits)
+    assert torch.allclose(dist.probs, torch.sigmoid(logits))
+
+
+def test_sample_logits():
+    logits = torch.randn(4, 3)
+    dist = TensorBernoulli(
+        logits=logits, shape=logits.shape, reinterpreted_batch_ndims=0
+    )
+    samples = dist.sample(sample_shape=(5,))
+    assert samples.shape == (5, *logits.shape)
+    assert samples.dtype == torch.float32
+    assert ((samples == 0) | (samples == 1)).all()
+
+
+def test_log_prob_logits():
+    logits = torch.randn(2, 3)
+    dist = TensorBernoulli(
+        logits=logits, shape=logits.shape, reinterpreted_batch_ndims=0
+    )
+    x = torch.tensor([[0.0, 1.0, 0.0], [1.0, 0.0, 1.0]])
+    lp = dist.log_prob(x)
+    td = torch.distributions.Bernoulli(logits=logits)
+    ref = td.log_prob(x)
+    assert torch.allclose(lp, ref)

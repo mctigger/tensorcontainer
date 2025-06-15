@@ -47,19 +47,19 @@ def test_copy_returns_distinct_tensordict_but_shares_leaf_tensors(nested_dict):
 
 def test_copy_returns_distinct_tensordict_but_shares_leaf_tensors_compiled(nested_dict):
     """Test that copy works correctly with torch.compile."""
-    
+
     def copy_fn(td):
         return td.copy()
-    
+
     data = nested_dict((2, 2))
     td = TensorDict(data, shape=(2, 2))
-    
+
     eager_result, compiled_result = run_and_compare_compiled(copy_fn, td)
-    
+
     # Additional checks specific to copy behavior
     # top‐level object is new (for eager result)
     assert eager_result is not td
-    
+
     for key in td:
         val = td[key]
         copied_val = eager_result[key]
@@ -95,24 +95,24 @@ def test_mutating_nested_copy_does_not_affect_original(nested_dict):
 
 def test_mutating_nested_copy_does_not_affect_original_compiled(nested_dict):
     """Test that copy works correctly with torch.compile."""
-    
+
     def copy_fn(td):
         # Just return the copy, we'll mutate it outside the compiled function
         return td.copy()
-    
+
     data = nested_dict((4, 1))
     td = TensorDict(data, shape=(4, 1))
-    
+
     eager_copy, compiled_copy = run_and_compare_compiled(copy_fn, td)
-    
+
     # Now mutate the copies outside the compiled function
     # This tests that the copy operation worked correctly with torch.compile
-    
+
     # Modify the eager copy
     eager_copy["x"]["c"] = torch.tensor([[42], [43], [44], [45]])
     assert "c" in eager_copy["x"]
     assert "c" not in td["x"]
-    
+
     # Modify the compiled copy
     compiled_copy["x"]["c"] = torch.tensor([[42], [43], [44], [45]])
     assert "c" in compiled_copy["x"]
@@ -131,14 +131,14 @@ def test_copy_of_empty_tensor_dict(nested_dict):
 
 def test_copy_of_empty_tensor_dict_compiled():
     """Test that copying an empty TensorDict works with torch.compile."""
-    
+
     def copy_empty_td(td):
         return td.copy()
-    
+
     td = TensorDict({}, shape=())
-    
+
     eager_result, compiled_result = run_and_compare_compiled(copy_empty_td, td)
-    
+
     # Additional checks specific to empty TensorDict
     assert isinstance(eager_result, TensorDict)
     assert eager_result is not td
@@ -174,19 +174,19 @@ def test_copy_with_pytree(nested_dict):
 
 def test_copy_with_pytree_compiled(nested_dict):
     """Test that copy works correctly with pytree and torch.compile."""
-    
+
     def copy_fn(td):
         return td.copy()
-    
+
     data = nested_dict((2, 2))
     td = TensorDict(data, shape=(2, 2))
-    
+
     eager_result, compiled_result = run_and_compare_compiled(copy_fn, td)
-    
+
     # Additional checks specific to copy behavior
     # top‐level object is new (for eager result)
     assert eager_result is not td
-    
+
     for key in td:
         val = td[key]
         copied_val = eager_result[key]

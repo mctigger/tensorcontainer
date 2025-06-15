@@ -12,7 +12,6 @@ from torch.distributions import (
     register_kl,
     kl_divergence,
     OneHotCategoricalStraightThrough,
-    transforms,
 )
 from rtd.distributions.sampling import SamplingDistribution
 import torch
@@ -26,14 +25,16 @@ from typing import List, Tuple
 # Use the official PyTree utility from torch
 import torch.utils._pytree as pytree
 
+
 class ClampedTanhTransform(torch.distributions.transforms.Transform):
     """
     Transform that applies tanh and clamps the output between -1 and 1.
     """
+
     domain = torch.distributions.constraints.real
     codomain = torch.distributions.constraints.interval(-1.0, 1.0)
     bijective = True
-    
+
     @property
     def sign(self):
         return +1
@@ -51,7 +52,10 @@ class ClampedTanhTransform(torch.distributions.transforms.Transform):
     def log_abs_det_jacobian(self, x, y):
         # |det J| = 1 - tanh^2(x)
         # log|det J| = log(1 - tanh^2(x))
-        return torch.log(1 - y.pow(2) + 1e-6)  # Adding small epsilon for numerical stability
+        return torch.log(
+            1 - y.pow(2) + 1e-6
+        )  # Adding small epsilon for numerical stability
+
 
 class TensorDistribution(TensorDict, PytreeRegistered):
     meta_data: Dict[str, Any]
@@ -215,21 +219,40 @@ class TensorNormal(TensorDistribution):
             device=self.device,
         )
 
+
 class TensorTruncatedNormal(TensorDistribution):
-    def __init__(self, loc, scale, low, high, reinterpreted_batch_ndims, shape=..., device=torch.device("cpu")):
+    def __init__(
+        self,
+        loc,
+        scale,
+        low,
+        high,
+        reinterpreted_batch_ndims,
+        shape=None,
+        device=torch.device("cpu"),
+    ):
         super().__init__(
             {"loc": loc, "scale": scale},
             shape,
             device,
-            {"reinterpreted_batch_ndims": reinterpreted_batch_ndims, "low": low, "high": high},
+            {
+                "reinterpreted_batch_ndims": reinterpreted_batch_ndims,
+                "low": low,
+                "high": high,
+            },
         )
 
     def dist(self) -> Distribution:
         return Independent(
-            TruncatedNormal(self["loc"].float(), self["scale"].float(), self.meta_data["low"], self.meta_data["high"]),
+            TruncatedNormal(
+                self["loc"].float(),
+                self["scale"].float(),
+                self.meta_data["low"],
+                self.meta_data["high"],
+            ),
             self.meta_data["reinterpreted_batch_ndims"],
         )
-    
+
     def copy(self):
         return TensorTruncatedNormal(
             loc=self["loc"],
@@ -241,36 +264,83 @@ class TensorTruncatedNormal(TensorDistribution):
             device=self.device,
         )
 
+
 class TensorBernoulli(TensorDistribution):
     def __init__(
         self,
-        probs,
-        reinterpreted_batch_ndims,
-        shape=...,
+        probs=None,
+        logits=None,
+        reinterpreted_batch_ndims=0,
+        shape=None,
         device=torch.device("cpu"),
     ):
+        if (probs is None) == (logits is None):
+            raise ValueError(
+                "Either `probs` or `logits` must be specified, but not both."
+            )
+        if probs is not None:
+            self._probs = probs
+            self._logits = None
+            data = {"probs": probs}
+        else:
+            self._logits = logits
+            self._probs = None
+            data = {"logits": logits}
+        if shape is None:
+            if probs is not None:
+                shape = probs.shape
+            else:
+                shape = logits.shape
         super().__init__(
-            {"probs": probs},
+            data,
             shape,
             device,
             {"reinterpreted_batch_ndims": reinterpreted_batch_ndims},
         )
 
+    @property
+    def probs(self):
+        if self._probs is None:
+            self._probs = torch.sigmoid(self["logits"])
+        return self._probs
+
+    @property
+    def logits(self):
+        if self._logits is None:
+            self._logits = torch.log(self["probs"] / (1 - self["probs"]))
+        return self._logits
+
     def dist(self):
-        return Independent(
-            torch.distributions.Bernoulli(
-                probs=self["probs"],
-            ),
-            self.meta_data["reinterpreted_batch_ndims"],
-        )
+        if self._probs is not None:
+            return Independent(
+                torch.distributions.Bernoulli(
+                    probs=self["probs"],
+                ),
+                self.meta_data["reinterpreted_batch_ndims"],
+            )
+        else:
+            return Independent(
+                torch.distributions.Bernoulli(
+                    logits=self["logits"],
+                ),
+                self.meta_data["reinterpreted_batch_ndims"],
+            )
 
     def copy(self):
-        return TensorBernoulli(
-            probs=self["probs"].clone(),
-            reinterpreted_batch_ndims=self.meta_data["reinterpreted_batch_ndims"],
-            shape=self.shape,
-            device=self.device,
-        )
+        if self._probs is not None:
+            return TensorBernoulli(
+                probs=self["probs"].clone(),
+                reinterpreted_batch_ndims=self.meta_data["reinterpreted_batch_ndims"],
+                shape=self.shape,
+                device=self.device,
+            )
+        else:
+            return TensorBernoulli(
+                logits=self["logits"].clone(),
+                reinterpreted_batch_ndims=self.meta_data["reinterpreted_batch_ndims"],
+                shape=self.shape,
+                device=self.device,
+            )
 
 
 class TensorCategorical(TensorDistribution):
@@ -278,7 +348,7 @@ class TensorCategorical(TensorDistribution):
         self,
         logits,
         output_shape,
-        shape=...,
+        shape=None,
         device=torch.device("cpu"),
     ):
         super().__init__(
@@ -319,13 +389,14 @@ def registerd_d_td(
 ):
     return kl_divergence(d, td.dist())
 
+
 class TensorTanhNormal(TensorDistribution):
     def __init__(
         self,
         loc,
         scale,
         reinterpreted_batch_ndims=1,
-        shape=...,
+        shape=None,
         device=torch.device("cpu"),
     ):
         super().__init__(
