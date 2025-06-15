@@ -279,12 +279,8 @@ class TensorBernoulli(TensorDistribution):
                 "Either `probs` or `logits` must be specified, but not both."
             )
         if probs is not None:
-            self._probs = probs
-            self._logits = None
             data = {"probs": probs}
         else:
-            self._logits = logits
-            self._probs = None
             data = {"logits": logits}
         if shape is None:
             if probs is not None:
@@ -311,7 +307,7 @@ class TensorBernoulli(TensorDistribution):
         return self["logits"]
 
     def dist(self):
-        if self._probs is not None:
+        if "probs" in self.data:
             return Independent(
                 torch.distributions.Bernoulli(
                     probs=self["probs"],
@@ -327,7 +323,7 @@ class TensorBernoulli(TensorDistribution):
             )
 
     def copy(self):
-        if self._probs is not None:
+        if "probs" in self.data:
             return TensorBernoulli(
                 probs=self["probs"].clone(),
                 reinterpreted_batch_ndims=self.meta_data["reinterpreted_batch_ndims"],
