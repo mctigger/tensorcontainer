@@ -15,6 +15,7 @@ from torch.distributions import (
 )
 from rtd.distributions.sampling import SamplingDistribution
 import torch
+from rtd.distributions.soft_bernoulli import SoftBernoulli
 from rtd.distributions.truncated_normal import TruncatedNormal
 from rtd.tensor_dict import TensorDict
 from rtd.utils import PytreeRegistered
@@ -332,6 +333,80 @@ class TensorBernoulli(TensorDistribution):
             )
         else:
             return TensorBernoulli(
+                logits=self["logits"].clone(),
+                reinterpreted_batch_ndims=self.meta_data["reinterpreted_batch_ndims"],
+                shape=self.shape,
+                device=self.device,
+            )
+
+
+class TensorSoftBernoulli(TensorDistribution):
+    def __init__(
+        self,
+        probs=None,
+        logits=None,
+        reinterpreted_batch_ndims=0,
+        shape=None,
+        device=torch.device("cpu"),
+    ):
+        if (probs is None) == (logits is None):
+            raise ValueError(
+                "Either `probs` or `logits` must be specified, but not both."
+            )
+        if probs is not None:
+            data = {"probs": probs}
+        else:
+            data = {"logits": logits}
+        if shape is None:
+            if probs is not None:
+                shape = probs.shape
+            else:
+                shape = logits.shape
+        super().__init__(
+            data,
+            shape,
+            device,
+            {"reinterpreted_batch_ndims": reinterpreted_batch_ndims},
+        )
+
+    @property
+    def probs(self):
+        if "probs" not in self.data:
+            self.data["probs"] = torch.sigmoid(self["logits"])
+        return self["probs"]
+
+    @property
+    def logits(self):
+        if "logits" not in self.data:
+            self.data["logits"] = torch.log(self["probs"] / (1 - self["probs"]))
+        return self["logits"]
+
+    def dist(self):
+        if "probs" in self.data:
+            return Independent(
+                SoftBernoulli(
+                    probs=self["probs"],
+                ),
+                self.meta_data["reinterpreted_batch_ndims"],
+            )
+        else:
+            return Independent(
+                SoftBernoulli(
+                    logits=self["logits"],
+                ),
+                self.meta_data["reinterpreted_batch_ndims"],
+            )
+
+    def copy(self):
+        if "probs" in self.data:
+            return TensorSoftBernoulli(
+                probs=self["probs"].clone(),
+                reinterpreted_batch_ndims=self.meta_data["reinterpreted_batch_ndims"],
+                shape=self.shape,
+                device=self.device,
+            )
+        else:
+            return TensorSoftBernoulli(
                 logits=self["logits"].clone(),
                 reinterpreted_batch_ndims=self.meta_data["reinterpreted_batch_ndims"],
                 shape=self.shape,
