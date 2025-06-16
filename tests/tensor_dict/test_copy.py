@@ -200,3 +200,21 @@ def test_copy_with_pytree_compiled(nested_dict):
         else:
             # leaf tensors should be the same object
             assert copied_val is val
+
+
+def test_copy_inside_compile():
+    """Test that creating and copying a TensorDict inside torch.compile works."""
+
+    def compiled_fn(x):
+        td = TensorDict({"a": x, "b": x + 1}, shape=[1])
+        td_copy = td.copy()
+        return td_copy
+
+    x = torch.randn(1)
+    compiled = torch.compile(compiled_fn, fullgraph=True)
+    td_copy = compiled(x)
+
+    assert isinstance(td_copy, TensorDict)
+    assert td_copy is not None
+    assert torch.equal(td_copy["a"], x)
+    assert torch.equal(td_copy["b"], x + 1)
