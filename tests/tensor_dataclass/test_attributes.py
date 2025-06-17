@@ -10,9 +10,12 @@ def test_getattr():
     class TestContainer(TensorDataclass):
         a: torch.Tensor
         b: torch.Tensor
+        device: str = "cpu"
 
     # Test direct attribute access
-    container = TestContainer(a=torch.zeros(2, 3), b=torch.ones(2, 3), shape=(2, 3))
+    container = TestContainer(
+        a=torch.zeros(2, 3), b=torch.ones(2, 3), shape=(2, 3), device="cpu"
+    )
     assert container.a.shape == (2, 3)
     assert container.b.shape == (2, 3)
 
@@ -38,9 +41,10 @@ def test_compile():
     class MyData(TensorDataclass):
         x: torch.Tensor
         y: torch.Tensor
+        device: str = "cpu"
 
     def func(td: MyData) -> MyData:
         return td.view(12)
 
-    data = MyData(x=torch.ones(3, 4), y=torch.zeros(3, 4), shape=(3, 4))
+    data = MyData(x=torch.ones(3, 4), y=torch.zeros(3, 4), shape=(3, 4), device="cpu")
     run_and_compare_compiled(func, data)

@@ -79,49 +79,6 @@ class TensorDict(TensorContainer, PytreeRegistered):
 
         return result
 
-    def _is_shape_compatible(self, shape):
-        batch_ndim = len(self.shape)
-        leaf_ndim = len(shape)
-
-        return leaf_ndim >= batch_ndim and shape[:batch_ndim] == self.shape
-
-    def _is_device_compatible(self, leaf_device: torch.device):
-        """Checks if the leaf_device is compatible with the TensorDict's device."""
-        if self.device is None:
-            # If TensorDict's device is not specified, any leaf device is considered compatible.
-            return True
-
-        td_device_obj = self.device
-        if isinstance(self.device, str):
-            try:
-                td_device_obj = torch.device(self.device)
-            except RuntimeError:
-                return False
-
-        if not isinstance(td_device_obj, torch.device):
-            return False
-
-        # Compare device types
-        if td_device_obj.type != leaf_device.type:
-            return False
-
-        # Compare device indices
-        # If both have an index, they must match
-        if td_device_obj.index is not None and leaf_device.index is not None:
-            return td_device_obj.index == leaf_device.index
-        # If td_device_obj has no index (e.g., "cuda") and leaf_device has index 0 (e.g., "cuda:0"), they are compatible
-        elif td_device_obj.index is None and leaf_device.index == 0:
-            return True
-        # If leaf_device has no index (e.g., "cuda") and td_device_obj has index 0 (e.g., "cuda:0"), they are compatible
-        elif td_device_obj.index == 0 and leaf_device.index is None:
-            return True
-        # If neither has an index (e.g., both "cpu"), they are compatible
-        elif td_device_obj.index is None and leaf_device.index is None:
-            return True
-        # Otherwise, they are not compatible (e.g., "cuda" vs "cuda:1")
-        else:
-            return False
-
     def _get_path_str(self, key_path):
         """Helper to construct path string from key_path, robust to torch.compile."""
         path_parts = []
