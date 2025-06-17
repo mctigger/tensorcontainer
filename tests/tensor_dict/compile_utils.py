@@ -2,18 +2,18 @@ import torch
 import torch.utils._pytree as pytree
 import torch._dynamo.utils
 
-from rtd.tensor_dict import TensorDict
+from rtd.tensor_container import TensorContainer
 
 
-def assert_td_equal(td_a: TensorDict, td_b: TensorDict):
+def assert_tc_equal(tc_a: TensorContainer, tc_b: TensorContainer):
     """
-    Asserts that two TensorDicts are equal in shape, device, structure, and values.
+    Asserts that two TensorContainers are equal in shape, device, structure, and values.
     """
-    assert td_a.shape == td_b.shape, "Shape mismatch"
-    assert td_a.device == td_b.device, "Device mismatch"
+    assert tc_a.shape == tc_b.shape, "Shape mismatch"
+    assert tc_a.device == tc_b.device, "Device mismatch"
 
-    leaves_a, spec_a = pytree.tree_flatten(td_a)
-    leaves_b, spec_b = pytree.tree_flatten(td_b)
+    leaves_a, spec_a = pytree.tree_flatten(tc_a)
+    leaves_b, spec_b = pytree.tree_flatten(tc_b)
 
     assert spec_a == spec_b, "PyTree spec mismatch (keys or nesting)"
 
@@ -25,8 +25,8 @@ def _compare_results(eager_result, compiled_result):
     """
     Recursively compares eager and compiled results.
     """
-    if isinstance(eager_result, TensorDict):
-        assert_td_equal(eager_result, compiled_result)
+    if isinstance(eager_result, TensorContainer):
+        assert_tc_equal(eager_result, compiled_result)
     elif isinstance(eager_result, torch.Tensor):
         assert torch.allclose(eager_result, compiled_result)
     elif isinstance(eager_result, (tuple, list)):

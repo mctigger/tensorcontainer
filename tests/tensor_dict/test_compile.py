@@ -2,7 +2,7 @@ import pytest
 import torch
 
 from rtd.tensor_dict import TensorDict
-from tests.tensor_dict.compile_utils import assert_td_equal, run_and_compare_compiled
+from tests.tensor_dict.compile_utils import assert_tc_equal, run_and_compare_compiled
 
 
 @pytest.fixture
@@ -104,12 +104,12 @@ class TestTensorDictCompilation:
         # 1. Compare the TensorDicts that reflect the modification.
         #    eager_modified_td is the same object as simple_td_eager (which was modified).
         #    compiled_modified_td is the new TensorDict returned by the compiled function.
-        assert_td_equal(eager_modified_td, compiled_modified_td)
+        assert_tc_equal(eager_modified_td, compiled_modified_td)
 
         # 2. Verify that the input TensorDict to the compiled function (`simple_td_for_compile_input`)
         #    is mutated to reflect the changes, consistent with the returned TensorDict.
         #    This is an observed behavior when a PyTree input is modified and returned by torch.compile.
-        assert_td_equal(compiled_modified_td, simple_td_for_compile_input)
+        assert_tc_equal(compiled_modified_td, simple_td_for_compile_input)
 
     def test_stacking_tensordicts_in_compiled_function(self, simple_td):
         """
@@ -181,7 +181,7 @@ class TestTensorDictCompilation:
 
         assert eager_result.shape == (3,)
         assert eager_result["nested"].shape == (3,)
-        assert_td_equal(eager_result, compiled_result)
+        assert_tc_equal(eager_result, compiled_result)
 
     @pytest.mark.skipif(
         not torch.cuda.is_available(), reason="This test requires a CUDA device"

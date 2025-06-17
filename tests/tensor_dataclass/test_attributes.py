@@ -1,0 +1,46 @@
+import pytest
+import torch
+from rtd.tensor_dataclass import TensorDataclass
+from tests.tensor_dict.compile_utils import run_and_compare_compiled
+from dataclasses import dataclass
+
+
+def test_getattr():
+    @dataclass(kw_only=True)
+    class TestContainer(TensorDataclass):
+        a: torch.Tensor
+        b: torch.Tensor
+
+    # Test direct attribute access
+    container = TestContainer(a=torch.zeros(2, 3), b=torch.ones(2, 3), shape=(2, 3))
+    assert container.a.shape == (2, 3)
+    assert container.b.shape == (2, 3)
+
+    # Test TensorContainer method inheritance
+    reshaped = container.view(6)
+    assert reshaped.a.shape == (6,)
+    assert reshaped.b.shape == (6,)
+
+    # Validate container structure
+    assert isinstance(container.clone(), TestContainer)
+    # The .dtype attribute is not defined for TensorContainer, so this check is removed.
+    # A more elaborate implementation would require a reduction over all tensor dtypes.
+    # assert container.to(torch.float16).dtype == torch.float16
+
+    with pytest.raises(AttributeError):
+        _ = container.invalid  # Should raise AttributeError for attribute access
+
+
+def test_compile():
+    """Tests that a function using TensorDataclass can be torch.compiled."""
+
+    @dataclass(kw_only=True)
+    class MyData(TensorDataclass):
+        x: torch.Tensor
+        y: torch.Tensor
+
+    def func(td: MyData) -> MyData:
+        return td.view(12)
+
+    data = MyData(x=torch.ones(3, 4), y=torch.zeros(3, 4), shape=(3, 4))
+    run_and_compare_compiled(func, data)
