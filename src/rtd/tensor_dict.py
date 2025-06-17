@@ -57,10 +57,9 @@ class TensorDict(TensorContainer, PytreeRegistered):
         Initializes the TensorDict. This constructor is kept simple for
         `torch.compile` compatibility, performing direct attribute assignment.
         """
-        super().__init__(shape)
+        super().__init__(shape, device)
 
         self.data = TensorDict.data_from_dict(data, shape, device)
-        self.device = device
 
         if validate_args:
             self._tree_validate_shape(data)
