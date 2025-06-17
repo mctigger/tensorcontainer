@@ -14,7 +14,7 @@ from typing import Tuple, List
 TDCompatible = Union[Tensor, TensorContainer]
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(eq=False)
 class TensorDataclass(TensorContainer, PytreeRegistered):
     """A dataclass-based tensor container with PyTree compatibility."""
 
@@ -99,6 +99,7 @@ class TensorDataclass(TensorContainer, PytreeRegistered):
 
     @classmethod
     def _pytree_unflatten(cls, leaves: List[Tensor], context: Tuple) -> TensorDataclass:
+        """Unflattens component values into a dataclass instance."""
         (
             children_spec,
             event_ndims,
@@ -116,8 +117,7 @@ class TensorDataclass(TensorContainer, PytreeRegistered):
                 shape=shape,
             )
 
-        first_leaf_device = leaves[0].device
-        device = first_leaf_device
+        reconstructed_device = leaves[0].device
 
         # Reconstruct the nested dictionary structure using the unflattened leaves
         data = pytree.tree_unflatten(leaves, children_spec)
@@ -130,16 +130,15 @@ class TensorDataclass(TensorContainer, PytreeRegistered):
         if (
             event_ndims[0] == 0
         ):  # Leaf was a scalar or had only batch dimensions originally
-            shape = first_leaf_reconstructed.shape
+            reconstructed_shape = first_leaf_reconstructed.shape
         else:  # Leaf had event dimensions originally
-            shape = first_leaf_reconstructed.shape[: -event_ndims[0]]
+            reconstructed_shape = first_leaf_reconstructed.shape[: -event_ndims[0]]
 
-        """Unflattens component values into a dataclass instance."""
         return cls(
             **dict(zip(field_names_data, data)),
             **dict(zip(field_names_meta_data, meta_data)),
-            device=device,
-            shape=shape,
+            device=reconstructed_device,
+            shape=reconstructed_shape,
         )
 
     def __repr__(self) -> str:
