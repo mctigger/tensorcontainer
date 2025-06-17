@@ -96,9 +96,11 @@ def test_to_with_non_blocking_and_memory_format():
         assert td_non_blocking.device.type == "cuda"
         # Check if the tensor is in channels_last format by verifying its layout
         # For channels_last format, the stride should be (1, C, H*W, W)
+        # Check if the tensor is in channels_last format by verifying its layout
+        # For channels_last format, the stride should be (1, C, H*W, W)
         # Check if the tensor is contiguous (required for channels_last format)
-        assert td_non_blocking.a.is_contiguous()
-        assert td_non_blocking.b.is_contiguous()
+        assert td_non_blocking.a.is_contiguous(memory_format=torch.channels_last)
+        assert td_non_blocking.b.is_contiguous(memory_format=torch.channels_last)
 
 
 def test_to_mixed_fields():

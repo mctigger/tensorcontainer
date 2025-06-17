@@ -1,4 +1,6 @@
 import torch
+import dataclasses
+from typing import Optional
 from src.rtd.tensor_dataclass import TensorDataclass
 
 
@@ -6,13 +8,19 @@ class TestDetach:
     def test_basic_detach(self):
         """Test that tensors are detached and still have the same data."""
 
+        @dataclasses.dataclass
         class TestClass(TensorDataclass):
+            shape: tuple
+            device: Optional[torch.device]
             a: torch.Tensor
             b: torch.Tensor
 
         # Create instance with tensors
         test_instance = TestClass(
-            a=torch.tensor([1.0, 2.0, 3.0]), b=torch.tensor([4.0, 5.0, 6.0])
+            shape=(3,),
+            device=torch.device("cpu"),
+            a=torch.tensor([1.0, 2.0, 3.0]),
+            b=torch.tensor([4.0, 5.0, 6.0]),
         )
 
         # Detach the instance
@@ -33,12 +41,17 @@ class TestDetach:
     def test_detach_with_gradients(self):
         """Test detach with tensors requiring gradients."""
 
+        @dataclasses.dataclass
         class TestClass(TensorDataclass):
+            shape: tuple
+            device: Optional[torch.device]
             a: torch.Tensor
             b: torch.Tensor
 
         # Create instance with tensors requiring gradients
         test_instance = TestClass(
+            shape=(3,),
+            device=torch.device("cpu"),
             a=torch.tensor([1.0, 2.0, 3.0], requires_grad=True),
             b=torch.tensor([4.0, 5.0, 6.0], requires_grad=True),
         )
@@ -61,17 +74,30 @@ class TestDetach:
     def test_nested_detach(self):
         """Test detach with nested TensorDataclass instances."""
 
+        @dataclasses.dataclass
         class NestedClass(TensorDataclass):
+            shape: tuple
+            device: Optional[torch.device]
             c: torch.Tensor
 
+        @dataclasses.dataclass
         class TestClass(TensorDataclass):
+            shape: tuple
+            device: Optional[torch.device]
             a: torch.Tensor
             b: NestedClass
 
         # Create nested instance
-        nested = NestedClass(c=torch.tensor([7.0, 8.0, 9.0], requires_grad=True))
+        nested = NestedClass(
+            shape=(3,),
+            device=torch.device("cpu"),
+            c=torch.tensor([7.0, 8.0, 9.0], requires_grad=True),
+        )
         test_instance = TestClass(
-            a=torch.tensor([1.0, 2.0, 3.0], requires_grad=True), b=nested
+            shape=(3,),
+            device=torch.device("cpu"),
+            a=torch.tensor([1.0, 2.0, 3.0], requires_grad=True),
+            b=nested,
         )
 
         # Detach the instance
@@ -92,13 +118,22 @@ class TestDetach:
     def test_non_tensor_fields(self):
         """Test that non-tensor fields are preserved."""
 
+        @dataclasses.dataclass
         class TestClass(TensorDataclass):
+            shape: tuple
+            device: Optional[torch.device]
             a: torch.Tensor
             b: int
             c: str
 
         # Create instance with mixed fields
-        test_instance = TestClass(a=torch.tensor([1.0, 2.0, 3.0]), b=42, c="test")
+        test_instance = TestClass(
+            shape=(3,),
+            device=torch.device("cpu"),
+            a=torch.tensor([1.0, 2.0, 3.0]),
+            b=42,
+            c="test",
+        )
 
         # Detach the instance
         detached_instance = test_instance.detach()

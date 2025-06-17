@@ -1,5 +1,6 @@
 import pytest
 import torch
+from typing import Optional
 from rtd.tensor_dataclass import TensorDataclass
 from tests.tensor_dict.compile_utils import run_and_compare_compiled
 from dataclasses import dataclass
@@ -8,13 +9,17 @@ from dataclasses import dataclass
 def test_getattr():
     @dataclass(kw_only=True)
     class TestContainer(TensorDataclass):
+        shape: tuple
+        device: Optional[torch.device]
         a: torch.Tensor
         b: torch.Tensor
-        device: str = "cpu"
 
     # Test direct attribute access
     container = TestContainer(
-        a=torch.zeros(2, 3), b=torch.ones(2, 3), shape=(2, 3), device="cpu"
+        a=torch.zeros(2, 3),
+        b=torch.ones(2, 3),
+        shape=(2, 3),
+        device=torch.device("cpu"),
     )
     assert container.a.shape == (2, 3)
     assert container.b.shape == (2, 3)
@@ -39,12 +44,18 @@ def test_compile():
 
     @dataclass(kw_only=True)
     class MyData(TensorDataclass):
+        shape: tuple
+        device: Optional[torch.device]
         x: torch.Tensor
         y: torch.Tensor
-        device: str = "cpu"
 
     def func(td: MyData) -> MyData:
         return td.view(12)
 
-    data = MyData(x=torch.ones(3, 4), y=torch.zeros(3, 4), shape=(3, 4), device="cpu")
+    data = MyData(
+        x=torch.ones(3, 4),
+        y=torch.zeros(3, 4),
+        shape=(3, 4),
+        device=torch.device("cpu"),
+    )
     run_and_compare_compiled(func, data)

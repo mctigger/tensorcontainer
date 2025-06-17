@@ -1,11 +1,14 @@
 import pytest
 import torch
 import dataclasses
+from typing import Optional
 from rtd.tensor_dataclass import TensorDataclass
 
 
 @dataclasses.dataclass
 class ShapeTestClass(TensorDataclass):
+    shape: tuple
+    device: Optional[torch.device]
     a: torch.Tensor
     b: torch.Tensor
     meta: int = 42
@@ -13,10 +16,10 @@ class ShapeTestClass(TensorDataclass):
 
 def test_view():
     td = ShapeTestClass(
-        a=torch.randn(4, 5),
-        b=torch.ones(4, 5),
         shape=(4, 5),
         device=torch.device("cpu"),
+        a=torch.randn(4, 5),
+        b=torch.ones(4, 5),
     )
 
     viewed = td.view(20)
@@ -28,10 +31,10 @@ def test_view():
 
 def test_reshape():
     td = ShapeTestClass(
-        a=torch.randn(2, 6),
-        b=torch.ones(2, 6),
         shape=(2, 6),
         device=torch.device("cpu"),
+        a=torch.randn(2, 6),
+        b=torch.ones(2, 6),
     )
 
     reshaped = td.reshape(4, 3)
@@ -42,10 +45,10 @@ def test_reshape():
 
 def test_shape_inference_on_unflatten():
     original = ShapeTestClass(
-        a=torch.randn(2, 5),
-        b=torch.ones(2, 5),
         shape=(2, 5),
         device=torch.device("cpu"),
+        a=torch.randn(2, 5),
+        b=torch.ones(2, 5),
     )
 
     # Flatten and modify leaves
@@ -60,10 +63,10 @@ def test_shape_inference_on_unflatten():
 
 def test_invalid_shape_raises():
     td = ShapeTestClass(
-        a=torch.randn(4, 5),
-        b=torch.ones(4, 5),
         shape=(4, 5),
         device=torch.device("cpu"),
+        a=torch.randn(4, 5),
+        b=torch.ones(4, 5),
     )
 
     with pytest.raises(RuntimeError):
@@ -72,10 +75,10 @@ def test_invalid_shape_raises():
 
 def test_shape_compile():
     td = ShapeTestClass(
-        a=torch.randn(4, 5),
-        b=torch.ones(4, 5),
         shape=(4, 5),
         device=torch.device("cpu"),
+        a=torch.randn(4, 5),
+        b=torch.ones(4, 5),
     )
 
     def view_fn(td):

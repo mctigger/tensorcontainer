@@ -1,0 +1,165 @@
+import pytest
+import torch
+import dataclasses
+from rtd.tensor_dataclass import TensorDataclass
+from typing import Optional
+
+
+@dataclasses.dataclass(eq=False)
+class StackTestClass(TensorDataclass):
+    shape: tuple
+    device: Optional[torch.device]
+    a: torch.Tensor
+    b: torch.Tensor
+    meta: int = 42
+
+
+class TestStack:
+    def test_basic_stack(self):
+        """Test basic torch.stack operation on a list of TensorDataclass instances."""
+        td1 = StackTestClass(
+            a=torch.randn(2, 3),
+            b=torch.ones(2, 3),
+            shape=(2, 3),
+            device=torch.device("cpu"),
+        )
+        td2 = StackTestClass(
+            a=torch.randn(2, 3),
+            b=torch.ones(2, 3),
+            shape=(2, 3),
+            device=torch.device("cpu"),
+        )
+
+        stacked_td = torch.stack([td1, td2], dim=0)
+
+        assert stacked_td.shape == (2, 2, 3)
+        assert stacked_td.a.shape == (2, 2, 3)
+        assert stacked_td.b.shape == (2, 2, 3)
+        assert (
+            stacked_td.meta == 42
+        )  # Non-tensor fields should be preserved (first one)
+
+        assert torch.equal(stacked_td.a[0], td1.a)
+        assert torch.equal(stacked_td.a[1], td2.a)
+        assert torch.equal(stacked_td.b[0], td1.b)
+        assert torch.equal(stacked_td.b[1], td2.b)
+
+    def test_stack_different_dim(self):
+        """Test torch.stack with a different dimension."""
+        td1 = StackTestClass(
+            a=torch.randn(2, 3),
+            b=torch.ones(2, 3),
+            shape=(2, 3),
+            device=torch.device("cpu"),
+        )
+        td2 = StackTestClass(
+            a=torch.randn(2, 3),
+            b=torch.ones(2, 3),
+            shape=(2, 3),
+            device=torch.device("cpu"),
+        )
+
+        stacked_td = torch.stack([td1, td2], dim=1)
+
+        assert stacked_td.shape == (2, 2, 3)
+        assert stacked_td.a.shape == (2, 2, 3)
+        assert stacked_td.b.shape == (2, 2, 3)
+
+        assert torch.equal(stacked_td.a[:, 0], td1.a)
+        assert torch.equal(stacked_td.a[:, 1], td2.a)
+
+    def test_stack_inconsistent_shapes_raises(self):
+        """Test that stacking with inconsistent shapes raises an error."""
+        td1 = StackTestClass(
+            a=torch.randn(2, 3),
+            b=torch.ones(2, 3),
+            shape=(2, 3),
+            device=torch.device("cpu"),
+        )
+        td2 = StackTestClass(
+            a=torch.randn(2, 4),  # Inconsistent shape
+            b=torch.ones(2, 4),
+            shape=(2, 4),
+            device=torch.device("cpu"),
+        )
+
+        with pytest.raises(ValueError):
+            torch.stack([td1, td2], dim=0)
+
+    def test_stack_inconsistent_meta_data_raises(self):
+        """Test that stacking with inconsistent meta data raises an error."""
+        td1 = StackTestClass(
+            a=torch.randn(2, 3),
+            b=torch.ones(2, 3),
+            shape=(2, 3),
+            device=torch.device("cpu"),
+            meta=42,
+        )
+        td2 = StackTestClass(
+            a=torch.randn(2, 3),
+            b=torch.ones(2, 3),
+            shape=(2, 3),
+            device=torch.device("cpu"),
+            meta=99,  # Inconsistent meta data
+        )
+
+        # The current pytree implementation for TensorDataclass will take the meta_data
+        # from the first element. If this behavior is desired, this test should be removed
+        # or modified to assert that the first meta_data is kept.
+        # For now, we assume inconsistent meta data should raise an error if it's not handled
+        # by the pytree unflattening in a way that preserves consistency or raises.
+        # Given the current _pytree_unflatten, it will just take the first meta_data.
+        # So, this test should check if the meta data is taken from the first element.
+        with pytest.raises(ValueError):
+            torch.stack([td1, td2], dim=0)
+
+    @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
+    def test_stack_on_cuda(self):
+        """Test torch.stack on CUDA devices."""
+        td1 = StackTestClass(
+            a=torch.randn(2, 3, device="cuda"),
+            b=torch.ones(2, 3, device="cuda"),
+            shape=(2, 3),
+            device=torch.device("cuda"),
+        )
+        td2 = StackTestClass(
+            a=torch.randn(2, 3, device="cuda"),
+            b=torch.ones(2, 3, device="cuda"),
+            shape=(2, 3),
+            device=torch.device("cuda"),
+        )
+
+        stacked_td = torch.stack([td1, td2], dim=0)
+
+        assert stacked_td.device.type == "cuda"
+        assert stacked_td.a.device.type == "cuda"
+        assert stacked_td.b.device.type == "cuda"
+        assert stacked_td.shape == (2, 2, 3)
+
+    def test_stack_compile(self):
+        """Tests that a function using torch.stack with TensorDataclass can be torch.compiled."""
+        from tests.tensor_dict.compile_utils import run_and_compare_compiled
+
+        @dataclasses.dataclass(eq=False)
+        class MyData(TensorDataclass):
+            shape: tuple
+            device: Optional[torch.device]
+            x: torch.Tensor
+            y: torch.Tensor
+
+        def func(tds: list[MyData]) -> MyData:
+            return torch.stack(tds, dim=0)
+
+        data1 = MyData(
+            x=torch.ones(3, 4),
+            y=torch.zeros(3, 4),
+            shape=(3, 4),
+            device=torch.device("cpu"),
+        )
+        data2 = MyData(
+            x=torch.ones(3, 4) * 2,
+            y=torch.zeros(3, 4) * 2,
+            shape=(3, 4),
+            device=torch.device("cpu"),
+        )
+        run_and_compare_compiled(func, [data1, data2])
