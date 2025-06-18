@@ -1,13 +1,14 @@
-from abc import ABC, abstractmethod
-from typing import List, Tuple, TypeVar, Type
+from abc import abstractmethod
+from typing import List, Tuple, TypeVar, Type, Any
 
 from torch import Tensor
 import torch.utils._pytree as pytree
+from torch.utils._pytree import KeyEntry
 
 _PytreeRegistered = TypeVar("_PytreeRegistered", bound="PytreeRegistered")
 
 
-class PytreeRegistered(ABC):
+class PytreeRegistered:
     """
     A mixin class that automatically registers any of its subclasses
     with the PyTorch PyTree system upon definition.
@@ -30,7 +31,13 @@ class PytreeRegistered(ABC):
         )
 
     @abstractmethod
-    def _pytree_flatten(self) -> Tuple[List[Tensor], Tuple]:
+    def _pytree_flatten(self) -> tuple[list[tuple[KeyEntry, Any]], Any]:
+        pass
+
+    @abstractmethod
+    def _pytree_flatten_with_keys_fn(
+        self,
+    ) -> Tuple[List[Tuple[pytree.KeyPath, Tensor]], Tuple]:
         pass
 
     @classmethod

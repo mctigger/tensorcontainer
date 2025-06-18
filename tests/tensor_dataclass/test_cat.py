@@ -1,11 +1,9 @@
 import pytest
 import torch
-import dataclasses
 from rtd.tensor_dataclass import TensorDataclass
 from typing import Optional
 
 
-@dataclasses.dataclass
 class CatTestClass(TensorDataclass):
     shape: tuple
     device: Optional[torch.device]
@@ -131,10 +129,7 @@ class TestCat:
         """Tests that a function using torch.cat with TensorDataclass can be torch.compiled."""
         from tests.tensor_dict.compile_utils import run_and_compare_compiled
 
-        @dataclasses.dataclass(eq=False)
         class MyData(TensorDataclass):
-            shape: tuple
-            device: Optional[torch.device]
             x: torch.Tensor
             y: torch.Tensor
 
@@ -147,6 +142,7 @@ class TestCat:
             shape=(3, 4),
             device=torch.device("cpu"),
         )
+
         data2 = MyData(
             x=torch.ones(3, 4) * 2,
             y=torch.zeros(3, 4) * 2,

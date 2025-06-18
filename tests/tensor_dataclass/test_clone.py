@@ -5,10 +5,7 @@ from rtd.tensor_dataclass import TensorDataclass
 from typing import Optional
 
 
-@dataclasses.dataclass
 class CloneTestClass(TensorDataclass):
-    shape: tuple
-    device: Optional[torch.device]
     a: torch.Tensor
     b: torch.Tensor
     meta: int = 42
