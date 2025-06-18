@@ -25,10 +25,7 @@ def test_getattr():
     assert container.b.shape == (2, 3)
 
     # Test TensorContainer method inheritance
-    reshaped = container.view(6)
-    assert reshaped.a.shape == (6,)
-    assert reshaped.b.shape == (6,)
-
+    # These tests have been moved to test_view_reshape.py
     # Validate container structure
     assert isinstance(container.clone(), TestContainer)
     # The .dtype attribute is not defined for TensorContainer, so this check is removed.

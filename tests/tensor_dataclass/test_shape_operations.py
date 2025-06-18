@@ -14,33 +14,8 @@ class ShapeTestClass(TensorDataclass):
     meta: int = 42
 
 
-def test_view():
-    td = ShapeTestClass(
-        shape=(4, 5),
-        device=torch.device("cpu"),
-        a=torch.randn(4, 5),
-        b=torch.ones(4, 5),
-    )
-
-    viewed = td.view(20)
-    assert viewed.shape == (20,)
-    assert viewed.a.shape == (20,)
-    assert viewed.b.shape == (20,)
-    assert viewed.meta == 42
-
-
-def test_reshape():
-    td = ShapeTestClass(
-        shape=(2, 6),
-        device=torch.device("cpu"),
-        a=torch.randn(2, 6),
-        b=torch.ones(2, 6),
-    )
-
-    reshaped = td.reshape(4, 3)
-    assert reshaped.shape == (4, 3)
-    assert reshaped.a.shape == (4, 3)
-    assert reshaped.b.shape == (4, 3)
+# Note: The view and reshape tests have been moved to test_view_reshape.py
+# This file now focuses on shape inference and other shape-related operations
 
 
 def test_shape_inference_on_unflatten():
