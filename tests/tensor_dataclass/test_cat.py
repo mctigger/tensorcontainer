@@ -1,15 +1,12 @@
 import pytest
 import torch
 from rtd.tensor_dataclass import TensorDataclass
-from typing import Optional
 from torch._dynamo import exc as dynamo_exc
 from tests.tensor_dict.compile_utils import run_and_compare_compiled
 
 
 # Define a base class for tests
 class CatTestClass(TensorDataclass):
-    shape: tuple
-    device: Optional[torch.device]
     a: torch.Tensor
     b: torch.Tensor
     meta: int = 42

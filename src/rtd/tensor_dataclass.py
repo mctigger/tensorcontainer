@@ -220,18 +220,41 @@ class _TensorDataclassLogic(TensorContainer, PytreeRegistered):
         )
 
 
-class TensorDataclass(_TensorDataclassLogic, metaclass=TensorDataclassMeta):
+@dataclass_transform(eq_default=False)
+class TensorDataclass(_TensorDataclassLogic):
     """
     User-facing base class for creating PyTree-compatible tensor dataclasses.
-
-    Inherits logic from _TensorDataclassLogic and uses TensorDataclassMeta
-    to safely convert any subclass into a slotted, `eq=False` dataclass.
     """
 
-    # Define the fields that all subclasses will inherit.
     shape: tuple
     device: Optional[torch.device]
 
-    # No __init_subclass__ is needed or desired here.
-    # The metaclass handles everything.
-    pass
+    def __init_subclass__(cls, **kwargs):
+        if hasattr(cls, "__slots__"):
+            return
+
+        # --- NEW: Automatically inherit annotations from parent classes ---
+        # Build a complete dictionary of annotations from the MRO.
+        # Iterate backwards through the MRO to ensure correct override order (child overrides parent).
+        all_annotations = {}
+        for base in reversed(cls.__mro__):
+            if hasattr(base, "__annotations__"):
+                all_annotations.update(base.__annotations__)
+        cls.__annotations__ = all_annotations
+        # --- End new logic ---
+
+        dc_kwargs = {}
+        for k in list(kwargs.keys()):
+            if k in DATACLASS_ARGS:
+                dc_kwargs[k] = kwargs.pop(k)
+
+        super().__init_subclass__(**kwargs)
+
+        if dc_kwargs.get("eq") is True:
+            raise TypeError(
+                f"Cannot create {cls.__name__} with eq=True. TensorDataclass requires eq=False."
+            )
+        dc_kwargs.setdefault("eq", False)
+        dc_kwargs.setdefault("slots", True)
+
+        dataclasses.dataclass(cls, **dc_kwargs)

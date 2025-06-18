@@ -2,11 +2,9 @@ import pytest
 import torch
 from typing import Optional
 from rtd.tensor_dataclass import TensorDataclass
-from dataclasses import dataclass
 
 
-@dataclass(kw_only=True)
-class TestContainer(TensorDataclass):
+class A(TensorDataclass):
     shape: tuple
     device: Optional[torch.device]
     a: torch.Tensor
@@ -18,7 +16,7 @@ class TestContainer(TensorDataclass):
 class TestViewAndReshape:
     def test_view(self, mode):
         """Test the view method of TensorDataclass."""
-        td = TestContainer(
+        td = A(
             a=torch.randn(4, 5),
             b=torch.ones(4, 5),
             shape=(4, 5),
@@ -42,7 +40,7 @@ class TestViewAndReshape:
 
     def test_reshape(self, mode):
         """Test the reshape method of TensorDataclass."""
-        td = TestContainer(
+        td = A(
             a=torch.randn(2, 6),
             b=torch.ones(2, 6),
             shape=(2, 6),
@@ -66,7 +64,7 @@ class TestViewAndReshape:
 
     def test_invalid_view_raises(self, mode):
         """Test that invalid view operations raise RuntimeError."""
-        td = TestContainer(
+        td = A(
             a=torch.randn(4, 5),
             b=torch.ones(4, 5),
             shape=(4, 5),
@@ -86,7 +84,7 @@ class TestViewAndReshape:
 
     def test_invalid_reshape_raises(self, mode):
         """Test that invalid reshape operations raise RuntimeError."""
-        td = TestContainer(
+        td = A(
             a=torch.randn(4, 5),
             b=torch.ones(4, 5),
             shape=(4, 5),
@@ -106,7 +104,7 @@ class TestViewAndReshape:
 
     def test_view_reshape_compile(self, mode):
         """Test that view and reshape operations can be compiled."""
-        td = TestContainer(
+        td = A(
             a=torch.randn(4, 5),
             b=torch.ones(4, 5),
             shape=(4, 5),
