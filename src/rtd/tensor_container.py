@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import functools
-from typing import List, Tuple, Union
+from typing import List, Tuple, Union, TypeVar, Optional
 
 import torch
 
@@ -10,6 +10,9 @@ import torch.utils._pytree as pytree
 
 
 HANDLED_FUNCTIONS = {}
+
+
+T = TypeVar("T", bound="TensorContainer")
 
 
 def implements(torch_function):
@@ -24,6 +27,23 @@ def implements(torch_function):
 
 
 class TensorContainer:
+    """A generic container for nested tensors.
+
+    This class is a base class for more specific tensor containers like
+    :class:`TensorDict` and :class:`TensorDataclass`. It provides common
+    functionality for manipulating nested tensors, such as reshaping,
+    casting, and cloning.
+
+    The main idea behind this class is to provide a container that can be
+    used with `torch.utils._pytree` to apply functions to all tensors
+    in the container. This allows us to write code that is agnostic to the
+    specific container type.
+
+    Args:
+        shape (torch.Size): The shape of the container.
+        device (torch.device): The device of the container.
+    """
+
     def __init__(self, shape, device):
         super().__init__()
 
@@ -88,31 +108,189 @@ class TensorContainer:
         return len(self.shape)
 
     # --- Overloaded methods leveraging PyTrees ---
-    def view(self, *shape: int) -> TensorContainer:
+    def view(self: T, *shape: int) -> T:
         return pytree.tree_map(lambda x: x.view(*shape, *x.shape[self.ndim :]), self)
 
-    def reshape(self, *shape: int) -> TensorContainer:
+    def reshape(self: T, *shape: int) -> T:
         return pytree.tree_map(lambda x: x.reshape(*shape, *x.shape[self.ndim :]), self)
 
-    def to(self, *args, **kwargs) -> TensorContainer:
+    def to(self: T, *args, **kwargs) -> T:
         # Move tensors and ensure they are contiguous
         return pytree.tree_map(lambda x: x.to(*args, **kwargs), self)
 
-    def detach(self) -> TensorContainer:
+    def detach(self: T) -> T:
         return pytree.tree_map(lambda x: x.detach(), self)
 
-    def clone(self) -> TensorContainer:
-        return pytree.tree_map(lambda x: x.clone(), self)
+    def clone(self: T, *, memory_format: Optional[torch.memory_format] = None) -> T:
+        # If memory_format is not specified, use torch.preserve_format as default
+        if memory_format is None:
+            memory_format = torch.preserve_format
+        return pytree.tree_map(lambda x: x.clone(memory_format=memory_format), self)
 
-    def expand(self, *shape: int) -> TensorContainer:
+    def expand(self: T, *shape: int) -> T:
         return pytree.tree_map(lambda x: x.expand(*shape, *x.shape[self.ndim :]), self)
+
+    def permute(self: T, *dims: int) -> T:
+        """Permutes the batch dimensions of the container.
+
+        This is equivalent to calling :meth:`torch.Tensor.permute` on each tensor
+        in the container, but only for the batch dimensions.
+
+        Args:
+            *dims (int): The desired ordering of dimensions.
+
+        Returns:
+            A new container with the batch dimensions permuted.
+        """
+        return pytree.tree_map(
+            lambda x: x.permute(*dims, *range(self.ndim, x.ndim)), self
+        )
+
+    def squeeze(self: T, dim: Optional[int] = None) -> T:
+        """Squeezes the batch dimensions of the container.
+
+        Args:
+            dim (int, optional): The dimension to squeeze. If ``None``, all
+                batch dimensions of size 1 are squeezed.
+
+        Returns:
+            A new container with the specified dimensions squeezed.
+        """
+        if dim is not None:
+            if self.shape[dim] != 1:
+                return self.clone()
+            new_shape = list(self.shape)
+            new_shape.pop(dim)
+            return self.reshape(*new_shape)
+        else:
+            new_shape = [s for s in self.shape if s != 1]
+            if len(new_shape) == len(self.shape):
+                return self.clone()
+            return self.reshape(*new_shape)
+
+    def t(self: T) -> T:
+        """Transposes the first two batch dimensions of the container.
+
+        This is equivalent to ``self.transpose(0, 1)``.
+
+        Returns:
+            A new container with the first two batch dimensions transposed.
+        """
+        return self.transpose(0, 1)
+
+    def transpose(self: T, dim0: int, dim1: int) -> T:
+        """Transposes two batch dimensions of the container.
+
+        Args:
+            dim0 (int): The first dimension to transpose.
+            dim1 (int): The second dimension to transpose.
+
+        Returns:
+            A new container with the specified dimensions transposed.
+        """
+        return pytree.tree_map(lambda x: x.transpose(dim0, dim1), self)
+
+    def unsqueeze(self: T, dim: int) -> T:
+        """Unsqueezes a batch dimension of the container.
+
+        Args:
+            dim (int): The dimension to unsqueeze.
+
+        Returns:
+            A new container with the specified dimension unsqueezed.
+        """
+        new_shape = torch.empty(self.shape).unsqueeze(dim).shape
+        return self.reshape(*new_shape)
+
+    def size(self) -> torch.Size:
+        """Returns the size of the batch dimensions."""
+        return self.shape
+
+    def dim(self) -> int:
+        """Returns the number of batch dimensions."""
+        return self.ndim
+
+    def numel(self) -> int:
+        """Returns the total number of elements in the batch dimensions."""
+        return self.shape.numel()
+
+    def cpu(self: T) -> T:
+        """Returns a new container with all tensors on the CPU."""
+        return self.to("cpu")
+
+    def cuda(self: T, device=None, non_blocking: bool = False) -> T:
+        """Returns a new container with all tensors on the specified CUDA device."""
+        return self.to(
+            f"cuda:{device}" if device is not None else "cuda",
+            non_blocking=non_blocking,
+        )
+
+    def float(self: T) -> T:
+        """Casts all tensors to float type."""
+        return pytree.tree_map(lambda x: x.float(), self)
+
+    def double(self: T) -> T:
+        """Casts all tensors to double type."""
+        return pytree.tree_map(lambda x: x.double(), self)
+
+    def half(self: T) -> T:
+        """Casts all tensors to half type."""
+        return pytree.tree_map(lambda x: x.half(), self)
+
+    def long(self: T) -> T:
+        """Casts all tensors to long type."""
+        return pytree.tree_map(lambda x: x.long(), self)
+
+    def int(self: T) -> T:
+        """Casts all tensors to int type."""
+        return pytree.tree_map(lambda x: x.int(), self)
+
+    def abs(self: T) -> T:
+        """Computes the absolute value of each tensor in the container."""
+        return pytree.tree_map(lambda x: x.abs(), self)
+
+    def add(self: T, other) -> T:
+        """Adds a value to each tensor in the container."""
+        return pytree.tree_map(lambda x: x.add(other), self)
+
+    def sub(self: T, other) -> T:
+        """Subtracts a value from each tensor in the container."""
+        return pytree.tree_map(lambda x: x.sub(other), self)
+
+    def mul(self: T, other) -> T:
+        """Multiplies each tensor in the container by a value."""
+        return pytree.tree_map(lambda x: x.mul(other), self)
+
+    def div(self: T, other) -> T:
+        """Divides each tensor in the container by a value."""
+        return pytree.tree_map(lambda x: x.div(other), self)
+
+    def pow(self: T, exponent) -> T:
+        """Raises each tensor in the container to a power."""
+        return pytree.tree_map(lambda x: x.pow(exponent), self)
+
+    def sqrt(self: T) -> T:
+        """Computes the square root of each tensor in the container."""
+        return pytree.tree_map(lambda x: x.sqrt(), self)
+
+    def log(self: T) -> T:
+        """Computes the natural logarithm of each tensor in the container."""
+        return pytree.tree_map(lambda x: x.log(), self)
+
+    def neg(self: T) -> T:
+        """Negates each tensor in the container."""
+        return pytree.tree_map(lambda x: x.neg(), self)
+
+    def clamp(self: T, min, max) -> T:
+        """Clamps each tensor in the container to a range."""
+        return pytree.tree_map(lambda x: x.clamp(min, max), self)
 
 
 # --- PyTree-aware implementations of torch functions ---
 @implements(torch.stack)
 def _stack(
     tensors: Union[Tuple[TensorContainer, ...], List[TensorContainer]], dim: int = 0
-):
+) -> TensorContainer:
     returns = pytree.tree_map(lambda *x: torch.stack(x, dim), *tensors)
     return returns
 
@@ -120,5 +298,5 @@ def _stack(
 @implements(torch.cat)
 def _cat(
     tensors: Union[Tuple[TensorContainer, ...], List[TensorContainer]], dim: int = 0
-):
+) -> TensorContainer:
     return pytree.tree_map(lambda *x: torch.cat(x, dim), *tensors)
