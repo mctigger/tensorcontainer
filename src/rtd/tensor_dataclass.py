@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import dataclasses
+import copy  # Added for deepcopy
 from typing import Optional, Union
 from typing_extensions import dataclass_transform
 
@@ -59,6 +60,23 @@ class _TensorDataclassLogic(TensorContainer, PytreeRegistered):
     def __post_init__(self):
         """Initializes the TensorContainer part."""
         super().__init__(self.shape, self.device)
+
+        # Infer device from tensor children if self.device is None
+        if self.device is None:
+            devices = {
+                getattr(self, f.name).device
+                for f in dataclasses.fields(self)
+                if isinstance(getattr(self, f.name), TDCompatible)
+                and hasattr(getattr(self, f.name), "device")
+            }
+            if len(devices) == 1:
+                self.device = devices.pop()
+            elif len(devices) > 1:
+                # This case should ideally be caught by _tree_validate_device if all tensors are expected
+                # to be on the same device as the container. If the container's device is None,
+                # it implies flexibility, but operations might fail later if devices are truly mixed
+                # without explicit handling. For now, we keep self.device as None.
+                pass
 
         self._tree_validate_device()
         self._tree_validate_shape()
@@ -218,6 +236,44 @@ class _TensorDataclassLogic(TensorContainer, PytreeRegistered):
             f"    device={self.device},\n"
             f"    fields=(\n        {items_str}\n    )\n)"
         )
+
+    def clone(
+        self, *, memory_format: Optional[torch.memory_format] = None
+    ) -> TensorDataclass:
+        """
+        Returns a new TensorDataclass instance with all tensor data cloned.
+        Non-tensor fields (metadata) are deepcopied.
+        """
+        # Flatten to get tensor leaves and context (which includes meta_data)
+        flat_leaves, context = self._pytree_flatten()
+        children_spec, event_ndims, original_shape, original_device, meta_data = context
+
+        # Clone tensor leaves
+        cloned_leaves = [
+            leaf.clone(memory_format=memory_format)
+            if isinstance(leaf, torch.Tensor)
+            else leaf.clone(memory_format=memory_format)
+            for leaf in flat_leaves
+        ]
+
+        # Deepcopy metadata to ensure independence, especially for mutable types
+        # Apply deepcopy to values to be more torch.compile friendly than deepcopying the ConstDictVariable
+        cloned_meta_data = {k: copy.deepcopy(v) for k, v in meta_data.items()}
+
+        # Reconstruct with cloned leaves and deepcopied metadata
+        # The original_shape and original_device from context are appropriate here,
+        # as clone() should preserve these aspects from the source.
+        # The _pytree_unflatten method will correctly determine the new shape and device
+        # based on the cloned_leaves if they were to change (though clone() preserves them).
+        cloned_context = (
+            children_spec,
+            event_ndims,
+            original_shape,
+            original_device,
+            cloned_meta_data,
+        )
+
+        return self.__class__._pytree_unflatten(cloned_leaves, cloned_context)
 
 
 @dataclass_transform(eq_default=False)

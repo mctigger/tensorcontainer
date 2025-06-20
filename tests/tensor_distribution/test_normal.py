@@ -22,7 +22,13 @@ def test_init_valid():
     """Tests that TensorNormal can be instantiated with valid parameters."""
     loc = torch.zeros(2, 3)
     scale = torch.ones(2, 3)
-    dist = TensorNormal(loc=loc, scale=scale, shape=loc.shape, reinterpreted_batch_ndims=0)
+    dist = TensorNormal(
+        loc=loc,
+        scale=scale,
+        shape=loc.shape,
+        reinterpreted_batch_ndims=0,
+        device=loc.device,
+    )
     assert isinstance(dist, TensorDistribution)
 
 
@@ -34,7 +40,11 @@ def test_sample_shape_and_dtype():
     loc = torch.randn(4, 3)
     scale = torch.rand(4, 3) + 1e-6  # ensure scale is positive
     dist = TensorNormal(
-        loc=loc, scale=scale, shape=loc.shape, reinterpreted_batch_ndims=0
+        loc=loc,
+        scale=scale,
+        shape=loc.shape,
+        reinterpreted_batch_ndims=0,
+        device=loc.device,
     )
     # Draw 5 i.i.d. samples
     samples = dist.sample(sample_shape=torch.Size((5,)))
@@ -48,8 +58,8 @@ def test_sample_shape_and_dtype():
     "rbn_dims,expected_shape",
     [
         (0, (2, 3)),  # no reinterpretation -> log_prob per-element
-        (1, (2,)),    # sum over the last dimension
-        (2, ()),      # sum over the last two dimensions -> scalar
+        (1, (2,)),  # sum over the last dimension
+        (2, ()),  # sum over the last two dimensions -> scalar
     ],
 )
 def test_log_prob_reinterpreted_batch_ndims(rbn_dims, expected_shape):
@@ -65,9 +75,10 @@ def test_log_prob_reinterpreted_batch_ndims(rbn_dims, expected_shape):
         scale=scale,
         shape=loc.shape,
         reinterpreted_batch_ndims=rbn_dims,
+        device=loc.device,
     )
     # A sample to evaluate the log probability of
-    x = torch.tensor([[0.1, 1.2, -1.1], [0.4, -0.6, 0.7]])
+    x = torch.tensor([[0.1, 1.2, -1.1], [0.4, -0.6, 0.7]], device=loc.device)
     lp = dist.log_prob(x)
 
     # Calculate expected log_prob using the reference torch.distributions
@@ -95,5 +106,5 @@ def test_device_normalization_helper():
     else:
         # On a CPU-only machine, test with "cpu"
         dev1 = torch.device("cpu")
-        dev2 = torch.device("cpu:0") # This is not standard but torch handles it
+        dev2 = torch.device("cpu:0")  # This is not standard but torch handles it
         assert normalize_device(dev1) == normalize_device(dev2)

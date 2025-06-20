@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from typing import Optional
 from abc import abstractmethod
-from typing import Any, Dict
+from dataclasses import field
 
 from torch import Size, Tensor
 from torch.distributions import (
@@ -17,14 +18,7 @@ from rtd.distributions.sampling import SamplingDistribution
 import torch
 from rtd.distributions.soft_bernoulli import SoftBernoulli
 from rtd.distributions.truncated_normal import TruncatedNormal
-from rtd.tensor_dict import TensorDict
-from rtd.utils import PytreeRegistered
-
-from typing import List, Tuple
-
-
-# Use the official PyTree utility from torch
-import torch.utils._pytree as pytree
+from rtd.tensor_dataclass import TensorDataclass
 
 
 class ClampedTanhTransform(torch.distributions.transforms.Transform):
@@ -58,106 +52,7 @@ class ClampedTanhTransform(torch.distributions.transforms.Transform):
         )  # Adding small epsilon for numerical stability
 
 
-class TensorDistribution(TensorDict, PytreeRegistered):
-    meta_data: Dict[str, Any]
-
-    def __init__(self, data, shape, device, meta_data):
-        super().__init__(data, shape, device)
-
-        self.meta_data = meta_data
-
-    def _get_pytree_context(
-        self, flat_leaves: List[Tensor], children_spec: pytree.TreeSpec
-    ) -> Tuple:
-        """
-        Private helper to compute the pytree context for this TensorDict.
-
-        The context captures the necessary metadata to reconstruct the TensorDict
-        from its leaves: the original structure of the contained data and the
-        event dimensions of each tensor.
-        """
-        batch_ndim = len(self.shape)
-        event_ndims = tuple(leaf.ndim - batch_ndim for leaf in flat_leaves)
-        return (children_spec, event_ndims, self.meta_data)
-
-    def _pytree_flatten(self) -> Tuple[List[Tensor], Tuple]:
-        """
-        Flattens the TensorDict into its tensor leaves and static metadata.
-        (Implementation for `flatten_fn` in `register_pytree_node`)
-        """
-        # Get the leaves and the spec describing the structure of self.data
-        flat_leaves, children_spec = pytree.tree_flatten(self.data)
-
-        # Use the helper to compute and return the context
-        context = self._get_pytree_context(flat_leaves, children_spec)
-        return flat_leaves, context
-
-    def _pytree_flatten_with_keys_fn(
-        self,
-    ) -> Tuple[List[Tuple[pytree.KeyPath, Tensor]], Tuple]:
-        """
-        Flattens the TensorDict into key-path/leaf pairs and static metadata.
-        (Implementation for `flatten_with_keys_fn` in `register_pytree_node`)
-        """
-        # Use the public API to robustly get key paths, leaves, and the spec
-        keypath_leaf_list, children_spec = pytree.tree_flatten_with_path(self.data)
-
-        # Extract just the leaves to pass to the context helper
-        flat_leaves = [leaf for _, leaf in keypath_leaf_list]
-
-        # Use the helper to compute and return the context
-        context = self._get_pytree_context(flat_leaves, children_spec)
-        return keypath_leaf_list, context
-
-    @classmethod
-    def _pytree_unflatten(cls, leaves: List[Tensor], context: Tuple) -> TensorDict:
-        """
-        Reconstructs a TensorDict by creating a new instance and manually
-        populating its attributes. This approach is more robust for torch.compile's
-        code generation phase.
-        """
-        (children_spec, event_ndims, meta_data) = context  # Unpack the context
-
-        if not leaves:
-            # Handle the empty case explicitly with direct instantiation
-            obj = cls.__new__(cls)
-            obj.data = {}
-            obj.shape = []  # Or a sensible default for empty
-            obj.device = None
-            obj.meta_data = {}
-            return obj
-
-        # Reconstruct the nested dictionary structure using the unflattened leaves
-        data = pytree.tree_unflatten(leaves, children_spec)
-
-        # Infer new_shape and new_device
-        first_leaf_reconstructed = leaves[0]
-
-        # Simplified inference (common and works for stack/cat):
-        new_device = first_leaf_reconstructed.device
-
-        # Calculate new_shape based on the structure and first leaf.
-        # For operations like `stack`, the batch shape changes.
-        # If `_pytree_flatten` correctly passes `event_ndims`, then:
-        if event_ndims[0] == 0:
-            new_shape = first_leaf_reconstructed.shape
-        else:
-            new_shape = first_leaf_reconstructed.shape[: -event_ndims[0]]
-
-        # Instead of calling `_reconstruct_tensordict` which wraps `cls(...)`,
-        # directly use `cls.__new__` and set attributes.
-        obj = cls.__new__(cls)
-        obj.data = (
-            data  # This is the reconstructed nested dictionary of tensors/TensorDicts
-        )
-        obj.shape = new_shape
-        obj.device = new_device
-        obj.meta_data = meta_data
-        return obj
-
-    def __repr__(self) -> str:
-        return f"{self.__class__.__name__}(data={self.data}, shape={self.shape}, device={self.device}, meta_data={self.meta_data})"
-
+class TensorDistribution(TensorDataclass):
     @abstractmethod
     def dist(self) -> Distribution: ...
 
@@ -186,258 +81,241 @@ class TensorDistribution(TensorDict, PytreeRegistered):
         return self.dist().mode
 
 
-class TensorNormal(TensorDistribution):
-    def __init__(
-        self,
-        loc,
-        scale,
-        reinterpreted_batch_ndims,
-        shape,
-        device=torch.device("cpu"),
-    ):
-        super().__init__(
-            {"loc": loc, "scale": scale},
-            shape,
-            device,
-            {"reinterpreted_batch_ndims": reinterpreted_batch_ndims},
-        )
+class TensorNormal(TensorDataclass):
+    loc: Tensor
+    scale: Tensor
+    reinterpreted_batch_ndims: int = 1
+    shape: tuple = field(default_factory=tuple, init=False)
+    device: Optional[torch.device] = field(default=None, init=False)
 
-    def dist(self):
+    def __post_init__(self):
+        super().__post_init__()
+
+    def dist(self) -> Distribution:
         return Independent(
             Normal(
-                loc=self["loc"],
-                scale=self["scale"],
+                loc=self.loc,
+                scale=self.scale,
             ),
-            self.meta_data["reinterpreted_batch_ndims"],
+            self.reinterpreted_batch_ndims,
         )
 
     def copy(self):
         return TensorNormal(
-            loc=self["loc"],
-            scale=self["scale"],
-            reinterpreted_batch_ndims=self.meta_data["reinterpreted_batch_ndims"],
+            loc=self.loc.clone(),
+            scale=self.scale.clone(),
+            reinterpreted_batch_ndims=self.reinterpreted_batch_ndims,
             shape=self.shape,
             device=self.device,
         )
 
 
-class TensorTruncatedNormal(TensorDistribution):
-    def __init__(
-        self,
-        loc,
-        scale,
-        low,
-        high,
-        reinterpreted_batch_ndims,
-        shape=None,
-        device=torch.device("cpu"),
-    ):
-        super().__init__(
-            {"loc": loc, "scale": scale},
-            shape,
-            device,
-            {
-                "reinterpreted_batch_ndims": reinterpreted_batch_ndims,
-                "low": low,
-                "high": high,
-            },
-        )
+class TensorTruncatedNormal(TensorDataclass):
+    loc: Tensor
+    scale: Tensor
+    low: Tensor
+    high: Tensor
+    reinterpreted_batch_ndims: int = 1  # Default value for reinterpreted_batch_ndims
+    shape: tuple = field(default_factory=tuple, init=False)
+    device: Optional[torch.device] = field(default=None, init=False)
+
+    def __post_init__(self):
+        super().__post_init__()
 
     def dist(self) -> Distribution:
         return Independent(
             TruncatedNormal(
-                self["loc"].float(),
-                self["scale"].float(),
-                self.meta_data["low"],
-                self.meta_data["high"],
+                self.loc.float(),
+                self.scale.float(),
+                self.low,
+                self.high,
             ),
-            self.meta_data["reinterpreted_batch_ndims"],
+            self.reinterpreted_batch_ndims,
         )
 
     def copy(self):
         return TensorTruncatedNormal(
-            loc=self["loc"],
-            scale=self["scale"],
-            low=self.meta_data["low"],
-            high=self.meta_data["high"],
-            reinterpreted_batch_ndims=self.meta_data["reinterpreted_batch_ndims"],
+            loc=self.loc.clone(),
+            scale=self.scale.clone(),
+            low=self.low.clone(),
+            high=self.high.clone(),
+            reinterpreted_batch_ndims=self.reinterpreted_batch_ndims,
             shape=self.shape,
             device=self.device,
         )
 
 
-class TensorBernoulli(TensorDistribution):
-    def __init__(
-        self,
-        probs=None,
-        logits=None,
-        reinterpreted_batch_ndims=0,
-        shape=None,
-        device=torch.device("cpu"),
-    ):
-        if (probs is None) == (logits is None):
+class TensorBernoulli(TensorDataclass):
+    probs: Optional[Tensor] = field(default=None)
+    logits: Optional[Tensor] = field(default=None)
+    reinterpreted_batch_ndims: int = 0
+    shape: tuple = field(default_factory=tuple, init=False)
+    device: Optional[torch.device] = field(default=None, init=False)
+
+    def __post_init__(self):
+        super().__post_init__()  # Call parent's post_init
+        if (self.probs is None) == (self.logits is None):
             raise ValueError(
                 "Either `probs` or `logits` must be specified, but not both."
             )
-        if probs is not None:
-            data = {"probs": probs}
-        else:
-            data = {"logits": logits}
-        if shape is None:
-            if probs is not None:
-                shape = probs.shape
-            else:
-                shape = logits.shape
-        super().__init__(
-            data,
-            shape,
-            device,
-            {"reinterpreted_batch_ndims": reinterpreted_batch_ndims},
-        )
+        # Ensure _probs and _logits are initialized for properties
+        if self.probs is not None:
+            self._probs = self.probs
+            self._logits = None
+        elif self.logits is not None:
+            self._logits = self.logits
+            self._probs = None
 
     @property
     def probs(self):
-        if "probs" not in self.data:
-            self.data["probs"] = torch.sigmoid(self["logits"])
-        return self["probs"]
+        if self._probs is None and self._logits is not None:
+            self._probs = torch.sigmoid(self._logits)
+        return self._probs
+
+    @probs.setter
+    def probs(self, value):
+        self._probs = value
+        self._logits = None  # Invalidate logits when probs is set
 
     @property
     def logits(self):
-        if "logits" not in self.data:
-            self.data["logits"] = torch.log(self["probs"] / (1 - self["probs"]))
-        return self["logits"]
+        if self._logits is None and self._probs is not None:
+            # Add a small epsilon to avoid log(0) or log(negative)
+            self._logits = torch.log(self._probs / (1 - self._probs + 1e-8))
+        return self._logits
+
+    @logits.setter
+    def logits(self, value):
+        self._logits = value
+        self._probs = None  # Invalidate probs when logits is set
 
     def dist(self):
-        if "probs" in self.data:
+        if self.probs is not None:
             return Independent(
                 torch.distributions.Bernoulli(
-                    probs=self["probs"],
+                    probs=self.probs,
                 ),
-                self.meta_data["reinterpreted_batch_ndims"],
+                self.reinterpreted_batch_ndims,
             )
         else:
             return Independent(
                 torch.distributions.Bernoulli(
-                    logits=self["logits"],
+                    logits=self.logits,
                 ),
-                self.meta_data["reinterpreted_batch_ndims"],
+                self.reinterpreted_batch_ndims,
             )
 
     def copy(self):
-        if "probs" in self.data:
+        if self.probs is not None:
             return TensorBernoulli(
-                probs=self["probs"].clone(),
-                reinterpreted_batch_ndims=self.meta_data["reinterpreted_batch_ndims"],
+                probs=self.probs.clone(),
+                reinterpreted_batch_ndims=self.reinterpreted_batch_ndims,
                 shape=self.shape,
                 device=self.device,
             )
         else:
             return TensorBernoulli(
-                logits=self["logits"].clone(),
-                reinterpreted_batch_ndims=self.meta_data["reinterpreted_batch_ndims"],
+                logits=self.logits.clone(),
+                reinterpreted_batch_ndims=self.reinterpreted_batch_ndims,
                 shape=self.shape,
                 device=self.device,
             )
 
 
-class TensorSoftBernoulli(TensorDistribution):
-    def __init__(
-        self,
-        probs=None,
-        logits=None,
-        reinterpreted_batch_ndims=0,
-        shape=None,
-        device=torch.device("cpu"),
-    ):
-        if (probs is None) == (logits is None):
+class TensorSoftBernoulli(TensorDataclass):
+    probs: Optional[Tensor] = field(default=None)
+    logits: Optional[Tensor] = field(default=None)
+    reinterpreted_batch_ndims: int = 0
+    shape: tuple = field(default_factory=tuple, init=False)
+    device: Optional[torch.device] = field(default=None, init=False)
+
+    def __post_init__(self):
+        super().__post_init__()  # Call parent's post_init
+        if (self.probs is None) == (self.logits is None):
             raise ValueError(
                 "Either `probs` or `logits` must be specified, but not both."
             )
-        if probs is not None:
-            data = {"probs": probs}
-        else:
-            data = {"logits": logits}
-        if shape is None:
-            if probs is not None:
-                shape = probs.shape
-            else:
-                shape = logits.shape
-        super().__init__(
-            data,
-            shape,
-            device,
-            {"reinterpreted_batch_ndims": reinterpreted_batch_ndims},
-        )
+        # Ensure _probs and _logits are initialized for properties
+        if self.probs is not None:
+            self._probs = self.probs
+            self._logits = None
+        elif self.logits is not None:
+            self._logits = self.logits
+            self._probs = None
 
     @property
     def probs(self):
-        if "probs" not in self.data:
-            self.data["probs"] = torch.sigmoid(self["logits"])
-        return self["probs"]
+        if self._probs is None and self._logits is not None:
+            self._probs = torch.sigmoid(self._logits)
+        return self._probs
+
+    @probs.setter
+    def probs(self, value):
+        self._probs = value
+        self._logits = None  # Invalidate logits when probs is set
 
     @property
     def logits(self):
-        if "logits" not in self.data:
-            self.data["logits"] = torch.log(self["probs"] / (1 - self["probs"]))
-        return self["logits"]
+        if self._logits is None and self._probs is not None:
+            # Add a small epsilon to avoid log(0) or log(negative)
+            self._logits = torch.log(self._probs / (1 - self._probs + 1e-8))
+        return self._logits
+
+    @logits.setter
+    def logits(self, value):
+        self._logits = value
+        self._probs = None  # Invalidate probs when logits is set
 
     def dist(self):
-        if "probs" in self.data:
+        if self.probs is not None:
             return Independent(
                 SoftBernoulli(
-                    probs=self["probs"],
+                    probs=self.probs,
                 ),
-                self.meta_data["reinterpreted_batch_ndims"],
+                self.reinterpreted_batch_ndims,
             )
         else:
             return Independent(
                 SoftBernoulli(
-                    logits=self["logits"],
+                    logits=self.logits,
                 ),
-                self.meta_data["reinterpreted_batch_ndims"],
+                self.reinterpreted_batch_ndims,
             )
 
     def copy(self):
-        if "probs" in self.data:
+        if self.probs is not None:
             return TensorSoftBernoulli(
-                probs=self["probs"].clone(),
-                reinterpreted_batch_ndims=self.meta_data["reinterpreted_batch_ndims"],
+                probs=self.probs.clone(),
+                reinterpreted_batch_ndims=self.reinterpreted_batch_ndims,
                 shape=self.shape,
                 device=self.device,
             )
         else:
             return TensorSoftBernoulli(
-                logits=self["logits"].clone(),
-                reinterpreted_batch_ndims=self.meta_data["reinterpreted_batch_ndims"],
+                logits=self.logits.clone(),
+                reinterpreted_batch_ndims=self.reinterpreted_batch_ndims,
                 shape=self.shape,
                 device=self.device,
             )
 
 
-class TensorCategorical(TensorDistribution):
-    def __init__(
-        self,
-        logits,
-        output_shape,
-        shape=None,
-        device=torch.device("cpu"),
-    ):
-        super().__init__(
-            {"logits": logits},
-            shape,
-            device,
-            {
-                "output_shape": output_shape,
-            },
-        )
+class TensorCategorical(TensorDataclass):
+    logits: Tensor
+    output_shape: tuple
+    reinterpreted_batch_ndims: int = len
+    shape: tuple = field(default_factory=tuple, init=False)
+    device: Optional[torch.device] = field(default=None, init=False)
+
+    def __post_init__(self):
+        super().__post_init__()
 
     def dist(self):
-        logits = self["logits"].float()
-        output_shape = self.meta_data["output_shape"]
+        logits = self.logits.float()
+        output_shape = self.output_shape
         logits = logits.view(*logits.shape[:-1], -1, *output_shape)
         one_hot = OneHotCategoricalStraightThrough(logits=logits)
 
-        return Independent(one_hot, len(output_shape))
+        return Independent(one_hot, self.reinterpreted_batch_ndims)
 
 
 @register_kl(TensorDistribution, TensorDistribution)
@@ -461,40 +339,34 @@ def registerd_d_td(
     return kl_divergence(d, td.dist())
 
 
-class TensorTanhNormal(TensorDistribution):
-    def __init__(
-        self,
-        loc,
-        scale,
-        reinterpreted_batch_ndims=1,
-        shape=None,
-        device=torch.device("cpu"),
-    ):
-        super().__init__(
-            {"loc": loc, "scale": scale},
-            shape,
-            device,
-            {"reinterpreted_batch_ndims": reinterpreted_batch_ndims},
-        )
+class TensorTanhNormal(TensorDataclass):
+    loc: Tensor
+    scale: Tensor
+    reinterpreted_batch_ndims: int = 1  # Default value for reinterpreted_batch_ndims
+    shape: tuple = field(default_factory=tuple, init=False)
+    device: Optional[torch.device] = field(default=None, init=False)
+
+    def __post_init__(self):
+        super().__post_init__()
 
     def dist(self) -> Distribution:
         return Independent(
             SamplingDistribution(
                 TransformedDistribution(
-                    Normal(self["loc"].float(), self["scale"].float()),
+                    Normal(self.loc.float(), self.scale.float()),
                     [
                         ClampedTanhTransform(),
                     ],
                 ),
             ),
-            self.meta_data["reinterpreted_batch_ndims"],
+            self.reinterpreted_batch_ndims,
         )
 
     def copy(self):
         return TensorTanhNormal(
-            loc=self["loc"],
-            scale=self["scale"],
-            reinterpreted_batch_ndims=self.meta_data["reinterpreted_batch_ndims"],
+            loc=self.loc.clone(),
+            scale=self.scale.clone(),
+            reinterpreted_batch_ndims=self.reinterpreted_batch_ndims,
             shape=self.shape,
             device=self.device,
         )
