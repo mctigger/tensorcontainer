@@ -125,7 +125,12 @@ class TensorContainer:
         # If memory_format is not specified, use torch.preserve_format as default
         if memory_format is None:
             memory_format = torch.preserve_format
-        return pytree.tree_map(lambda x: x.clone(memory_format=memory_format), self)
+
+        cloned_td = pytree.tree_map(
+            lambda x: x.clone(memory_format=memory_format), self
+        )
+        cloned_td.device = self.device
+        return cloned_td
 
     def expand(self: T, *shape: int) -> T:
         return pytree.tree_map(lambda x: x.expand(*shape, *x.shape[self.ndim :]), self)
@@ -142,6 +147,17 @@ class TensorContainer:
         Returns:
             A new container with the batch dimensions permuted.
         """
+        if len(dims) != self.ndim:
+            raise RuntimeError(
+                f"permute() expected {self.ndim} dimensions but got {len(dims)}"
+            )
+        if len(set(dims)) != len(dims):
+            raise RuntimeError("permute(): duplicate dimensions are not allowed")
+        for dim in dims:
+            if not 0 <= dim < self.ndim:
+                raise RuntimeError(
+                    f"permute(): dimension out of range (expected to be in range of [0, {self.ndim - 1}], but got {dim})"
+                )
         return pytree.tree_map(
             lambda x: x.permute(*dims, *range(self.ndim, x.ndim)), self
         )
@@ -176,6 +192,11 @@ class TensorContainer:
         Returns:
             A new container with the first two batch dimensions transposed.
         """
+        if self.ndim < 2:
+            raise RuntimeError(
+                "t() expects a tensor with at least 2 dimensions, but got a tensor with "
+                f"{self.ndim} dimensions instead"
+            )
         return self.transpose(0, 1)
 
     def transpose(self: T, dim0: int, dim1: int) -> T:
@@ -204,7 +225,7 @@ class TensorContainer:
 
     def size(self) -> torch.Size:
         """Returns the size of the batch dimensions."""
-        return self.shape
+        return torch.Size(self.shape)
 
     def dim(self) -> int:
         """Returns the number of batch dimensions."""
@@ -212,7 +233,7 @@ class TensorContainer:
 
     def numel(self) -> int:
         """Returns the total number of elements in the batch dimensions."""
-        return self.shape.numel()
+        return self.size().numel()
 
     def cpu(self: T) -> T:
         """Returns a new container with all tensors on the CPU."""

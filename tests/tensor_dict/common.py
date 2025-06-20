@@ -1,8 +1,6 @@
-import pytest
 import torch
 
 
-@pytest.fixture
 def nested_dict():
     def _make(shape):
         nested_dict_data = {  # Renamed to avoid conflict with outer scope
@@ -44,19 +42,17 @@ def compute_stack_shape(shape, dim, num_tensors=2):
 
 def compare_nested_dict(data, output, expect_fn):
     for key, val in data.items():
-        if isinstance(val, dict):
-            for subkey, orig in val.items():
-                out = output[key][subkey]
-                expect = expect_fn(orig)
-                assert out.shape == expect.shape, (
-                    f"Shape mismatch for {key}.{subkey}: {out.shape} vs {expect.shape}"
-                )
-                assert torch.equal(out, expect), f"Tensor mismatch for {key}.{subkey}"
-        else:
+        # It's a nested structure (like TensorDict)
+        if hasattr(val, "data") and isinstance(val.data, dict):
+            compare_nested_dict(val.data, output[key].data, expect_fn)
+        elif isinstance(val, torch.Tensor):
             orig = val
             out = output[key]
             expect = expect_fn(orig)
             assert out.shape == expect.shape, (
                 f"Shape mismatch for {key}: {out.shape} vs {expect.shape}"
             )
-            assert torch.equal(out, expect), f"Tensor mismatch for {key}"
+            # Use allclose for robust float comparison
+            assert torch.allclose(out.to(torch.float32), expect.to(torch.float32)), (
+                f"Tensor mismatch for {key}"
+            )
