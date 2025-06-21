@@ -1,4 +1,5 @@
 import torch
+
 from rtd.tensor_dict import TensorDict
 from rtd.tensor_distribution import TensorBernoulli
 
@@ -8,10 +9,12 @@ def test_assign_and_retrieve_tensordistribution():
     td = TensorDict({}, shape=(), device=torch.device("cpu"))
 
     # Create a simple scalar Bernoulli TensorDistribution
+    probs = torch.tensor(0.7)
     tb = TensorBernoulli(
-        _probs=torch.tensor(0.7),
-        device=torch.device("cpu"),
+        _probs=probs,
         reinterpreted_batch_ndims=0,
+        shape=probs.shape,
+        device=probs.device,
     )
 
     # Assign it
@@ -27,15 +30,19 @@ def test_update_with_tensordistribution():
     td = TensorDict({"x": torch.ones(2, 2)}, shape=(2,), device=torch.device("cpu"))
 
     # Two Bernoulli distributions matching the batch‐shape
+    probs1 = torch.tensor([0.3, 0.6])
     tb1 = TensorBernoulli(
-        _probs=torch.tensor([0.3, 0.6]),
-        device=torch.device("cpu"),
+        _probs=probs1,
         reinterpreted_batch_ndims=0,
+        shape=probs1.shape,
+        device=probs1.device,
     )
+    probs2 = torch.tensor([0.1, 0.9])
     tb2 = TensorBernoulli(
-        _probs=torch.tensor([0.1, 0.9]),
-        device=torch.device("cpu"),
+        _probs=probs2,
         reinterpreted_batch_ndims=0,
+        shape=probs2.shape,
+        device=probs2.device,
     )
 
     # Insert via update()
@@ -49,17 +56,21 @@ def test_update_with_tensordistribution():
 def test_reassign_overwrites_previous_distribution():
     td = TensorDict({"z": torch.randn(3, 3)}, shape=(3,), device=torch.device("cpu"))
 
+    probs_old = torch.tensor([0.2, 0.8, 0.5])
     tb_old = TensorBernoulli(
-        _probs=torch.tensor([0.2, 0.8, 0.5]),
-        device=torch.device("cpu"),
+        _probs=probs_old,
         reinterpreted_batch_ndims=0,
+        shape=probs_old.shape,
+        device=probs_old.device,
     )
     td["dist"] = tb_old
 
+    probs_new = torch.tensor([0.6, 0.4, 0.9])
     tb_new = TensorBernoulli(
-        _probs=torch.tensor([0.6, 0.4, 0.9]),
-        device=torch.device("cpu"),
+        _probs=probs_new,
         reinterpreted_batch_ndims=0,
+        shape=probs_new.shape,
+        device=probs_new.device,
     )
     td["dist"] = tb_new
 

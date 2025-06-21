@@ -1,21 +1,9 @@
 import pytest
 import torch
-from rtd.tensor_distribution import TensorNormal, TensorDistribution
 
+from rtd.tensor_distribution import TensorDistribution, TensorNormal
 
-def normalize_device(dev: torch.device) -> torch.device:
-    """
-    Normalizes a torch.device object to include the device index for CUDA.
-
-    This ensures that a device specified as "cuda" is resolved to "cuda:0"
-    (or the current device), making comparisons consistent.
-    """
-    d = torch.device(dev)
-    # If no index was given, fill in current_device() for CUDA, leave CPU as-is
-    if d.type == "cuda" and d.index is None:
-        idx = torch.cuda.current_device()
-        return torch.device(f"cuda:{idx}")
-    return d
+from .conftest import normalize_device
 
 
 def test_init_valid():
@@ -23,10 +11,10 @@ def test_init_valid():
     loc = torch.zeros(2, 3)
     scale = torch.ones(2, 3)
     dist = TensorNormal(
-        shape=loc.shape,
         loc=loc,
         scale=scale,
         reinterpreted_batch_ndims=0,
+        shape=loc.shape,
         device=loc.device,
     )
     assert isinstance(dist, TensorDistribution)
@@ -40,10 +28,10 @@ def test_sample_shape_and_dtype():
     loc = torch.randn(4, 3)
     scale = torch.rand(4, 3) + 1e-6  # ensure scale is positive
     dist = TensorNormal(
-        shape=loc.shape,
         loc=loc,
         scale=scale,
         reinterpreted_batch_ndims=0,
+        shape=loc.shape,
         device=loc.device,
     )
     # Draw 5 i.i.d. samples
@@ -71,10 +59,10 @@ def test_log_prob_reinterpreted_batch_ndims(rbn_dims, expected_shape):
     loc = torch.tensor([[0.0, 1.0, -1.0], [0.5, -0.5, 0.5]])
     scale = torch.tensor([[0.2, 0.8, 0.1], [0.5, 0.5, 0.5]])
     dist = TensorNormal(
-        shape=loc.shape,
         loc=loc,
         scale=scale,
         reinterpreted_batch_ndims=rbn_dims,
+        shape=loc.shape,
         device=loc.device,
     )
     # A sample to evaluate the log probability of

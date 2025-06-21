@@ -1,15 +1,9 @@
 import pytest
 import torch
+
 from rtd.tensor_distribution import TensorBernoulli
 
-
-def normalize_device(dev: torch.device) -> torch.device:
-    d = torch.device(dev)
-    # If no index was given, fill in current_device() for CUDA, leave CPU as-is
-    if d.type == "cuda" and d.index is None:
-        idx = torch.cuda.current_device()  # e.g. 0
-        return torch.device(f"cuda:{idx}")
-    return d
+from .conftest import normalize_device
 
 
 @pytest.mark.parametrize(
@@ -23,16 +17,16 @@ def normalize_device(dev: torch.device) -> torch.device:
 )
 def test_init_invalid_params(args, kwargs):
     with pytest.raises(ValueError):
-        TensorBernoulli((), torch.device("cpu"), **args, **kwargs)
+        TensorBernoulli(shape=(), device=torch.device("cpu"), **args, **kwargs)
 
 
 def test_sample_shape_and_dtype_and_values():
     probs = torch.rand(4, 3)
     dist = TensorBernoulli(
-        probs.shape,
-        probs.device,
         _probs=probs,
         reinterpreted_batch_ndims=0,
+        shape=probs.shape,
+        device=probs.device,
     )
     # draw 5 i.i.d. samples
     samples = dist.sample(sample_shape=torch.Size([5]))
@@ -54,10 +48,10 @@ def test_sample_shape_and_dtype_and_values():
 def test_log_prob_reinterpreted_batch_ndims(rbn_dims, expected_shape):
     probs = torch.tensor([[0.2, 0.8, 0.1], [0.5, 0.5, 0.5]])
     dist = TensorBernoulli(
-        probs.shape,
-        probs.device,
         _probs=probs,
         reinterpreted_batch_ndims=rbn_dims,
+        shape=probs.shape,
+        device=probs.device,
     )
     x = torch.tensor([[0.0, 1.0, 0.0], [1.0, 0.0, 1.0]])
     lp = dist.log_prob(x)
@@ -65,7 +59,7 @@ def test_log_prob_reinterpreted_batch_ndims(rbn_dims, expected_shape):
     td = torch.distributions.Bernoulli(probs)
     ref = td.log_prob(x)
     if rbn_dims > 0:
-        ref = ref.sum(dim=[0, 1][-rbn_dims:])
+        ref = ref.sum(dim=list(range(len(ref.shape)))[-rbn_dims:])
     assert lp.shape == expected_shape
     assert torch.allclose(lp, ref)
 
@@ -81,7 +75,7 @@ def test_device_normalization_helper():
 
 def test_init_logits():
     logits = torch.randn(4, 3)
-    dist = TensorBernoulli(logits.shape, logits.device, _logits=logits)
+    dist = TensorBernoulli(_logits=logits, shape=logits.shape, device=logits.device)
     assert torch.allclose(dist.logits, logits)
     assert torch.allclose(dist.probs, torch.sigmoid(logits))
 
@@ -89,7 +83,10 @@ def test_init_logits():
 def test_sample_logits():
     logits = torch.randn(4, 3)
     dist = TensorBernoulli(
-        logits.shape, logits.device, _logits=logits, reinterpreted_batch_ndims=0
+        _logits=logits,
+        reinterpreted_batch_ndims=0,
+        shape=logits.shape,
+        device=logits.device,
     )
     samples = dist.sample(sample_shape=torch.Size([5]))
     assert samples.shape == (5, *logits.shape)
@@ -100,7 +97,10 @@ def test_sample_logits():
 def test_log_prob_logits():
     logits = torch.randn(2, 3)
     dist = TensorBernoulli(
-        logits.shape, logits.device, _logits=logits, reinterpreted_batch_ndims=0
+        _logits=logits,
+        reinterpreted_batch_ndims=0,
+        shape=logits.shape,
+        device=logits.device,
     )
     x = torch.tensor([[0.0, 1.0, 0.0], [1.0, 0.0, 1.0]])
     lp = dist.log_prob(x)
@@ -112,14 +112,14 @@ def test_log_prob_logits():
 @pytest.mark.parametrize("shape", [(4,), (2, 2)])
 def test_view_probs(shape):
     probs = torch.rand(*shape)
-    dist = TensorBernoulli(probs.shape, probs.device, _probs=probs)
-    dist_view = dist.view(torch.Size([4]).numel())
-    assert torch.equal(dist_view.probs, probs.view(torch.Size([4]).numel()))
+    dist = TensorBernoulli(_probs=probs, shape=probs.shape, device=probs.device)
+    dist_view = dist.view(-1)
+    assert dist_view.probs.shape == (probs.numel(),)
 
 
 @pytest.mark.parametrize("shape", [(4,), (2, 2)])
 def test_view_logits(shape):
     logits = torch.randn(*shape)
-    dist = TensorBernoulli(logits.shape, logits.device, _logits=logits)
-    dist_view = dist.view(torch.Size([4]).numel())
-    assert torch.equal(dist_view.logits, logits.view(torch.Size([4]).numel()))
+    dist = TensorBernoulli(_logits=logits, shape=logits.shape, device=logits.device)
+    dist_view = dist.view(-1)
+    assert dist_view.logits.shape == (logits.numel(),)

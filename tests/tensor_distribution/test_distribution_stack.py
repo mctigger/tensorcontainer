@@ -8,17 +8,17 @@ def test_stack_tensordistribution_returns_tensordistribution():
     # Create two Bernoulli TensorDistributions with the same batch‐shape
     probs1 = torch.tensor([0.2, 0.8])
     tb1 = TensorBernoulli(
-        probs1.shape,
-        probs1.device,
         _probs=probs1,
         reinterpreted_batch_ndims=0,
+        shape=probs1.shape,
+        device=probs1.device,
     )
     probs2 = torch.tensor([0.3, 0.7])
     tb2 = TensorBernoulli(
-        probs2.shape,
-        probs2.device,
         _probs=probs2,
         reinterpreted_batch_ndims=0,
+        shape=probs2.shape,
+        device=probs2.device,
     )
 
     # Stack along a new leading dimension
@@ -41,17 +41,17 @@ def test_stack_tensordistribution_on_cuda():
     # Prepare two distributions on GPU
     probs1 = torch.tensor([0.4, 0.6], device="cuda")
     tb1 = TensorBernoulli(
-        probs1.shape,
-        probs1.device,
         _probs=probs1,
         reinterpreted_batch_ndims=0,
+        shape=probs1.shape,
+        device=probs1.device,
     )
     probs2 = torch.tensor([0.1, 0.9], device="cuda")
     tb2 = TensorBernoulli(
-        probs2.shape,
-        probs2.device,
         _probs=probs2,
         reinterpreted_batch_ndims=0,
+        shape=probs2.shape,
+        device=probs2.device,
     )
 
     # Stack them

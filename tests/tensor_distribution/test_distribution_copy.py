@@ -1,6 +1,7 @@
 import pytest
 import torch
-from rtd.tensor_distribution import TensorBernoulli, TensorNormal, TensorDistribution
+
+from rtd.tensor_distribution import TensorBernoulli, TensorDistribution, TensorNormal
 
 
 @pytest.mark.parametrize(
@@ -12,6 +13,8 @@ from rtd.tensor_distribution import TensorBernoulli, TensorNormal, TensorDistrib
             {
                 "_probs": torch.tensor([0.1, 0.9]),
                 "reinterpreted_batch_ndims": 1,
+                "shape": torch.Size([2]),
+                "device": torch.device("cpu"),
             },
         ),
         # Normal distribution
@@ -21,6 +24,8 @@ from rtd.tensor_distribution import TensorBernoulli, TensorNormal, TensorDistrib
                 "loc": torch.randn(3, 2),
                 "scale": torch.rand(3, 2) + 0.1,
                 "reinterpreted_batch_ndims": 2,
+                "shape": torch.Size([3, 2]),
+                "device": torch.device("cpu"),
             },
         ),
     ],
@@ -55,9 +60,12 @@ def test_copy_returns_same_subclass_and_preserves_properties(TDClass, init_kwarg
 
 def test_copy_independent_modification_does_not_affect_original():
     # Create an original Bernoulli TensorDistribution
+    probs = torch.tensor([0.3, 0.7])
     orig = TensorBernoulli(
-        _probs=torch.tensor([0.3, 0.7]),
+        _probs=probs,
         reinterpreted_batch_ndims=1,
+        shape=probs.shape,
+        device=probs.device,
     )
     cpy = orig.clone()
 

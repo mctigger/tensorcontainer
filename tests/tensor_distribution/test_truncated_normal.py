@@ -1,21 +1,9 @@
 import pytest
 import torch
-from rtd.tensor_distribution import TensorTruncatedNormal, TensorDistribution
 
+from rtd.tensor_distribution import TensorDistribution, TensorTruncatedNormal
 
-def normalize_device(dev: torch.device) -> torch.device:
-    """
-    Normalizes a torch.device object to include the device index for CUDA.
-
-    This ensures that a device specified as "cuda" is resolved to "cuda:0"
-    (or the current device), making comparisons consistent.
-    """
-    d = torch.device(dev)
-    # If no index was given, fill in current_device() for CUDA, leave CPU as-is
-    if d.type == "cuda" and d.index is None:
-        idx = torch.cuda.current_device()
-        return torch.device(f"cuda:{idx}")
-    return d
+from .conftest import normalize_device
 
 
 def test_init_valid():
@@ -25,7 +13,13 @@ def test_init_valid():
     low = torch.full_like(loc, -0.5)
     high = torch.full_like(loc, 0.5)
     dist = TensorTruncatedNormal(
-        loc=loc, scale=scale, low=low, high=high, reinterpreted_batch_ndims=0
+        loc=loc,
+        scale=scale,
+        low=low,
+        high=high,
+        reinterpreted_batch_ndims=0,
+        shape=loc.shape,
+        device=loc.device,
     )
     assert isinstance(dist, TensorDistribution)
 
@@ -45,6 +39,8 @@ def test_sample_shape_and_dtype():
         low=low,
         high=high,
         reinterpreted_batch_ndims=0,
+        shape=loc.shape,
+        device=loc.device,
     )
     # Draw 5 i.i.d. samples
     samples = dist.sample(sample_shape=torch.Size((5,)))
@@ -78,21 +74,14 @@ def test_log_prob_reinterpreted_batch_ndims(rbn_dims, expected_shape):
         low=low,
         high=high,
         reinterpreted_batch_ndims=rbn_dims,
+        shape=loc.shape,
+        device=loc.device,
     )
     # A sample to evaluate the log probability of
-    x = torch.tensor([[0.1, 1.2, -1.1], [0.4, -0.6, 0.7]])
+    x = torch.tensor([[0.1, 0.9, -0.9], [0.4, -0.6, 0.7]])
     lp = dist.log_prob(x)
 
-    # Calculate expected log_prob using the reference torch.distributions
-    torch_dist = torch.distributions.Normal(loc, scale)
-    ref_lp = torch_dist.log_prob(x)
-    if rbn_dims > 0:
-        # Sum over the dimensions that are being reinterpreted as event dims
-        ref_lp = ref_lp.sum(dim=list(range(-rbn_dims, 0)))
-
     assert lp.shape == expected_shape
-    # The values will not be equal since we are comparing against a normal distribution
-    # assert torch.allclose(lp, ref_lp)
 
 
 def test_device_normalization_helper():

@@ -1,13 +1,7 @@
-import pytest
 import torch
 from torch.distributions import Independent, Normal
 
 from rtd.tensor_distribution import TensorNormal
-
-
-@pytest.fixture(autouse=True)
-def deterministic_seed():
-    torch.manual_seed(0)
 
 
 def test_rsample_returns_differentiable_tensor_and_correct_shape():

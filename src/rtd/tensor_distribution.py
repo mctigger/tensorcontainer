@@ -1,23 +1,24 @@
 from __future__ import annotations
 
-from typing import Optional
+import dataclasses
 from abc import abstractmethod
 from dataclasses import field
-import dataclasses
+from typing import Optional
 
+import torch
 from torch import Size, Tensor
 from torch.distributions import (
     Distribution,
     Independent,
     Normal,
-    TransformedDistribution,
-    register_kl,
-    kl_divergence,
     OneHotCategoricalStraightThrough,
+    TransformedDistribution,
     constraints,
+    kl_divergence,
+    register_kl,
 )
+
 from rtd.distributions.sampling import SamplingDistribution
-import torch
 from rtd.distributions.soft_bernoulli import SoftBernoulli
 from rtd.distributions.truncated_normal import TruncatedNormal
 from rtd.tensor_dataclass import TensorDataclass
@@ -55,9 +56,6 @@ class ClampedTanhTransform(torch.distributions.transforms.Transform):
 
 
 class TensorDistribution(TensorDataclass):
-    shape: Optional[tuple] = None
-    device: Optional[torch.device] = None
-
     def __post_init__(self):
         # infer shape and device if not provided
         for f in dataclasses.fields(self):
@@ -73,7 +71,8 @@ class TensorDistribution(TensorDataclass):
         super().__post_init__()
 
     @abstractmethod
-    def dist(self) -> Distribution: ...
+    def dist(self) -> Distribution:
+        """Returns the underlying torch.distributions.Distribution instance."""
 
     def rsample(self, sample_shape: Size = Size()) -> Tensor:
         return self.dist().rsample(sample_shape)
@@ -122,6 +121,8 @@ class TensorNormal(TensorDistribution):
             loc=self.loc.clone(),
             scale=self.scale.clone(),
             reinterpreted_batch_ndims=self.reinterpreted_batch_ndims,
+            shape=self.shape,
+            device=self.device,
         )
 
 
@@ -130,7 +131,7 @@ class TensorTruncatedNormal(TensorDistribution):
     scale: Tensor
     low: Tensor
     high: Tensor
-    reinterpreted_batch_ndims: int = 1  # Default value for reinterpreted_batch_ndims
+    reinterpreted_batch_ndims: int = 1
 
     def __post_init__(self):
         super().__post_init__()
@@ -140,8 +141,8 @@ class TensorTruncatedNormal(TensorDistribution):
             TruncatedNormal(
                 self.loc.float(),
                 self.scale.float(),
-                float(self.low),
-                float(self.high),
+                self.low.float(),  # type: ignore
+                self.high.float(),  # type: ignore
             ),
             self.reinterpreted_batch_ndims,
         )
@@ -153,6 +154,8 @@ class TensorTruncatedNormal(TensorDistribution):
             low=self.low.clone(),
             high=self.high.clone(),
             reinterpreted_batch_ndims=self.reinterpreted_batch_ndims,
+            shape=self.shape,
+            device=self.device,
         )
 
 
@@ -215,11 +218,15 @@ class TensorBernoulli(TensorDistribution):
             return TensorBernoulli(
                 _probs=self._probs.clone(),
                 reinterpreted_batch_ndims=self.reinterpreted_batch_ndims,
+                shape=self.shape,
+                device=self.device,
             )
         else:
             return TensorBernoulli(
                 _logits=self._logits.clone() if self._logits is not None else None,
                 reinterpreted_batch_ndims=self.reinterpreted_batch_ndims,
+                shape=self.shape,
+                device=self.device,
             )
 
 
@@ -282,30 +289,48 @@ class TensorSoftBernoulli(TensorDistribution):
             return TensorSoftBernoulli(
                 _probs=self._probs.clone(),
                 reinterpreted_batch_ndims=self.reinterpreted_batch_ndims,
+                shape=self.shape,
+                device=self.device,
             )
         else:
             return TensorSoftBernoulli(
                 _logits=self._logits.clone() if self._logits is not None else None,
                 reinterpreted_batch_ndims=self.reinterpreted_batch_ndims,
+                shape=self.shape,
+                device=self.device,
             )
 
 
 class TensorCategorical(TensorDistribution):
     logits: Tensor
-    output_shape: tuple
-    reinterpreted_batch_ndims: int = field(init=False)
+    reinterpreted_batch_ndims: int = 1
 
     def __post_init__(self):
-        self.reinterpreted_batch_ndims = len(self.output_shape)
         super().__post_init__()
 
-    def dist(self):
-        logits = self.logits.float()
-        output_shape = self.output_shape
-        logits = logits.view(*logits.shape[:-1], -1, *output_shape)
-        one_hot = OneHotCategoricalStraightThrough(logits=logits)
+    def dist(self) -> Distribution:
+        one_hot = OneHotCategoricalStraightThrough(logits=self.logits.float())
+        if self.reinterpreted_batch_ndims < 1:
+            raise ValueError(
+                "reinterpreted_batch_ndims must be at least 1 for TensorCategorical, "
+                f"but got {self.reinterpreted_batch_ndims}"
+            )
+        dims_to_reinterpret = self.reinterpreted_batch_ndims - 1
+        return Independent(one_hot, dims_to_reinterpret)
 
-        return Independent(one_hot, self.reinterpreted_batch_ndims)
+    def entropy(self) -> Tensor:
+        return OneHotCategoricalStraightThrough(logits=self.logits.float()).entropy()
+
+    def log_prob(self, value: Tensor) -> Tensor:
+        return self.dist().log_prob(value)
+
+    def copy(self):
+        return TensorCategorical(
+            logits=self.logits.clone(),
+            reinterpreted_batch_ndims=self.reinterpreted_batch_ndims,
+            shape=self.shape,
+            device=self.device,
+        )
 
 
 @register_kl(TensorDistribution, TensorDistribution)
@@ -332,7 +357,7 @@ def registerd_d_td(
 class TensorTanhNormal(TensorDistribution):
     loc: Tensor
     scale: Tensor
-    reinterpreted_batch_ndims: int = 1  # Default value for reinterpreted_batch_ndims
+    reinterpreted_batch_ndims: int = 1
 
     def __post_init__(self):
         super().__post_init__()
@@ -355,4 +380,6 @@ class TensorTanhNormal(TensorDistribution):
             loc=self.loc.clone(),
             scale=self.scale.clone(),
             reinterpreted_batch_ndims=self.reinterpreted_batch_ndims,
+            shape=self.shape,
+            device=self.device,
         )

@@ -1,28 +1,22 @@
 import pytest
 import torch
-from rtd.tensor_distribution import TensorTanhNormal, TensorDistribution
 
+from rtd.tensor_distribution import TensorDistribution, TensorTanhNormal
 
-def normalize_device(dev: torch.device) -> torch.device:
-    """
-    Normalizes a torch.device object to include the device index for CUDA.
-
-    This ensures that a device specified as "cuda" is resolved to "cuda:0"
-    (or the current device), making comparisons consistent.
-    """
-    d = torch.device(dev)
-    # If no index was given, fill in current_device() for CUDA, leave CPU as-is
-    if d.type == "cuda" and d.index is None:
-        idx = torch.cuda.current_device()
-        return torch.device(f"cuda:{idx}")
-    return d
+from .conftest import normalize_device
 
 
 def test_init_valid():
     """Tests that TensorTanhNormal can be instantiated with valid parameters."""
     loc = torch.zeros(2, 3)
     scale = torch.ones(2, 3)
-    dist = TensorTanhNormal(loc=loc, scale=scale, reinterpreted_batch_ndims=0)
+    dist = TensorTanhNormal(
+        loc=loc,
+        scale=scale,
+        reinterpreted_batch_ndims=0,
+        shape=loc.shape,
+        device=loc.device,
+    )
     assert isinstance(dist, TensorDistribution)
 
 
@@ -33,7 +27,13 @@ def test_sample_shape_and_dtype():
     """
     loc = torch.randn(4, 3)
     scale = torch.rand(4, 3) + 1e-6  # ensure scale is positive
-    dist = TensorTanhNormal(loc=loc, scale=scale, reinterpreted_batch_ndims=0)
+    dist = TensorTanhNormal(
+        loc=loc,
+        scale=scale,
+        reinterpreted_batch_ndims=0,
+        shape=loc.shape,
+        device=loc.device,
+    )
     # Draw 5 i.i.d. samples
     samples = dist.sample(sample_shape=torch.Size((5,)))
 
@@ -65,6 +65,8 @@ def test_log_prob_reinterpreted_batch_ndims(rbn_dims, expected_shape):
         loc=loc,
         scale=scale,
         reinterpreted_batch_ndims=rbn_dims,
+        shape=loc.shape,
+        device=loc.device,
     )
 
     # A sample to evaluate the log probability of - ensure it's within [-1, 1]
@@ -85,6 +87,8 @@ def test_mean_and_mode():
         loc=loc,
         scale=scale,
         reinterpreted_batch_ndims=0,
+        shape=loc.shape,
+        device=loc.device,
     )
 
     mean = dist.mean
@@ -105,14 +109,20 @@ def test_copy():
     """Tests that the copy method creates a new instance with the same parameters."""
     loc = torch.randn(2, 3)
     scale = torch.rand(2, 3) + 1e-6  # ensure scale is positive
-    dist = TensorTanhNormal(loc=loc, scale=scale, reinterpreted_batch_ndims=1)
+    dist = TensorTanhNormal(
+        loc=loc,
+        scale=scale,
+        reinterpreted_batch_ndims=1,
+        shape=loc.shape,
+        device=loc.device,
+    )
 
     dist_copy = dist.copy()
 
     assert isinstance(dist_copy, TensorTanhNormal)
     # Compare the underlying tensor values by converting to tensors
-    assert torch.allclose(loc, dist_copy["loc"].clone())  # type: ignore
-    assert torch.allclose(scale, dist_copy["scale"].clone())  # type: ignore
+    assert torch.allclose(loc, dist_copy.loc)  # type: ignore
+    assert torch.allclose(scale, dist_copy.scale)  # type: ignore
     _, (_, _, _, _, meta_data) = dist._pytree_flatten()
     _, (_, _, _, _, meta_data_copy) = dist_copy._pytree_flatten()
     assert (
