@@ -22,7 +22,6 @@ from torch import Tensor
 from rtd.tensor_container import TensorContainer
 from rtd.utils import PytreeRegistered
 
-
 TDCompatible: TypeAlias = Union[Tensor, TensorContainer]
 NestedTDCompatible: TypeAlias = Union[TDCompatible, Dict[str, TDCompatible]]
 
@@ -42,8 +41,18 @@ def implements(torch_function):
 
 class TensorDict(TensorContainer, PytreeRegistered):
     """
-    A dictionary-like container for torch.Tensors that is compatible with
-    torch.compile and standard PyTorch functions.
+    Dictionary-like container for batched Tensors sharing a common batch shape.
+
+    - PyTree & torch.compile compatible
+    - Standard mapping ops: getitem, setitem, update, etc.
+    - Utilities: flatten_keys, copy, and more
+
+    Example:
+        >>> td = TensorDict({'x': torch.zeros(4, 3)}, shape=(4,))
+        >>> td['x'].shape
+        torch.Size([4, 3])
+        >>> td.flatten_keys()
+        TensorDict(shape=(4,), x: Tensor(shape=(4,3)))
     """
 
     def __init__(
