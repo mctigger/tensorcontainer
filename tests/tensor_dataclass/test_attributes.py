@@ -1,16 +1,12 @@
 import pytest
 import torch
-from typing import Optional
+
 from rtd.tensor_dataclass import TensorDataclass
 from tests.tensor_dict.compile_utils import run_and_compare_compiled
-from dataclasses import dataclass
 
 
 def test_getattr():
-    @dataclass(kw_only=True)
     class TestContainer(TensorDataclass):
-        shape: tuple
-        device: Optional[torch.device]
         a: torch.Tensor
         b: torch.Tensor
 
@@ -33,16 +29,13 @@ def test_getattr():
     # assert container.to(torch.float16).dtype == torch.float16
 
     with pytest.raises(AttributeError):
-        _ = container.invalid  # Should raise AttributeError for attribute access
+        _ = container.invalid  # type: ignore # Should raise AttributeError for attribute access
 
 
 def test_compile():
     """Tests that a function using TensorDataclass can be torch.compiled."""
 
-    @dataclass(kw_only=True)
     class MyData(TensorDataclass):
-        shape: tuple
-        device: Optional[torch.device]
         x: torch.Tensor
         y: torch.Tensor
 
