@@ -1,61 +1,64 @@
 from __future__ import annotations
 
-import dataclasses
 import copy  # Added for deepcopy
-from typing import Optional, Union
-from typing_extensions import dataclass_transform
+import dataclasses
+from typing import List, Optional, Tuple, Union
 
+import torch
 from torch import Tensor
+from torch.utils import _pytree as pytree
+from typing_extensions import dataclass_transform
 
 from rtd.tensor_container import TensorContainer
 from rtd.utils import PytreeRegistered
-from torch.utils import _pytree as pytree
-from typing import Tuple, List
-import torch
 
 TDCompatible = Union[Tensor, TensorContainer]
 DATACLASS_ARGS = {"init", "repr", "eq", "order", "unsafe_hash", "frozen", "slots"}
 
 
 @dataclass_transform(eq_default=False)
-class TensorDataclassMeta(type):
-    """
-    Metaclass to safely create and decorate tensor dataclasses.
+class TensorDataclassTransform:
+    """This class is just needed for type hints. Directly decorating TensorDataclass does not work."""
 
-    This metaclass separates class creation from the dataclass transformation,
-    preventing the recursive __init_subclass__ calls that occur when
-    @dataclass(slots=True) is used within a creation hook.
-    """
+    pass
 
-    def __new__(mcs, name, bases, dct, **kwargs):
-        if "__slots__" in dct:
-            return super().__new__(mcs, name, bases, dct)
 
-        # 1. Separate the dataclass-specific kwargs from other potential kwargs.
-        dc_kwargs = {k: v for k, v in kwargs.items() if k in DATACLASS_ARGS}
+class TensorDataclass(TensorContainer, PytreeRegistered, TensorDataclassTransform):
+    """A dataclass-based tensor container with PyTree compatibility."""
 
-        # 2. Let the default machinery create the raw class object.
-        cls = super().__new__(mcs, name, bases, dct)
+    # Added here to make shape and device part of the data class.
+    shape: tuple
+    device: Optional[torch.device]
 
-        # 3. Configure the dataclass arguments safely.
-        #    Enforce eq=False and slots=True by default.
+    def __init_subclass__(cls, **kwargs):
+        if hasattr(cls, "__slots__"):
+            return
+
+        # --- NEW: Automatically inherit annotations from parent classes ---
+        # Build a complete dictionary of annotations from the MRO.
+        # Iterate backwards through the MRO to ensure correct override order (child overrides parent).
+        all_annotations = {}
+        for base in reversed(cls.__mro__):
+            if hasattr(base, "__annotations__"):
+                all_annotations.update(base.__annotations__)
+        cls.__annotations__ = all_annotations
+        # --- End new logic ---
+
+        dc_kwargs = {}
+        for k in list(kwargs.keys()):
+            if k in DATACLASS_ARGS:
+                dc_kwargs[k] = kwargs.pop(k)
+
+        super().__init_subclass__(**kwargs)
+
         if dc_kwargs.get("eq") is True:
             raise TypeError(
-                f"Cannot create {name} with eq=True. TensorDataclass requires eq=False."
+                f"Cannot create {cls.__name__} with eq=True. TensorDataclass requires eq=False."
             )
         dc_kwargs.setdefault("eq", False)
         dc_kwargs.setdefault("slots", True)
 
-        # 4. AFTER the class is created, apply the dataclass decorator.
-        #    This is now a safe, non-recursive, one-shot transformation.
-        return dataclasses.dataclass(cls, **dc_kwargs)
-
-
-class _TensorDataclassLogic(TensorContainer, PytreeRegistered):
-    """A dataclass-based tensor container with PyTree compatibility."""
-
-    shape: tuple
-    device: Optional[torch.device]
+        dataclasses.dataclass(cls, **dc_kwargs)
 
     def __post_init__(self):
         """Initializes the TensorContainer part."""
@@ -274,43 +277,3 @@ class _TensorDataclassLogic(TensorContainer, PytreeRegistered):
         )
 
         return self.__class__._pytree_unflatten(cloned_leaves, cloned_context)
-
-
-@dataclass_transform(eq_default=False)
-class TensorDataclass(_TensorDataclassLogic):
-    """
-    User-facing base class for creating PyTree-compatible tensor dataclasses.
-    """
-
-    shape: tuple
-    device: Optional[torch.device]
-
-    def __init_subclass__(cls, **kwargs):
-        if hasattr(cls, "__slots__"):
-            return
-
-        # --- NEW: Automatically inherit annotations from parent classes ---
-        # Build a complete dictionary of annotations from the MRO.
-        # Iterate backwards through the MRO to ensure correct override order (child overrides parent).
-        all_annotations = {}
-        for base in reversed(cls.__mro__):
-            if hasattr(base, "__annotations__"):
-                all_annotations.update(base.__annotations__)
-        cls.__annotations__ = all_annotations
-        # --- End new logic ---
-
-        dc_kwargs = {}
-        for k in list(kwargs.keys()):
-            if k in DATACLASS_ARGS:
-                dc_kwargs[k] = kwargs.pop(k)
-
-        super().__init_subclass__(**kwargs)
-
-        if dc_kwargs.get("eq") is True:
-            raise TypeError(
-                f"Cannot create {cls.__name__} with eq=True. TensorDataclass requires eq=False."
-            )
-        dc_kwargs.setdefault("eq", False)
-        dc_kwargs.setdefault("slots", True)
-
-        dataclasses.dataclass(cls, **dc_kwargs)
