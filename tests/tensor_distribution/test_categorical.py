@@ -2,19 +2,17 @@ import pytest
 import torch
 
 from rtd.tensor_distribution import TensorCategorical
-from rtd.tensor_dict import TensorDict
 
 
-def _create_distributions(batch_size, num_categories, output_shape):
+def _create_distributions(*, batch_size, num_categories, output_shape):
     """Helper to create TensorCategorical and torch.distributions.Categorical instances."""
     logits_shape = batch_size + (num_categories,)
     logits = torch.randn(*logits_shape)
-    tensor_dict = TensorDict({"logits": logits}, shape=batch_size)
-
     dist = TensorCategorical(
-        logits=tensor_dict["logits"],
+        logits=logits,
         output_shape=output_shape,
         shape=batch_size,
+        device=logits.device,
     )
     torch_dist = torch.distributions.Categorical(logits=logits)
     return dist, torch_dist, logits, num_categories
@@ -43,11 +41,11 @@ def test_tensor_categorical_basic_functionality(batch_size):
     num_categories = 5
     output_shape = ()  # Fixed to empty output_shape to avoid RuntimeError
     dist, torch_dist, logits, num_categories = _create_distributions(
-        batch_size, num_categories, output_shape
+        batch_size=batch_size, num_categories=num_categories, output_shape=output_shape
     )
 
     # Test creation
-    assert torch.equal(dist["logits"], logits)
+    assert torch.equal(dist.logits, logits)
 
     # Test sample shape
     sample = dist.sample()
@@ -70,11 +68,11 @@ def test_tensor_categorical_edge_cases(batch_size, num_categories):
     reinterpreted_batch_ndims_for_categorical = 0
 
     dist, torch_dist, logits, num_categories = _create_distributions(
-        batch_size, num_categories, output_shape=()
+        batch_size=batch_size, num_categories=num_categories, output_shape=()
     )
 
     # Test creation and internal state
-    assert torch.equal(dist["logits"], logits)
+    assert torch.equal(dist.logits, logits)
     assert (
         dist.dist().batch_shape
         == batch_size[: len(batch_size) - reinterpreted_batch_ndims_for_categorical]
@@ -101,11 +99,11 @@ def test_tensor_categorical_empty_batch_and_output_shape():
     output_shape = ()
 
     dist, torch_dist, logits, num_categories = _create_distributions(
-        batch_size, num_categories, output_shape
+        batch_size=batch_size, num_categories=num_categories, output_shape=output_shape
     )
 
     # Test creation
-    assert torch.equal(dist["logits"], logits)
+    assert torch.equal(dist.logits, logits)
     assert dist.dist().batch_shape == ()
     assert dist.dist().event_shape == (num_categories,)
 
@@ -128,12 +126,11 @@ def test_tensor_categorical_large_logits():
     # Manually create logits to ensure large values
     logits_shape = batch_size + (num_categories,)
     logits = torch.randn(*logits_shape) * 1000  # Large values
-    tensor_dict = TensorDict({"logits": logits}, shape=batch_size)
-
     dist = TensorCategorical(
-        logits=tensor_dict["logits"],
+        logits=logits,
         output_shape=output_shape,
         shape=batch_size,
+        device=logits.device,
     )
     torch_dist = torch.distributions.Categorical(logits=logits)
 
@@ -154,12 +151,11 @@ def test_tensor_categorical_zero_logits():
     # Manually create logits to ensure zero values
     logits_shape = batch_size + (num_categories,)
     logits = torch.zeros(*logits_shape)  # All zeros
-    tensor_dict = TensorDict({"logits": logits}, shape=batch_size)
-
     dist = TensorCategorical(
-        logits=tensor_dict["logits"],
+        logits=logits,
         output_shape=output_shape,
         shape=batch_size,
+        device=logits.device,
     )
     torch_dist = torch.distributions.Categorical(logits=logits)
 

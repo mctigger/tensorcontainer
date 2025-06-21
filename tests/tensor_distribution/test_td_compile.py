@@ -43,7 +43,6 @@ class TestTensorDistributions:
             loc=loc,
             scale=scale,
             reinterpreted_batch_ndims=reinterpreted_batch_ndims,
-            shape=batch_shape,
         )
 
         # Test sampling methods
@@ -68,9 +67,8 @@ class TestTensorDistributions:
         reinterpreted_batch_ndims = len(event_shape)
 
         td_bernoulli = TensorBernoulli(
-            probs=probs,
+            _probs=probs,
             reinterpreted_batch_ndims=reinterpreted_batch_ndims,
-            shape=batch_shape,
         )
 
         # Test sampling (Bernoulli does not have rsample, this is a key fix)
@@ -102,7 +100,6 @@ class TestTensorDistributions:
         td_categorical = TensorCategorical(
             logits=logits,
             output_shape=event_shape,  # This must be Size(()) for the original code
-            shape=batch_shape,
         )
 
         # Test sampling methods

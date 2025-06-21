@@ -22,9 +22,11 @@ def test_init_valid():
     """Tests that TensorTruncatedNormal can be instantiated with valid parameters."""
     loc = torch.zeros(2, 3)
     scale = torch.ones(2, 3)
-    low = -1.0
-    high = 1.0
-    dist = TensorTruncatedNormal(loc=loc, scale=scale, low=-0.5, high=0.5, shape=tuple(loc.shape), reinterpreted_batch_ndims=0)
+    low = torch.full_like(loc, -0.5)
+    high = torch.full_like(loc, 0.5)
+    dist = TensorTruncatedNormal(
+        loc=loc, scale=scale, low=low, high=high, reinterpreted_batch_ndims=0
+    )
     assert isinstance(dist, TensorDistribution)
 
 
@@ -35,8 +37,14 @@ def test_sample_shape_and_dtype():
     """
     loc = torch.randn(4, 3)
     scale = torch.rand(4, 3) + 1e-6  # ensure scale is positive
+    low = torch.full_like(loc, -0.5)
+    high = torch.full_like(loc, 0.5)
     dist = TensorTruncatedNormal(
-        loc=loc, scale=scale, low=-0.5, high=0.5, shape=tuple(loc.shape), reinterpreted_batch_ndims=0
+        loc=loc,
+        scale=scale,
+        low=low,
+        high=high,
+        reinterpreted_batch_ndims=0,
     )
     # Draw 5 i.i.d. samples
     samples = dist.sample(sample_shape=torch.Size((5,)))
@@ -50,8 +58,8 @@ def test_sample_shape_and_dtype():
     "rbn_dims,expected_shape",
     [
         (0, (2, 3)),  # no reinterpretation -> log_prob per-element
-        (1, (2,)),    # sum over the last dimension
-        (2, ()),      # sum over the last two dimensions -> scalar
+        (1, (2,)),  # sum over the last dimension
+        (2, ()),  # sum over the last two dimensions -> scalar
     ],
 )
 def test_log_prob_reinterpreted_batch_ndims(rbn_dims, expected_shape):
@@ -62,14 +70,13 @@ def test_log_prob_reinterpreted_batch_ndims(rbn_dims, expected_shape):
     """
     loc = torch.tensor([[0.0, 1.0, -1.0], [0.5, -0.5, 0.5]])
     scale = torch.tensor([[0.2, 0.8, 0.1], [0.5, 0.5, 0.5]])
-    low = -1.0
-    high = 1.0
+    low = torch.full_like(loc, -1.0)
+    high = torch.full_like(loc, 1.0)
     dist = TensorTruncatedNormal(
         loc=loc,
         scale=scale,
         low=low,
         high=high,
-        shape=tuple(loc.shape),
         reinterpreted_batch_ndims=rbn_dims,
     )
     # A sample to evaluate the log probability of
@@ -102,5 +109,5 @@ def test_device_normalization_helper():
     else:
         # On a CPU-only machine, test with "cpu"
         dev1 = torch.device("cpu")
-        dev2 = torch.device("cpu:0") # This is not standard but torch handles it
+        dev2 = torch.device("cpu:0")  # This is not standard but torch handles it
         assert normalize_device(dev1) == normalize_device(dev2)

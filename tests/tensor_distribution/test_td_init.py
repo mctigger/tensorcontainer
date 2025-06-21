@@ -7,9 +7,7 @@ class TestTensorDistributionInit:
         # Test initialization in eager mode
         loc = torch.randn(2, 3)
         scale = torch.rand(2, 3)
-        td = TensorNormal(
-            loc, scale, reinterpreted_batch_ndims=1, shape=torch.Size([2, 3])
-        )
+        td = TensorNormal(loc, scale, reinterpreted_batch_ndims=1)
         assert torch.equal(td["loc"], loc)
         assert torch.equal(td["scale"], scale)
 
@@ -20,12 +18,7 @@ class TestTensorDistributionInit:
         """
 
         def create_td_from_tensors(loc_arg, scale_arg):
-            td = TensorNormal(
-                loc_arg,
-                scale_arg,
-                reinterpreted_batch_ndims=1,
-                shape=torch.Size([2, 3]),
-            )
+            td = TensorNormal(loc_arg, scale_arg, reinterpreted_batch_ndims=1)
             return td["loc"], td["scale"]
 
         loc = torch.randn(2, 3)

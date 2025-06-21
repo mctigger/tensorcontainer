@@ -94,3 +94,27 @@ def test_device_persistence_across_operations():
 
     td4 = td2.expand(12, 12)
     assert are_devices_equal(td4.device, td.device)
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
+def test_tensordict_cpu_method():
+    td = TensorDict(
+        {"a": torch.randn(4, 3, device="cuda")},
+        shape=(4,),
+        device=torch.device("cuda"),
+    )
+    td_cpu = td.cpu()
+
+    assert td_cpu.device.type == "cpu"
+    for v in td_cpu.data.values():
+        assert v.device.type == "cpu"
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
+def test_tensordict_cuda_method():
+    td = TensorDict({"a": torch.randn(4, 3)}, shape=(4,), device=torch.device("cpu"))
+    td_cuda = td.cuda()
+
+    assert td_cuda.device.type == "cuda"
+    for v in td_cuda.data.values():
+        assert v.device.type == "cuda"

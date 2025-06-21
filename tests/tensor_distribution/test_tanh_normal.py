@@ -22,7 +22,7 @@ def test_init_valid():
     """Tests that TensorTanhNormal can be instantiated with valid parameters."""
     loc = torch.zeros(2, 3)
     scale = torch.ones(2, 3)
-    dist = TensorTanhNormal(loc=loc, scale=scale, shape=tuple(loc.shape), reinterpreted_batch_ndims=0)
+    dist = TensorTanhNormal(loc=loc, scale=scale, reinterpreted_batch_ndims=0)
     assert isinstance(dist, TensorDistribution)
 
 
@@ -33,16 +33,14 @@ def test_sample_shape_and_dtype():
     """
     loc = torch.randn(4, 3)
     scale = torch.rand(4, 3) + 1e-6  # ensure scale is positive
-    dist = TensorTanhNormal(
-        loc=loc, scale=scale, shape=tuple(loc.shape), reinterpreted_batch_ndims=0
-    )
+    dist = TensorTanhNormal(loc=loc, scale=scale, reinterpreted_batch_ndims=0)
     # Draw 5 i.i.d. samples
     samples = dist.sample(sample_shape=torch.Size((5,)))
 
     # Expected shape is (sample_shape, *batch_shape)
     assert samples.shape == (5, *loc.shape)
     assert samples.dtype == torch.float32
-    
+
     # Check that all samples are within the range [-1, 1] due to tanh transform
     assert torch.all(samples >= -1.0)
     assert torch.all(samples <= 1.0)
@@ -52,8 +50,8 @@ def test_sample_shape_and_dtype():
     "rbn_dims,expected_shape",
     [
         (0, (2, 3)),  # no reinterpretation -> log_prob per-element
-        (1, (2,)),    # sum over the last dimension
-        (2, ()),      # sum over the last two dimensions -> scalar
+        (1, (2,)),  # sum over the last dimension
+        (2, ()),  # sum over the last two dimensions -> scalar
     ],
 )
 def test_log_prob_reinterpreted_batch_ndims(rbn_dims, expected_shape):
@@ -66,10 +64,9 @@ def test_log_prob_reinterpreted_batch_ndims(rbn_dims, expected_shape):
     dist = TensorTanhNormal(
         loc=loc,
         scale=scale,
-        shape=tuple(loc.shape),
         reinterpreted_batch_ndims=rbn_dims,
     )
-    
+
     # A sample to evaluate the log probability of - ensure it's within [-1, 1]
     x = torch.tensor([[0.1, 0.8, -0.9], [0.4, -0.6, 0.7]])
     lp = dist.log_prob(x)
@@ -87,17 +84,16 @@ def test_mean_and_mode():
     dist = TensorTanhNormal(
         loc=loc,
         scale=scale,
-        shape=tuple(loc.shape),
         reinterpreted_batch_ndims=0,
     )
-    
+
     mean = dist.mean
     mode = dist.mode
-    
+
     assert mean.shape == loc.shape
     # The mode might be reshaped due to how SamplingDistribution works
     assert mode.numel() == loc.numel()
-    
+
     # Check that mean and mode are within the range [-1, 1] due to tanh transform
     assert torch.all(mean >= -1.0)
     assert torch.all(mean <= 1.0)
@@ -109,17 +105,20 @@ def test_copy():
     """Tests that the copy method creates a new instance with the same parameters."""
     loc = torch.randn(2, 3)
     scale = torch.rand(2, 3) + 1e-6  # ensure scale is positive
-    dist = TensorTanhNormal(
-        loc=loc, scale=scale, shape=tuple(loc.shape), reinterpreted_batch_ndims=1
-    )
-    
+    dist = TensorTanhNormal(loc=loc, scale=scale, reinterpreted_batch_ndims=1)
+
     dist_copy = dist.copy()
-    
+
     assert isinstance(dist_copy, TensorTanhNormal)
     # Compare the underlying tensor values by converting to tensors
-    assert torch.allclose(loc, dist_copy["loc"].clone())
-    assert torch.allclose(scale, dist_copy["scale"].clone())
-    assert dist.meta_data["reinterpreted_batch_ndims"] == dist_copy.meta_data["reinterpreted_batch_ndims"]
+    assert torch.allclose(loc, dist_copy["loc"].clone())  # type: ignore
+    assert torch.allclose(scale, dist_copy["scale"].clone())  # type: ignore
+    _, (_, _, _, _, meta_data) = dist._pytree_flatten()
+    _, (_, _, _, _, meta_data_copy) = dist_copy._pytree_flatten()
+    assert (
+        meta_data["reinterpreted_batch_ndims"]
+        == meta_data_copy["reinterpreted_batch_ndims"]
+    )
     assert dist.shape == dist_copy.shape
     # Compare devices as strings to avoid type issues
     assert str(dist.device) == str(dist_copy.device)
@@ -139,5 +138,5 @@ def test_device_normalization_helper():
     else:
         # On a CPU-only machine, test with "cpu"
         dev1 = torch.device("cpu")
-        dev2 = torch.device("cpu:0") # This is not standard but torch handles it
+        dev2 = torch.device("cpu:0")  # This is not standard but torch handles it
         assert normalize_device(dev1) == normalize_device(dev2)

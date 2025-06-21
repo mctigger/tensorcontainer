@@ -14,7 +14,13 @@ def test_rsample_returns_differentiable_tensor_and_correct_shape():
     # scalar Normal distribution
     loc = torch.tensor(0.0, requires_grad=True)
     scale = torch.tensor(1.0, requires_grad=True)
-    td = TensorNormal(loc, scale, reinterpreted_batch_ndims=0, shape=())
+    td = TensorNormal(
+        loc=loc,
+        scale=scale,
+        reinterpreted_batch_ndims=0,
+        shape=loc.shape,
+        device=loc.device,
+    )
 
     # default rsample: no sample_shape
     x = td.rsample()
@@ -32,7 +38,13 @@ def test_rsample_returns_differentiable_tensor_and_correct_shape():
 def test_sample_returns_nondifferentiable_tensor_and_correct_shape():
     loc = torch.zeros(3)
     scale = torch.ones(3)
-    td = TensorNormal(loc, scale, reinterpreted_batch_ndims=1, shape=(3,))
+    td = TensorNormal(
+        loc=loc,
+        scale=scale,
+        reinterpreted_batch_ndims=1,
+        shape=loc.shape,
+        device=loc.device,
+    )
 
     # default sample: draws one event of shape (3,)
     s = td.sample()
@@ -50,7 +62,13 @@ def test_sample_returns_nondifferentiable_tensor_and_correct_shape():
 def test_mean_stddev_mode_match_underlying_distribution():
     loc = torch.linspace(-1, 1, steps=4)
     scale = torch.linspace(0.5, 1.5, steps=4)
-    td = TensorNormal(loc, scale, reinterpreted_batch_ndims=1, shape=(4,))
+    td = TensorNormal(
+        loc=loc,
+        scale=scale,
+        reinterpreted_batch_ndims=1,
+        shape=loc.shape,
+        device=loc.device,
+    )
 
     dist = Independent(Normal(loc=loc, scale=scale), 1)
     # properties on TensorNormal
@@ -64,7 +82,13 @@ def test_entropy_matches_underlying_distribution():
     loc = torch.zeros(2, 3)
     scale = torch.ones(2, 3) * 2.0
     # treat last two dims as event dims => entropy summed over them
-    td = TensorNormal(loc, scale, reinterpreted_batch_ndims=2, shape=(2, 3))
+    td = TensorNormal(
+        loc=loc,
+        scale=scale,
+        reinterpreted_batch_ndims=2,
+        shape=loc.shape,
+        device=loc.device,
+    )
 
     dist = Independent(Normal(loc=loc, scale=scale), 2)
     ent_td = td.entropy()
@@ -77,7 +101,13 @@ def test_entropy_matches_underlying_distribution():
 def test_log_prob_agrees_with_underlying_distribution():
     loc = torch.tensor([[0.0, 1.0], [2.0, 3.0]])
     scale = torch.tensor([[1.0, 2.0], [3.0, 4.0]])
-    td = TensorNormal(loc, scale, reinterpreted_batch_ndims=2, shape=(2, 2))
+    td = TensorNormal(
+        loc=loc,
+        scale=scale,
+        reinterpreted_batch_ndims=2,
+        shape=loc.shape,
+        device=loc.device,
+    )
 
     dist = Independent(Normal(loc=loc, scale=scale), 2)
     # draw a sample to evaluate log_prob

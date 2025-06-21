@@ -6,21 +6,23 @@ from rtd.tensor_distribution import TensorBernoulli, TensorDistribution
 
 def test_stack_tensordistribution_returns_tensordistribution():
     # Create two Bernoulli TensorDistributions with the same batch‐shape
+    probs1 = torch.tensor([0.2, 0.8])
     tb1 = TensorBernoulli(
-        probs=torch.tensor([0.2, 0.8]),
+        probs1.shape,
+        probs1.device,
+        _probs=probs1,
         reinterpreted_batch_ndims=0,
-        shape=(2,),
-        device=torch.device("cpu"),
     )
+    probs2 = torch.tensor([0.3, 0.7])
     tb2 = TensorBernoulli(
-        probs=torch.tensor([0.3, 0.7]),
+        probs2.shape,
+        probs2.device,
+        _probs=probs2,
         reinterpreted_batch_ndims=0,
-        shape=(2,),
-        device=torch.device("cpu"),
     )
 
     # Stack along a new leading dimension
-    stacked = torch.stack([tb1, tb2], dim=0)
+    stacked = torch.stack([tb1, tb2], dim=0)  # type: ignore
 
     # Should be a TensorDistribution, not a TensorDict
     assert isinstance(stacked, TensorDistribution)
@@ -30,28 +32,30 @@ def test_stack_tensordistribution_returns_tensordistribution():
     assert stacked.shape == (2, 2)
 
     # Check that each slice matches the originals
-    assert torch.allclose(stacked[0]["probs"], tb1.dist().base_dist.probs)
-    assert torch.allclose(stacked[1]["probs"], tb2.dist().base_dist.probs)
+    assert torch.allclose(stacked.probs[0], tb1.probs)  # type: ignore
+    assert torch.allclose(stacked.probs[1], tb2.probs)  # type: ignore
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
 def test_stack_tensordistribution_on_cuda():
     # Prepare two distributions on GPU
+    probs1 = torch.tensor([0.4, 0.6], device="cuda")
     tb1 = TensorBernoulli(
-        probs=torch.tensor([0.4, 0.6], device="cuda"),
+        probs1.shape,
+        probs1.device,
+        _probs=probs1,
         reinterpreted_batch_ndims=0,
-        shape=(2,),
-        device=torch.device("cuda"),
     )
+    probs2 = torch.tensor([0.1, 0.9], device="cuda")
     tb2 = TensorBernoulli(
-        probs=torch.tensor([0.1, 0.9], device="cuda"),
+        probs2.shape,
+        probs2.device,
+        _probs=probs2,
         reinterpreted_batch_ndims=0,
-        shape=(2,),
-        device=torch.device("cuda"),
     )
 
     # Stack them
-    stacked = torch.stack([tb1, tb2], dim=0)
+    stacked = torch.stack([tb1, tb2], dim=0)  # type: ignore
 
     # Still a TensorDistribution on CUDA
     assert isinstance(stacked, TensorDistribution)
@@ -61,5 +65,5 @@ def test_stack_tensordistribution_on_cuda():
     assert stacked.shape == (2, 2)
 
     # Values match originals
-    assert torch.allclose(stacked[0]["probs"], tb1.dist().base_dist.probs)
-    assert torch.allclose(stacked[1]["probs"], tb2.dist().base_dist.probs)
+    assert torch.allclose(stacked.probs[0], tb1.probs)  # type: ignore
+    assert torch.allclose(stacked.probs[1], tb2.probs)  # type: ignore

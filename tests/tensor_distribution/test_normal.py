@@ -23,9 +23,9 @@ def test_init_valid():
     loc = torch.zeros(2, 3)
     scale = torch.ones(2, 3)
     dist = TensorNormal(
+        shape=loc.shape,
         loc=loc,
         scale=scale,
-        shape=loc.shape,
         reinterpreted_batch_ndims=0,
         device=loc.device,
     )
@@ -40,9 +40,9 @@ def test_sample_shape_and_dtype():
     loc = torch.randn(4, 3)
     scale = torch.rand(4, 3) + 1e-6  # ensure scale is positive
     dist = TensorNormal(
+        shape=loc.shape,
         loc=loc,
         scale=scale,
-        shape=loc.shape,
         reinterpreted_batch_ndims=0,
         device=loc.device,
     )
@@ -71,9 +71,9 @@ def test_log_prob_reinterpreted_batch_ndims(rbn_dims, expected_shape):
     loc = torch.tensor([[0.0, 1.0, -1.0], [0.5, -0.5, 0.5]])
     scale = torch.tensor([[0.2, 0.8, 0.1], [0.5, 0.5, 0.5]])
     dist = TensorNormal(
+        shape=loc.shape,
         loc=loc,
         scale=scale,
-        shape=loc.shape,
         reinterpreted_batch_ndims=rbn_dims,
         device=loc.device,
     )
