@@ -14,6 +14,7 @@ class ExpandTestClass(TensorDataclass):
     meta: int = 42
 
 
+@pytest.mark.skipif_no_compile
 class TestExpand:
     def test_basic_expand(self):
         """Test basic expansion of a TensorDataclass."""

@@ -26,6 +26,7 @@ def _test_numel(td, shape):
     assert td.numel() == torch.Size(shape).numel()
 
 
+@pytest.mark.skipif_no_compile
 class TestTensorDictUtils:
     @pytest.mark.parametrize("shape", [(), (1,), (2, 3), (2, 3, 4)])
     @pytest.mark.parametrize("device", ["cpu"])

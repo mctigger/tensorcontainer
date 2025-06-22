@@ -1,5 +1,8 @@
+import functools
+
 import pytest
 import torch
+from torch._inductor import exc as inductor_exc
 
 
 @pytest.fixture
@@ -15,3 +18,50 @@ def nested_dict():
         return nested_dict_data
 
     return _make
+
+
+@functools.lru_cache(None)
+def has_cpp_compiler():
+    """
+    Checks if a C++ compiler is available for torch.compile.
+    Caches the result to avoid re-running this check for every test.
+    """
+    try:
+        # A minimal function to test compilation
+        def dummy_fn(x):
+            return x + 1
+
+        # Attempt to compile and run the function
+        compiled_fn = torch.compile(dummy_fn)
+        compiled_fn(torch.randn(1))
+        return True
+    except (inductor_exc.InductorError, RuntimeError) as e:
+        # Check if the error message indicates a missing compiler
+        if "InvalidCxxCompiler" in str(e) or ("C++" in str(e) and "compiler" in str(e)):
+            return False
+        # Re-raise the exception if it's not the one we're looking for
+        raise
+
+
+def pytest_configure(config):
+    """
+    Pytest hook to dynamically register markers.
+    """
+    config.addinivalue_line(
+        "markers",
+        "skipif_no_compile: skip test if C++ compiler is not available",
+    )
+
+
+def pytest_collection_modifyitems(config, items):
+    """
+    Pytest hook to modify the collection of tests.
+    Skips tests marked with 'skipif_no_compile' if the compiler is not available.
+    """
+    if not has_cpp_compiler():
+        skip_no_compile = pytest.mark.skip(
+            reason="Test requires a C++ compiler for torch.compile, which was not found."
+        )
+        for item in items:
+            if "skipif_no_compile" in item.keywords:
+                item.add_marker(skip_no_compile)

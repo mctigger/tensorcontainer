@@ -2,6 +2,8 @@ import pytest
 import torch
 from torch._dynamo import exc as dynamo_exc
 
+pytestmark = pytest.mark.skipif_no_compile
+
 from rtd.tensor_dataclass import TensorDataclass
 from tests.tensor_dict.compile_utils import run_and_compare_compiled
 

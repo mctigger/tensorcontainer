@@ -28,6 +28,7 @@ def shapes(request):
     return request.param
 
 
+@pytest.mark.skipif_no_compile
 class TestTensorDistributions:
     """A test suite for TensorDistribution subclasses."""
 

@@ -1,8 +1,10 @@
+import pytest
 import torch
 
 from src.rtd.tensor_distribution import TensorNormal
 
 
+@pytest.mark.skipif_no_compile
 class TestTensorDistributionInit:
     def test_eager_init(self):
         # Test initialization in eager mode

@@ -1,6 +1,7 @@
 import pytest
 import torch
 
+pytestmark = pytest.mark.skipif_no_compile
 from rtd.tensor_dataclass import TensorDataclass
 from tests.tensor_dict.compile_utils import run_and_compare_compiled
 

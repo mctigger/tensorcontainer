@@ -14,6 +14,7 @@ class StackTestClass(TensorDataclass):
     meta: int = 42
 
 
+@pytest.mark.skipif_no_compile
 class TestStack:
     def test_basic_stack(self):
         """Test basic torch.stack operation on a list of TensorDataclass instances."""

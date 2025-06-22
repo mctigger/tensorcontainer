@@ -1,3 +1,4 @@
+import pytest
 import torch
 
 from rtd.tensor_dict import TensorDict
@@ -5,6 +6,7 @@ from rtd.tensor_dict import TensorDict
 from .compile_utils import run_and_compare_compiled
 
 
+@pytest.mark.skipif_no_compile
 class TestSqueeze:
     @staticmethod
     def _create_tensor_dict(shape, requires_grad=False, device="cpu"):

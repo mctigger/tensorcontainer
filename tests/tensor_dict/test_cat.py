@@ -2,6 +2,8 @@ import pytest
 import torch
 from torch._dynamo import exc as dynamo_exc  # Import for TorchRuntimeError
 
+pytestmark = pytest.mark.skipif_no_compile
+
 from rtd.tensor_dict import TensorDict  # adjust import as needed
 from tests.tensor_dict import common
 from tests.tensor_dict.common import compute_cat_shape, compare_nested_dict

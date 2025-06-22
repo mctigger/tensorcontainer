@@ -12,6 +12,7 @@ class CloneTestClass(TensorDataclass):
     meta: int = 42
 
 
+@pytest.mark.skipif_no_compile
 class TestClone:
     def test_basic_clone(self):
         """Test that clone creates a new instance with copied tensors."""

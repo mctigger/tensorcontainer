@@ -36,6 +36,7 @@ def nested_td():
     )
 
 
+@pytest.mark.skipif_no_compile
 class TestTensorDictCompilation:
     """
     Tests for TensorDict operations under torch.compile.

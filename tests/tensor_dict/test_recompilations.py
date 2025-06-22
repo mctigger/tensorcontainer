@@ -1,6 +1,7 @@
 import pytest
 import torch
 
+pytestmark = pytest.mark.skipif_no_compile
 from rtd.tensor_dict import TensorDict
 import torch._dynamo
 import torch._dynamo.utils

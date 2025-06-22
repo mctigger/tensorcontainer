@@ -1,6 +1,8 @@
 from typing import Optional
 
 import pytest
+
+pytestmark = pytest.mark.skipif_no_compile
 import torch
 from torch._dynamo import exc
 

@@ -21,6 +21,7 @@ def sample_nested_tensordict():
     )
 
 
+@pytest.mark.skipif_no_compile
 class TestGraphBreaks:
     def test_init(self):
         def f(args, *kwargs):

@@ -7,6 +7,7 @@ from rtd.tensor_dict import TensorDict
 from .compile_utils import run_and_compare_compiled
 
 
+@pytest.mark.skipif_no_compile
 class TestCasting:
     @pytest.mark.parametrize(
         "method_name, target_dtype",

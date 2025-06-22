@@ -7,6 +7,7 @@ from rtd.tensor_dict import TensorDict
 from .common import compare_nested_dict
 
 
+@pytest.mark.skipif_no_compile
 class TestTensorDictMathOps:
     @pytest.mark.parametrize("compile_op", [True, False])
     def test_abs(self, nested_dict, compile_op):
