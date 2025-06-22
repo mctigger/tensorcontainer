@@ -43,6 +43,12 @@ def has_cpp_compiler():
         raise
 
 
+skipif_no_compile = pytest.mark.skipif(
+    not has_cpp_compiler(),
+    reason="Test requires a C++ compiler for torch.compile, which was not found.",
+)
+
+
 def pytest_configure(config):
     """
     Pytest hook to dynamically register markers.
@@ -51,17 +57,3 @@ def pytest_configure(config):
         "markers",
         "skipif_no_compile: skip test if C++ compiler is not available",
     )
-
-
-def pytest_collection_modifyitems(config, items):
-    """
-    Pytest hook to modify the collection of tests.
-    Skips tests marked with 'skipif_no_compile' if the compiler is not available.
-    """
-    if not has_cpp_compiler():
-        skip_no_compile = pytest.mark.skip(
-            reason="Test requires a C++ compiler for torch.compile, which was not found."
-        )
-        for item in items:
-            if "skipif_no_compile" in item.keywords:
-                item.add_marker(skip_no_compile)

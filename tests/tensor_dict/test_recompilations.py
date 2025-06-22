@@ -1,8 +1,8 @@
 import pytest
 import torch
 
-pytestmark = pytest.mark.skipif_no_compile
 from rtd.tensor_dict import TensorDict
+from tests.conftest import skipif_no_compile
 import torch._dynamo
 import torch._dynamo.utils
 from torch._dynamo.testing import CompileCounter  # New import
@@ -18,6 +18,7 @@ def _get_td():
     )
 
 
+@skipif_no_compile
 @pytest.mark.parametrize("key", ["a", "b"])
 def test_getitem_recompilation(key):
     torch._dynamo.reset()

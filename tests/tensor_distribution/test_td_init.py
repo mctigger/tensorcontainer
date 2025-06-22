@@ -1,10 +1,9 @@
-import pytest
 import torch
 
 from src.rtd.tensor_distribution import TensorNormal
+from tests.conftest import skipif_no_compile
 
 
-@pytest.mark.skipif_no_compile
 class TestTensorDistributionInit:
     def test_eager_init(self):
         # Test initialization in eager mode
@@ -20,6 +19,7 @@ class TestTensorDistributionInit:
         assert torch.equal(td.loc, loc)
         assert torch.equal(td.scale, scale)
 
+    @skipif_no_compile
     def test_compile_init(self):
         """
         Verifies that a TensorNormal can be successfully created from raw tensors

@@ -1,8 +1,8 @@
 import pytest
 import torch
 
-pytestmark = pytest.mark.skipif_no_compile
 from rtd.tensor_dataclass import TensorDataclass
+from tests.conftest import skipif_no_compile
 from tests.tensor_dict.compile_utils import run_and_compare_compiled
 
 
@@ -33,6 +33,7 @@ def test_getattr():
         _ = container.invalid  # type: ignore # Should raise AttributeError for attribute access
 
 
+@skipif_no_compile
 def test_compile():
     """Tests that a function using TensorDataclass can be torch.compiled."""
 

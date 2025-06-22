@@ -2,10 +2,10 @@ import torch
 
 import pytest
 
-pytestmark = pytest.mark.skipif_no_compile
 from torch._dynamo import exc as dynamo_exc
 
 from rtd.tensor_dict import TensorDict
+from tests.conftest import skipif_no_compile
 from tests.tensor_dict import common
 from tests.tensor_dict.common import compute_stack_shape, compare_nested_dict
 from tests.tensor_dict.compile_utils import run_and_compare_compiled
@@ -65,9 +65,8 @@ SHAPE_DIM_PARAMS_INVALID_STACK = [
 
 
 # ——— Valid stacking dims across several shapes ———
-@pytest.mark.parametrize("mode", ["eager", "compile"])
 @pytest.mark.parametrize("shape, dim", SHAPE_DIM_PARAMS_VALID_STACK)
-def test_stack_valid(nested_dict, shape, dim, mode):
+def test_stack_valid_eager(nested_dict, shape, dim):
     data = nested_dict(shape)
     td1 = TensorDict(data, shape)
     # Create a second TensorDict with slightly different data for a robust check
@@ -83,11 +82,7 @@ def test_stack_valid(nested_dict, shape, dim, mode):
     def stack_operation(tensor_dict_list, stack_dimension):
         return torch.stack(tensor_dict_list, dim=stack_dimension)
 
-    if mode == "compile":
-        compiled_stack_op = torch.compile(stack_operation, fullgraph=True)
-        stacked_td = compiled_stack_op([td1, td2], dim)
-    else:  # mode == "eager"
-        stacked_td = stack_operation([td1, td2], dim)
+    stacked_td = stack_operation([td1, td2], dim)
 
     # compute expected shape
     expected_shape = compute_stack_shape(shape, dim, num_tensors=2)
@@ -124,9 +119,8 @@ def test_stack_valid(nested_dict, shape, dim, mode):
 
 
 # ——— Error on invalid dims ———
-@pytest.mark.parametrize("mode", ["eager", "compile"])
 @pytest.mark.parametrize("shape, dim", SHAPE_DIM_PARAMS_INVALID_STACK)
-def test_stack_invalid_dim_raises(shape, dim, nested_dict, mode):
+def test_stack_invalid_dim_raises_eager(shape, dim, nested_dict):
     td = TensorDict(nested_dict(shape), shape)
 
     def stack_operation(tensor_dict_instance, stack_dimension):
@@ -135,19 +129,31 @@ def test_stack_invalid_dim_raises(shape, dim, nested_dict, mode):
             [tensor_dict_instance, tensor_dict_instance], dim=stack_dimension
         )
 
-    if mode == "compile":
-        compiled_stack_op = torch.compile(stack_operation, fullgraph=True)
-        with pytest.raises(dynamo_exc.TorchRuntimeError) as excinfo:
-            compiled_stack_op(td, dim)
-        assert "IndexError" in str(excinfo.value) and "Dimension out of range" in str(
-            excinfo.value
+    with pytest.raises(IndexError):
+        stack_operation(td, dim)
+
+
+@skipif_no_compile
+@pytest.mark.parametrize("shape, dim", SHAPE_DIM_PARAMS_INVALID_STACK)
+def test_stack_invalid_dim_raises_compile(shape, dim, nested_dict):
+    td = TensorDict(nested_dict(shape), shape)
+
+    def stack_operation(tensor_dict_instance, stack_dimension):
+        # This is the operation that is expected to raise an error
+        return torch.stack(
+            [tensor_dict_instance, tensor_dict_instance], dim=stack_dimension
         )
-    else:  # mode == "eager"
-        with pytest.raises(IndexError):
-            stack_operation(td, dim)
+
+    compiled_stack_op = torch.compile(stack_operation, fullgraph=True)
+    with pytest.raises(dynamo_exc.TorchRuntimeError) as excinfo:
+        compiled_stack_op(td, dim)
+    assert "IndexError" in str(excinfo.value) and "Dimension out of range" in str(
+        excinfo.value
+    )
 
 
 # --- Test TD creation and stacking inside torch.compile ---
+@skipif_no_compile
 def test_stack_td_creation_and_stack_inside_compile(nested_dict):
     input_shape = (
         2,
@@ -217,6 +223,7 @@ def test_stack_td_creation_and_stack_inside_compile(nested_dict):
         ((2, 1, 2), -4),
     ],
 )
+@skipif_no_compile
 def test_stack_valid_compiled(nested_dict, shape, dim):
     def stack_fn(nd, s, d):
         td = TensorDict(nd, s)

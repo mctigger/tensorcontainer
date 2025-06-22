@@ -2,9 +2,8 @@ import pytest
 import torch
 from torch._dynamo import exc as dynamo_exc  # Import for TorchRuntimeError
 
-pytestmark = pytest.mark.skipif_no_compile
-
 from rtd.tensor_dict import TensorDict  # adjust import as needed
+from tests.conftest import skipif_no_compile
 from tests.tensor_dict import common
 from tests.tensor_dict.common import compute_cat_shape, compare_nested_dict
 
@@ -44,9 +43,8 @@ SHAPE_DIM_PARAMS_INVALID = [
 
 
 # ——— Valid concatenation dims across several shapes ———
-@pytest.mark.parametrize("mode", ["eager", "compile"])
 @pytest.mark.parametrize("shape, dim", SHAPE_DIM_PARAMS_VALID)
-def test_cat_valid(nested_dict, shape, dim, mode):
+def test_cat_valid_eager(nested_dict, shape, dim):
     data = nested_dict(shape)
     td = TensorDict(data, shape)
 
@@ -55,11 +53,7 @@ def test_cat_valid(nested_dict, shape, dim, mode):
             [tensor_dict_instance, tensor_dict_instance], dim=cat_dimension
         )
 
-    if mode == "compile":
-        compiled_cat_op = torch.compile(cat_operation)
-        cat_td = compiled_cat_op(td, dim)
-    else:  # mode == "eager"
-        cat_td = cat_operation(td, dim)
+    cat_td = cat_operation(td, dim)
 
     # compute expected shape
     expected_shape = compute_cat_shape(shape, dim)
@@ -73,9 +67,8 @@ def test_cat_valid(nested_dict, shape, dim, mode):
 
 
 # ——— Error on invalid dims ———
-@pytest.mark.parametrize("mode", ["eager", "compile"])
 @pytest.mark.parametrize("shape, dim", SHAPE_DIM_PARAMS_INVALID)
-def test_cat_invalid_dim_raises(shape, dim, nested_dict, mode):
+def test_cat_invalid_dim_raises_eager(shape, dim, nested_dict):
     td = TensorDict(nested_dict(shape), shape)
 
     def cat_operation(tensor_dict_instance, cat_dimension):
@@ -84,17 +77,28 @@ def test_cat_invalid_dim_raises(shape, dim, nested_dict, mode):
             [tensor_dict_instance, tensor_dict_instance], dim=cat_dimension
         )
 
-    if mode == "compile":
-        # In compile mode, errors during tracing (e.g., with fake tensors by Dynamo)
-        # are often wrapped in TorchRuntimeError.
-        # We compile first, then expect the error upon execution of the compiled function.
-        compiled_cat_op = torch.compile(cat_operation)
-        with pytest.raises(dynamo_exc.TorchRuntimeError) as excinfo:
-            compiled_cat_op(td, dim)
-        # Verify that the TorchRuntimeError was caused by an IndexError related to dimension
-        assert "IndexError" in str(excinfo.value) and "Dimension out of range" in str(
-            excinfo.value
+    with pytest.raises(IndexError):
+        cat_operation(td, dim)
+
+
+@skipif_no_compile
+@pytest.mark.parametrize("shape, dim", SHAPE_DIM_PARAMS_INVALID)
+def test_cat_invalid_dim_raises_compile(shape, dim, nested_dict):
+    td = TensorDict(nested_dict(shape), shape)
+
+    def cat_operation(tensor_dict_instance, cat_dimension):
+        # This is the operation that is expected to raise an error
+        return torch.cat(
+            [tensor_dict_instance, tensor_dict_instance], dim=cat_dimension
         )
-    else:  # mode == "eager"
-        with pytest.raises(IndexError):
-            cat_operation(td, dim)
+
+    # In compile mode, errors during tracing (e.g., with fake tensors by Dynamo)
+    # are often wrapped in TorchRuntimeError.
+    # We compile first, then expect the error upon execution of the compiled function.
+    compiled_cat_op = torch.compile(cat_operation)
+    with pytest.raises(dynamo_exc.TorchRuntimeError) as excinfo:
+        compiled_cat_op(td, dim)
+    # Verify that the TorchRuntimeError was caused by an IndexError related to dimension
+    assert "IndexError" in str(excinfo.value) and "Dimension out of range" in str(
+        excinfo.value
+    )

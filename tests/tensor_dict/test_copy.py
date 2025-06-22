@@ -1,8 +1,8 @@
 import pytest
 import torch
 
-pytestmark = pytest.mark.skipif_no_compile
 from rtd.tensor_dict import TensorDict
+from tests.conftest import skipif_no_compile
 from tests.tensor_dict.compile_utils import run_and_compare_compiled
 
 
@@ -46,6 +46,7 @@ def test_copy_returns_distinct_tensordict_but_shares_leaf_tensors(nested_dict):
             assert copied_val is val
 
 
+@skipif_no_compile
 def test_copy_returns_distinct_tensordict_but_shares_leaf_tensors_compiled(nested_dict):
     """Test that copy works correctly with torch.compile."""
 
@@ -94,6 +95,7 @@ def test_mutating_nested_copy_does_not_affect_original(nested_dict):
     assert "a" in td["x"]
 
 
+@skipif_no_compile
 def test_mutating_nested_copy_does_not_affect_original_compiled(nested_dict):
     """Test that copy works correctly with torch.compile."""
 
@@ -130,6 +132,7 @@ def test_copy_of_empty_tensor_dict(nested_dict):
     assert len(td_copy) == 0
 
 
+@skipif_no_compile
 def test_copy_of_empty_tensor_dict_compiled():
     """Test that copying an empty TensorDict works with torch.compile."""
 
@@ -173,6 +176,7 @@ def test_copy_with_pytree(nested_dict):
             assert copied_val is val
 
 
+@skipif_no_compile
 def test_copy_with_pytree_compiled(nested_dict):
     """Test that copy works correctly with pytree and torch.compile."""
 
@@ -203,6 +207,7 @@ def test_copy_with_pytree_compiled(nested_dict):
             assert copied_val is val
 
 
+@skipif_no_compile
 def test_copy_inside_compile():
     """Test that creating and copying a TensorDict inside torch.compile works."""
 

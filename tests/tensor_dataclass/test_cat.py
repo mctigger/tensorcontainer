@@ -2,9 +2,8 @@ import pytest
 import torch
 from torch._dynamo import exc as dynamo_exc
 
-pytestmark = pytest.mark.skipif_no_compile
-
 from rtd.tensor_dataclass import TensorDataclass
+from tests.conftest import skipif_no_compile
 from tests.tensor_dict.compile_utils import run_and_compare_compiled
 
 
@@ -58,9 +57,8 @@ def compute_cat_shape(shape, dim):
 
 
 # --- Valid concatenation dims across several shapes ---
-@pytest.mark.parametrize("mode", ["eager", "compile"])
 @pytest.mark.parametrize("shape, dim", SHAPE_DIM_PARAMS_VALID)
-def test_cat_valid(shape, dim, mode):
+def test_cat_valid(shape, dim):
     td1 = CatTestClass(
         a=torch.randn(shape),
         b=torch.ones(shape),
@@ -78,7 +76,7 @@ def test_cat_valid(shape, dim, mode):
         return torch.cat(tensor_dict_instance_list, dim=dim_arg)
 
     # Skip compilation for all cases
-    cat_td = cat_operation([td1, td2], dim)
+    cat_td: CatTestClass = cat_operation([td1, td2], dim)
 
     expected_shape = compute_cat_shape(shape, dim)
     assert cat_td.shape == expected_shape
@@ -108,9 +106,8 @@ def test_cat_valid(shape, dim, mode):
 
 
 # --- Error on invalid dims ---
-@pytest.mark.parametrize("mode", ["eager", "compile"])
 @pytest.mark.parametrize("shape, dim", SHAPE_DIM_PARAMS_INVALID)
-def test_cat_invalid_dim_raises(shape, dim, mode):
+def test_cat_invalid_dim_raises_eager(shape, dim):
     td1 = CatTestClass(
         a=torch.randn(shape),
         b=torch.ones(shape),
@@ -127,21 +124,40 @@ def test_cat_invalid_dim_raises(shape, dim, mode):
     def cat_operation(tensor_dict_instance_list, dim_arg):
         return torch.cat(tensor_dict_instance_list, dim=dim_arg)
 
-    if mode == "compile":
-        compiled_cat_op = torch.compile(cat_operation, fullgraph=True)
-        with pytest.raises(dynamo_exc.TorchRuntimeError) as excinfo:
-            compiled_cat_op([td1, td2], dim)
-        assert "IndexError" in str(excinfo.value) and "Dimension out of range" in str(
-            excinfo.value
-        )
-    else:  # mode == "eager"
-        with pytest.raises(IndexError):
-            cat_operation([td1, td2], dim)
+    with pytest.raises(IndexError):
+        cat_operation([td1, td2], dim)
+
+
+@skipif_no_compile
+@pytest.mark.parametrize("shape, dim", SHAPE_DIM_PARAMS_INVALID)
+def test_cat_invalid_dim_raises_compile(shape, dim):
+    td1 = CatTestClass(
+        a=torch.randn(shape),
+        b=torch.ones(shape),
+        shape=shape,
+        device=torch.device("cpu"),
+    )
+    td2 = CatTestClass(
+        a=torch.randn(shape),
+        b=torch.ones(shape),
+        shape=shape,
+        device=torch.device("cpu"),
+    )
+
+    def cat_operation(tensor_dict_instance_list, dim_arg):
+        return torch.cat(tensor_dict_instance_list, dim=dim_arg)
+
+    compiled_cat_op = torch.compile(cat_operation, fullgraph=True)
+    with pytest.raises(dynamo_exc.TorchRuntimeError) as excinfo:
+        compiled_cat_op([td1, td2], dim)
+    assert "IndexError" in str(excinfo.value) and "Dimension out of range" in str(
+        excinfo.value
+    )
 
 
 # --- Test cat on CUDA ---
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
-def test_cat_on_cuda():
+def test_cat_on_cuda_eager():
     td1 = CatTestClass(
         a=torch.randn(2, 3, device="cuda"),
         b=torch.ones(2, 3, device="cuda"),
@@ -159,19 +175,38 @@ def test_cat_on_cuda():
         return torch.cat(tensor_dict_instance_list, dim=dim_arg)
 
     # Test eager mode
-    cat_td_eager = cat_operation_cuda([td1, td2], 0)
+    cat_td_eager: CatTestClass = cat_operation_cuda([td1, td2], 0)
     assert cat_td_eager.device.type == "cuda"
     assert cat_td_eager.a.device.type == "cuda"
     assert cat_td_eager.b.device.type == "cuda"
     assert cat_td_eager.shape == (4, 3)
+
+
+@skipif_no_compile
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
+def test_cat_on_cuda_compile():
+    td1 = CatTestClass(
+        a=torch.randn(2, 3, device="cuda"),
+        b=torch.ones(2, 3, device="cuda"),
+        shape=(2, 3),
+        device=torch.device("cuda"),
+    )
+    td2 = CatTestClass(
+        a=torch.randn(2, 3, device="cuda"),
+        b=torch.ones(2, 3, device="cuda"),
+        shape=(2, 3),
+        device=torch.device("cuda"),
+    )
+
+    def cat_operation_cuda(tensor_dict_instance_list, dim_arg):
+        return torch.cat(tensor_dict_instance_list, dim=dim_arg)
 
     # Test compile mode
     run_and_compare_compiled(cat_operation_cuda, [td1, td2], 0)
 
 
 # --- Test cat with inconsistent meta data raises ---
-@pytest.mark.parametrize("mode", ["eager", "compile"])
-def test_cat_inconsistent_meta_data_raises(mode):
+def test_cat_inconsistent_meta_data_raises():
     td1 = CatTestClass(
         a=torch.randn(2, 3),
         b=torch.ones(2, 3),
@@ -190,18 +225,37 @@ def test_cat_inconsistent_meta_data_raises(mode):
     def cat_operation(tensor_dict_instance_list, dim_arg):
         return torch.cat(tensor_dict_instance_list, dim=dim_arg)
 
-    if mode == "compile":
-        # Don't compile the function that raises an exception
-        with pytest.raises(ValueError):
-            cat_operation([td1, td2], 0)
-    else:  # mode == "eager"
-        with pytest.raises(ValueError):
-            cat_operation([td1, td2], 0)
+    with pytest.raises(ValueError):
+        cat_operation([td1, td2], 0)
+
+
+@skipif_no_compile
+def test_cat_inconsistent_meta_data_raises_compile():
+    td1 = CatTestClass(
+        a=torch.randn(2, 3),
+        b=torch.ones(2, 3),
+        shape=(2, 3),
+        device=torch.device("cpu"),
+        meta=42,
+    )
+    td2 = CatTestClass(
+        a=torch.randn(2, 3),
+        b=torch.ones(2, 3),
+        shape=(2, 3),
+        device=torch.device("cpu"),
+        meta=99,  # Inconsistent meta data
+    )
+
+    def cat_operation(tensor_dict_instance_list, dim_arg):
+        return torch.cat(tensor_dict_instance_list, dim=dim_arg)
+
+    # Don't compile the function that raises an exception
+    with pytest.raises(dynamo_exc.Unsupported):
+        torch.compile(cat_operation, fullgraph=True)([td1, td2], 0)
 
 
 # --- Test cat with inconsistent shapes raises ---
-@pytest.mark.parametrize("mode", ["eager", "compile"])
-def test_cat_inconsistent_shapes_raises(mode):
+def test_cat_inconsistent_shapes_raises():
     td1 = CatTestClass(
         a=torch.randn(2, 3),
         b=torch.ones(2, 3),
@@ -218,16 +272,35 @@ def test_cat_inconsistent_shapes_raises(mode):
     def cat_operation(tensor_dict_instance_list, dim_arg):
         return torch.cat(tensor_dict_instance_list, dim=dim_arg)
 
-    if mode == "compile":
-        # Don't compile the function that raises an exception
-        with pytest.raises(ValueError):
-            cat_operation([td1, td2], 0)
-    else:  # mode == "eager"
-        with pytest.raises(ValueError):
-            cat_operation([td1, td2], 0)
+    with pytest.raises(ValueError):
+        cat_operation([td1, td2], 0)
+
+
+@skipif_no_compile
+def test_cat_inconsistent_shapes_raises_compile():
+    td1 = CatTestClass(
+        a=torch.randn(2, 3),
+        b=torch.ones(2, 3),
+        shape=(2, 3),
+        device=torch.device("cpu"),
+    )
+    td2 = CatTestClass(
+        a=torch.randn(2, 4),  # Inconsistent shape
+        b=torch.ones(2, 4),
+        shape=(2, 4),
+        device=torch.device("cpu"),
+    )
+
+    def cat_operation(tensor_dict_instance_list, dim_arg):
+        return torch.cat(tensor_dict_instance_list, dim=dim_arg)
+
+    # Don't compile the function that raises an exception
+    with pytest.raises(dynamo_exc.Unsupported):
+        torch.compile(cat_operation, fullgraph=True)([td1, td2], 0)
 
 
 # --- Test compile functionality for torch.cat ---
+@skipif_no_compile
 def test_cat_compile():
     """Tests that a function using torch.cat with TensorDataclass can be torch.compiled."""
 

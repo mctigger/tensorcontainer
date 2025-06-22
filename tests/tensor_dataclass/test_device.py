@@ -2,10 +2,10 @@ from typing import Optional
 
 import pytest
 
-pytestmark = pytest.mark.skipif_no_compile
 import torch
 
 from rtd.tensor_dataclass import TensorDataclass
+from tests.conftest import skipif_no_compile
 
 
 class DeviceTestClass(TensorDataclass):
@@ -59,6 +59,7 @@ def test_device_consistency_check():
         )
 
 
+@skipif_no_compile
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
 def test_device_compile():
     def device_fn(td):

@@ -2,10 +2,10 @@ from typing import Optional
 
 import pytest
 
-pytestmark = pytest.mark.skipif_no_compile
 import torch
 
 from rtd.tensor_dataclass import TensorDataclass
+from tests.conftest import skipif_no_compile
 
 
 class ShapeTestClass(TensorDataclass):
@@ -50,6 +50,7 @@ def test_invalid_shape_raises():
         td.view(21)  # Invalid size
 
 
+@skipif_no_compile
 def test_shape_compile():
     td = ShapeTestClass(
         shape=(4, 5),
