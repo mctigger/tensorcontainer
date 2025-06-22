@@ -1,5 +1,6 @@
 import pytest
 import torch
+
 from src.rtd.tensor_dataclass import TensorDataclass
 
 
@@ -57,3 +58,29 @@ def test_subclass_with_post_init():
         SubclassedTensorDataclass(
             my_tensor=torch.randn(2, 4), shape=(2, 3), device=torch.device("cpu")
         )
+
+
+def test_post_init_no_super_call():
+    """
+    Tests that validation is skipped if a subclass's __post_init__
+    does not call super().__post_init__().
+    """
+    from typing import Optional
+
+    class NoSuperPostInit(TensorDataclass):
+        shape: tuple
+        device: Optional[torch.device]
+        a: torch.Tensor
+
+        def __post_init__(self):
+            # This subclass does not call super().__post_init__()
+            pass
+
+    # This should not raise an error, because validation is skipped
+    td = NoSuperPostInit(
+        shape=(3, 4),
+        device=torch.device("cpu"),
+        a=torch.randn(5, 6),  # Inconsistent shape
+    )
+    assert td.shape == (3, 4)
+    assert td.a.shape == (5, 6)

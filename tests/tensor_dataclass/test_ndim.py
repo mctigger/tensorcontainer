@@ -1,9 +1,8 @@
 import torch
-import dataclasses
+
 from rtd.tensor_dataclass import TensorDataclass
 
 
-@dataclasses.dataclass
 class NdimTestClass(TensorDataclass):
     # Parent class required fields (no defaults)
     device: torch.device

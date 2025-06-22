@@ -1,11 +1,11 @@
+from typing import Optional
+
 import pytest
 import torch
-import dataclasses
-from typing import Optional
+
 from rtd.tensor_dataclass import TensorDataclass
 
 
-@dataclasses.dataclass
 class ShapeTestClass(TensorDataclass):
     shape: tuple
     device: Optional[torch.device]
@@ -64,3 +64,62 @@ def test_shape_compile():
 
     assert result.shape == (20,)
     assert result.a.shape == (20,)
+
+
+def test_zero_sized_batch():
+    """Test initialization and operations with a batch size of 0."""
+    td = ShapeTestClass(
+        shape=(0, 10),
+        device=torch.device("cpu"),
+        a=torch.randn(0, 10),
+        b=torch.randn(0, 10),
+    )
+
+    assert td.shape == (0, 10)
+    assert td.a.shape == (0, 10)
+    assert td.b.shape == (0, 10)
+
+    # Test clone
+    cloned_td = td.clone()
+    assert cloned_td.shape == (0, 10)
+    assert torch.equal(cloned_td.a, td.a)
+
+    # Test stack
+    stacked_td = torch.stack([td, td], dim=0)
+    assert stacked_td.shape == (2, 0, 10)
+
+
+def test_inconsistent_trailing_shapes():
+    """Test initialization with tensors that have different trailing shapes."""
+    try:
+        td = ShapeTestClass(
+            shape=(4,),
+            device=torch.device("cpu"),
+            a=torch.randn(4, 10),
+            b=torch.randn(4, 5),  # Different trailing dimension
+        )
+        assert td.shape == (4,)
+        assert td.a.shape == (4, 10)
+        assert td.b.shape == (4, 5)
+    except ValueError:
+        pytest.fail("Initialization failed with inconsistent trailing shapes.")
+
+
+def test_no_tensor_fields():
+    """Test a TensorDataclass with no tensor fields."""
+
+    class NoTensorData(TensorDataclass):
+        shape: tuple
+        device: Optional[torch.device]
+        meta: str
+
+    # Initialization
+    td = NoTensorData(shape=(2, 3), device=torch.device("cpu"), meta="test")
+    assert td.shape == (2, 3)
+    assert td.device == torch.device("cpu")
+    assert td.meta == "test"
+
+    # Clone
+    cloned_td = td.clone()
+    assert cloned_td.shape == (2, 3)
+    assert cloned_td.meta == "test"

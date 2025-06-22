@@ -1,11 +1,11 @@
-import pytest
-import torch
-import dataclasses
-from rtd.tensor_dataclass import TensorDataclass
 from typing import Optional
 
+import pytest
+import torch
 
-@dataclasses.dataclass
+from rtd.tensor_dataclass import TensorDataclass
+
+
 class ExpandTestClass(TensorDataclass):
     shape: tuple
     device: Optional[torch.device]
@@ -114,7 +114,6 @@ class TestExpand:
         """Tests that a function using TensorDataclass.expand() can be torch.compiled."""
         from tests.tensor_dict.compile_utils import run_and_compare_compiled
 
-        @dataclasses.dataclass
         class MyData(TensorDataclass):
             shape: tuple
             device: Optional[torch.device]

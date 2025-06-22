@@ -1,6 +1,9 @@
+from typing import Optional
+
 import pytest
 import torch
-from typing import Optional
+from torch._dynamo import exc
+
 from rtd.tensor_dataclass import TensorDataclass
 
 
@@ -127,3 +130,28 @@ class TestViewAndReshape:
         assert result.b.shape == (4, 5)
         assert torch.equal(result.a, td.a)
         assert torch.equal(result.b, td.b)
+
+    def test_non_contiguous_view_raises(self, mode):
+        """Test that view() on non-contiguous tensor raises a RuntimeError."""
+        # Create a dataclass with a tensor that can be transposed
+        td_orig = A(
+            shape=(5, 4),
+            device=torch.device("cpu"),
+            a=torch.randn(5, 4),
+            b=torch.randn(5, 4),
+        )
+
+        # Create a non-contiguous version by transposing
+        td_non_contiguous = td_orig.transpose(0, 1)
+        assert not td_non_contiguous.a.is_contiguous()
+
+        def view_fn(td):
+            return td.view(20)
+
+        if mode == "compile":
+            compiled_view = torch.compile(view_fn, fullgraph=True)
+            with pytest.raises(exc.TorchRuntimeError):
+                compiled_view(td_non_contiguous)
+        else:
+            with pytest.raises(RuntimeError, match="view size is not compatible"):
+                view_fn(td_non_contiguous)

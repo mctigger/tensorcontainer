@@ -1,11 +1,11 @@
-import pytest
-import torch
-import dataclasses
-from rtd.tensor_dataclass import TensorDataclass
 from typing import Optional
 
+import pytest
+import torch
 
-@dataclasses.dataclass(eq=False)
+from rtd.tensor_dataclass import TensorDataclass
+
+
 class StackTestClass(TensorDataclass):
     shape: tuple
     device: Optional[torch.device]
@@ -140,7 +140,6 @@ class TestStack:
         """Tests that a function using torch.stack with TensorDataclass can be torch.compiled."""
         from tests.tensor_dict.compile_utils import run_and_compare_compiled
 
-        @dataclasses.dataclass(eq=False)
         class MyData(TensorDataclass):
             shape: tuple
             device: Optional[torch.device]
@@ -163,3 +162,35 @@ class TestStack:
             device=torch.device("cpu"),
         )
         run_and_compare_compiled(func, [data1, data2])
+
+
+def test_stack_empty_list_raises():
+    """Test that torch.stack on an empty list raises a RuntimeError."""
+    with pytest.raises(RuntimeError, match="stack expects a non-empty TensorList"):
+        torch.stack([], dim=0)
+
+
+def test_stack_mixed_optional_raises():
+    """Test that stacking with mixed None and Tensor for an optional field raises."""
+
+    class OptionalStack(TensorDataclass):
+        shape: tuple
+        device: Optional[torch.device]
+        a: torch.Tensor
+        b: Optional[torch.Tensor] = None
+
+    td1 = OptionalStack(
+        shape=(3,),
+        device=torch.device("cpu"),
+        a=torch.randn(3),
+        b=torch.ones(3),
+    )
+    td2 = OptionalStack(
+        shape=(3,),
+        device=torch.device("cpu"),
+        a=torch.randn(3),
+        b=None,  # b is None here
+    )
+
+    with pytest.raises(ValueError, match="Node arity mismatch"):
+        torch.stack([td1, td2], dim=0)

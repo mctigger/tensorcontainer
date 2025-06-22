@@ -1,6 +1,7 @@
-import torch
-import dataclasses
 from typing import Optional
+
+import torch
+
 from src.rtd.tensor_dataclass import TensorDataclass
 
 
@@ -8,7 +9,6 @@ class TestDetach:
     def test_basic_detach(self):
         """Test that tensors are detached and still have the same data."""
 
-        @dataclasses.dataclass
         class TestClass(TensorDataclass):
             shape: tuple
             device: Optional[torch.device]
@@ -41,7 +41,6 @@ class TestDetach:
     def test_detach_with_gradients(self):
         """Test detach with tensors requiring gradients."""
 
-        @dataclasses.dataclass
         class TestClass(TensorDataclass):
             shape: tuple
             device: Optional[torch.device]
@@ -74,13 +73,11 @@ class TestDetach:
     def test_nested_detach(self):
         """Test detach with nested TensorDataclass instances."""
 
-        @dataclasses.dataclass
         class NestedClass(TensorDataclass):
             shape: tuple
             device: Optional[torch.device]
             c: torch.Tensor
 
-        @dataclasses.dataclass
         class TestClass(TensorDataclass):
             shape: tuple
             device: Optional[torch.device]
@@ -118,7 +115,6 @@ class TestDetach:
     def test_non_tensor_fields(self):
         """Test that non-tensor fields are preserved."""
 
-        @dataclasses.dataclass
         class TestClass(TensorDataclass):
             shape: tuple
             device: Optional[torch.device]

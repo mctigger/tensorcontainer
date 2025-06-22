@@ -1,8 +1,9 @@
+from typing import Optional
+
 import pytest
 import torch
-import dataclasses
+
 from rtd.tensor_dataclass import TensorDataclass
-from typing import Optional
 
 
 class CloneTestClass(TensorDataclass):
@@ -60,7 +61,6 @@ class TestClone:
     def test_clone_nested(self):
         """Test clone with nested TensorDataclass instances."""
 
-        @dataclasses.dataclass
         class NestedCloneTestClass(TensorDataclass):
             shape: tuple
             device: Optional[torch.device]
@@ -71,7 +71,13 @@ class TestClone:
             shape=(2, 3),
             device=torch.device("cpu"),
         )
-        td = CloneTestClass(
+
+        class CloneWithNested(TensorDataclass):
+            a: torch.Tensor
+            b: NestedCloneTestClass
+            meta: int = 42
+
+        td = CloneWithNested(
             a=torch.randn(2, 3, requires_grad=True),
             b=td_nested,
             shape=(2, 3),
@@ -93,7 +99,6 @@ class TestClone:
     def test_clone_empty_dataclass(self):
         """Test cloning an empty TensorDataclass."""
 
-        @dataclasses.dataclass
         class EmptyCloneTestClass(TensorDataclass):
             shape: tuple
             device: Optional[torch.device]
@@ -128,7 +133,6 @@ class TestClone:
         """Tests that a function using TensorDataclass.clone() can be torch.compiled."""
         from tests.tensor_dict.compile_utils import run_and_compare_compiled
 
-        @dataclasses.dataclass
         class MyData(TensorDataclass):
             shape: tuple
             device: Optional[torch.device]
@@ -145,3 +149,28 @@ class TestClone:
             device=torch.device("cpu"),
         )
         run_and_compare_compiled(func, data)
+
+
+def test_clone_mutable_metadata():
+    """Test that clone() deepcopies mutable metadata."""
+
+    class MutableMetadata(TensorDataclass):
+        shape: tuple
+        device: Optional[torch.device]
+        a: torch.Tensor
+        metadata: list
+
+    td = MutableMetadata(
+        shape=(2,),
+        device=torch.device("cpu"),
+        a=torch.randn(2),
+        metadata=[1, 2],
+    )
+
+    cloned_td = td.clone()
+    assert cloned_td.metadata == [1, 2]
+    assert cloned_td.metadata is not td.metadata
+
+    cloned_td.metadata.append(3)
+    assert td.metadata == [1, 2]
+    assert cloned_td.metadata == [1, 2, 3]

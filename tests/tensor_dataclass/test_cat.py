@@ -1,7 +1,8 @@
 import pytest
 import torch
-from rtd.tensor_dataclass import TensorDataclass
 from torch._dynamo import exc as dynamo_exc
+
+from rtd.tensor_dataclass import TensorDataclass
 from tests.tensor_dict.compile_utils import run_and_compare_compiled
 
 
@@ -249,3 +250,30 @@ def test_cat_compile():
         device=torch.device("cpu"),
     )
     run_and_compare_compiled(func, [data1, data2], 0)
+
+
+def test_cat_empty_list_raises():
+    """Test that torch.cat on an empty list raises a RuntimeError."""
+    with pytest.raises(RuntimeError, match="expected a non-empty list of Tensors"):
+        torch.cat([], dim=0)
+
+
+def test_cat_inconsistent_non_cat_dim_raises():
+    """
+    Test that torch.cat raises a ValueError for inconsistent non-cat dimensions.
+    """
+    td1 = CatTestClass(
+        shape=(2, 3),
+        device=torch.device("cpu"),
+        a=torch.randn(2, 3),
+        b=torch.randn(2, 3),
+    )
+    td2 = CatTestClass(
+        shape=(2, 4),  # Inconsistent dimension 1
+        device=torch.device("cpu"),
+        a=torch.randn(2, 4),
+        b=torch.randn(2, 4),
+    )
+
+    with pytest.raises(ValueError, match="Node context mismatch"):
+        torch.cat([td1, td2], dim=0)  # Concatenating along dimension 0

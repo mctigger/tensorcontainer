@@ -1,14 +1,12 @@
 import torch
-from dataclasses import dataclass
+
 from rtd.tensor_dataclass import TensorDataclass
 
 
 def test_subclassing_of_subclass():
-    @dataclass
     class A(TensorDataclass):
         x: torch.Tensor
 
-    @dataclass
     class B(A):
         new_attribute: str
 
@@ -38,11 +36,9 @@ def test_subclassing_of_subclass():
 
 
 def test_subclass_with_tensor_attribute():
-    @dataclass
     class A(TensorDataclass):
         x: torch.Tensor
 
-    @dataclass
     class B(A):
         y: torch.Tensor  # New tensor attribute
 

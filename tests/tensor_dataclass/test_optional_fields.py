@@ -1,13 +1,13 @@
+import dataclasses
+from typing import List, Optional
+
 import pytest
 import torch
-from typing import Optional, List
-import dataclasses
 
 from rtd.tensor_dataclass import TensorDataclass
 
 
 # Define a TensorDataclass with Optional and default_factory fields for testing
-@dataclasses.dataclass(kw_only=True)
 class MyOptionalData(TensorDataclass):
     # Dynamic tensor field
     obs: torch.Tensor
