@@ -1,106 +1,112 @@
 from typing import Optional
 
 import pytest
-
 import torch
 
 from rtd.tensor_dataclass import TensorDataclass
 from tests.conftest import skipif_no_compile
+from tests.tensor_dataclass.conftest import assert_device_consistency
 
 
-class DeviceTestClass(TensorDataclass):
-    # Parent class required fields (no defaults)
-    device: Optional[torch.device]
-    shape: tuple
+class TestDevice:
+    """Test class for device-related functionality."""
 
-    # Instance tensor fields
-    a: torch.Tensor
-    b: torch.Tensor
+    @pytest.mark.parametrize("compile_mode", [False, True])
+    def test_device_propagation(self, cuda_device_test_instance, compile_mode):
+        """Test that device is properly propagated to all tensor fields."""
+        if compile_mode:
+            pytest.importorskip("torch", minversion="2.0")
+            if not torch.cuda.is_available():
+                pytest.skip("CUDA not available")
 
-    # Optional field with default
-    meta: int = 42
+        td = cuda_device_test_instance
 
+        if compile_mode:
+            # Test with compiled function
+            def get_device_info(tensor_data):
+                return tensor_data.device, tensor_data.a.device, tensor_data.b.device
 
-def test_device_propagation():
-    td = DeviceTestClass(
-        a=torch.randn(2, 3, device=torch.device("cuda")),
-        b=torch.ones(2, 3, device=torch.device("cuda")),
-        shape=(2, 3),
-        device=torch.device("cuda"),
-    )
+            compiled_fn = torch.compile(get_device_info, fullgraph=True)
+            device, a_device, b_device = compiled_fn(td)
 
-    assert td.device is not None
-    assert td.device.type == "cuda"
-    assert td.a.device.type == "cuda"
-    assert td.b.device.type == "cuda"
+            assert device is not None
+            assert device.type == "cuda"
+            assert a_device.type == "cuda"
+            assert b_device.type == "cuda"
+        else:
+            assert_device_consistency(td, torch.device("cuda"))
 
+    @pytest.mark.parametrize("compile_mode", [False, True])
+    def test_to_device(self, device_test_instance, compile_mode):
+        """Test moving tensor dataclass to different device."""
+        if compile_mode:
+            pytest.importorskip("torch", minversion="2.0")
+            if not torch.cuda.is_available():
+                pytest.skip("CUDA not available")
 
-def test_to_device():
-    td = DeviceTestClass(
-        device=torch.device("cpu"),
-        shape=(2, 3),
-        a=torch.randn(2, 3),
-        b=torch.ones(2, 3),
-    ).to(torch.device("cuda"))
+        td = device_test_instance.to(torch.device("cuda"))
 
-    assert td.device is not None
-    assert td.device.type == "cuda"
-    assert td.a.device.type == "cuda"
-    assert td.b.device.type == "cuda"
+        if compile_mode:
 
+            def get_device_info(tensor_data):
+                return tensor_data.device, tensor_data.a.device, tensor_data.b.device
 
-def test_device_consistency_check():
-    with pytest.raises(ValueError):
-        DeviceTestClass(
-            a=torch.randn(2, 3, device=torch.device("cuda")),
-            b=torch.ones(2, 3),
-            shape=(2, 3),
-            device=torch.device("cpu"),
-        )
+            compiled_fn = torch.compile(get_device_info, fullgraph=True)
+            device, a_device, b_device = compiled_fn(td)
 
+            assert device is not None
+            assert device.type == "cuda"
+            assert a_device.type == "cuda"
+            assert b_device.type == "cuda"
+        else:
+            assert_device_consistency(td, torch.device("cuda"))
 
-@skipif_no_compile
-@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
-def test_device_compile():
-    def device_fn(td):
-        return td.to("cuda")
+    def test_device_consistency_check(self, device_test_instance):
+        """Test that device consistency validation catches mismatches."""
+        from tests.tensor_dataclass.conftest import DeviceTestClass
 
-    td = DeviceTestClass(
-        a=torch.randn(2, 3),
-        b=torch.ones(2, 3),
-        shape=(2, 3),
-        device=torch.device("cpu"),
-    )
+        with pytest.raises(ValueError):
+            DeviceTestClass(
+                a=torch.randn(2, 3, device=torch.device("cuda")),
+                b=torch.ones(2, 3),
+                shape=(2, 3),
+                device=torch.device("cpu"),
+            )
 
-    compiled_fn = torch.compile(device_fn, fullgraph=True)
-    result = compiled_fn(td)
+    @skipif_no_compile
+    @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
+    def test_device_compile(self, device_test_instance):
+        """Test device operations work with torch.compile."""
 
-    assert result.device is not None
-    assert result.device.type == "cuda"
-    assert result.a.device.type == "cuda"
+        def device_fn(td):
+            return td.to("cuda")
 
+        compiled_fn = torch.compile(device_fn, fullgraph=True)
+        result = compiled_fn(device_test_instance)
 
-@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
-def test_nested_device_mismatch_raises():
-    """Test that device validation catches mismatches in nested TensorDataclasses."""
+        assert_device_consistency(result, torch.device("cuda"))
 
-    class Inner(TensorDataclass):
-        shape: tuple
-        device: Optional[torch.device]
-        c: torch.Tensor
+    @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
+    def test_nested_device_mismatch_raises(self):
+        """Test that device validation catches mismatches in nested TensorDataclasses."""
 
-    class Outer(TensorDataclass):
-        shape: tuple
-        device: Optional[torch.device]
-        inner: Inner
+        class Inner(TensorDataclass):
+            shape: tuple
+            device: Optional[torch.device]
+            c: torch.Tensor
 
-    with pytest.raises(ValueError, match="Device mismatch"):
-        Outer(
-            shape=(2,),
-            device=torch.device("cpu"),
-            inner=Inner(
+        class Outer(TensorDataclass):
+            shape: tuple
+            device: Optional[torch.device]
+            inner: Inner
+
+        with pytest.raises(ValueError, match="Device mismatch"):
+            Outer(
                 shape=(2,),
-                device=torch.device("cuda"),
-                c=torch.randn(2, device="cuda"),
-            ),
-        )
+                device=torch.device("cpu"),
+                inner=Inner(
+                    shape=(2,),
+                    device=torch.device("cuda"),
+                    c=torch.randn(2, device="cuda"),
+                ),
+            )

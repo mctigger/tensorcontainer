@@ -4,98 +4,62 @@ import pytest
 import torch
 
 from rtd.tensor_dataclass import TensorDataclass
+from tests.tensor_dataclass.conftest import (
+    CloneTestClass,
+    assert_tensor_equal_and_different_objects,
+    create_nested_tensor_dataclass,
+)
+from tests.conftest import skipif_no_compile
 
 
-class CloneTestClass(TensorDataclass):
-    a: torch.Tensor
-    b: torch.Tensor
-    meta: int = 42
-
-
-@pytest.mark.skipif_no_compile
 class TestClone:
-    def test_basic_clone(self):
+    @pytest.mark.parametrize("requires_grad", [True, False])
+    def test_basic_clone(self, clone_test_instance, requires_grad):
         """Test that clone creates a new instance with copied tensors."""
-        td = CloneTestClass(
-            a=torch.randn(2, 3, requires_grad=True),
-            b=torch.ones(2, 3, requires_grad=True),
-            shape=(2, 3),
-            device=torch.device("cpu"),
-        )
-        cloned_td = td.clone()
+        # Modify the fixture instance to test both grad scenarios
+        if not requires_grad:
+            clone_test_instance.a.requires_grad_(False)
+            clone_test_instance.b.requires_grad_(False)
+
+        cloned_td = clone_test_instance.clone()
 
         # Check that it's a new instance
-        assert cloned_td is not td
-        assert cloned_td.a is not td.a
-        assert cloned_td.b is not td.b
+        assert cloned_td is not clone_test_instance
+        assert cloned_td.a is not clone_test_instance.a
+        assert cloned_td.b is not clone_test_instance.b
 
-        # Check that data is equal
-        assert torch.equal(cloned_td.a, td.a)
-        assert torch.equal(cloned_td.b, td.b)
+        # Check that data is equal but objects are different
+        assert_tensor_equal_and_different_objects(cloned_td.a, clone_test_instance.a)
+        assert_tensor_equal_and_different_objects(cloned_td.b, clone_test_instance.b)
 
         # Check that requires_grad is preserved
-        assert cloned_td.a.requires_grad == td.a.requires_grad
-        assert cloned_td.b.requires_grad == td.b.requires_grad
+        assert cloned_td.a.requires_grad == clone_test_instance.a.requires_grad
+        assert cloned_td.b.requires_grad == clone_test_instance.b.requires_grad
 
         # Check non-tensor fields are copied
-        assert cloned_td.meta == td.meta
+        assert cloned_td.meta == clone_test_instance.meta
 
         # Modify original and check cloned is unchanged
-        td.a = torch.zeros_like(td.a)
-        assert not torch.equal(cloned_td.a, td.a)
-
-    def test_clone_no_grad(self):
-        """Test clone with tensors not requiring gradients."""
-        td = CloneTestClass(
-            a=torch.randn(2, 3, requires_grad=False),
-            b=torch.ones(2, 3, requires_grad=False),
-            shape=(2, 3),
-            device=torch.device("cpu"),
-        )
-        cloned_td = td.clone()
-
-        assert not cloned_td.a.requires_grad
-        assert not cloned_td.b.requires_grad
-        assert torch.equal(cloned_td.a, td.a)
-        assert torch.equal(cloned_td.b, td.b)
+        original_a = clone_test_instance.a.clone()
+        clone_test_instance.a = torch.zeros_like(clone_test_instance.a)
+        assert torch.equal(cloned_td.a, original_a)
+        assert not torch.equal(cloned_td.a, clone_test_instance.a)
 
     def test_clone_nested(self):
         """Test clone with nested TensorDataclass instances."""
+        outer, inner = create_nested_tensor_dataclass()
+        cloned_outer = outer.clone()
 
-        class NestedCloneTestClass(TensorDataclass):
-            shape: tuple
-            device: Optional[torch.device]
-            c: torch.Tensor
+        # Check that all objects are different
+        assert cloned_outer is not outer
+        assert cloned_outer.inner is not outer.inner  # type: ignore
+        assert cloned_outer.inner.c is not outer.inner.c  # type: ignore
 
-        td_nested = NestedCloneTestClass(
-            c=torch.randn(2, 3, requires_grad=True),
-            shape=(2, 3),
-            device=torch.device("cpu"),
-        )
+        # Check that data is equal but objects are different
+        assert_tensor_equal_and_different_objects(cloned_outer.inner.c, outer.inner.c)  # type: ignore
 
-        class CloneWithNested(TensorDataclass):
-            a: torch.Tensor
-            b: NestedCloneTestClass
-            meta: int = 42
-
-        td = CloneWithNested(
-            a=torch.randn(2, 3, requires_grad=True),
-            b=td_nested,
-            shape=(2, 3),
-            device=torch.device("cpu"),
-        )
-        cloned_td = td.clone()
-
-        assert cloned_td is not td
-        assert cloned_td.a is not td.a
-        assert cloned_td.b is not td.b
-        assert cloned_td.b.c is not td.b.c
-
-        assert torch.equal(cloned_td.a, td.a)
-        assert torch.equal(cloned_td.b.c, td.b.c)
-
-        assert cloned_td.a.requires_grad == td.a.requires_grad
-        assert cloned_td.b.c.requires_grad == td.b.c.requires_grad
+        # Check that requires_grad is preserved
+        assert cloned_outer.inner.c.requires_grad == outer.inner.c.requires_grad  # type: ignore
 
     def test_clone_empty_dataclass(self):
         """Test cloning an empty TensorDataclass."""
@@ -122,14 +86,15 @@ class TestClone:
         )
         cloned_td = td.clone()
 
-        assert cloned_td.a.device.type == "cuda"
-        assert cloned_td.b.device.type == "cuda"
-        assert cloned_td.device.type == "cuda"
-        assert torch.equal(cloned_td.a, td.a)
-        assert torch.equal(cloned_td.b, td.b)
-        assert cloned_td.a.requires_grad == td.a.requires_grad
-        assert cloned_td.b.requires_grad == td.b.requires_grad
+        assert cloned_td.a.device.type == "cuda"  # type: ignore
+        assert cloned_td.b.device.type == "cuda"  # type: ignore
+        assert cloned_td.device.type == "cuda"  # type: ignore
+        assert_tensor_equal_and_different_objects(cloned_td.a, td.a)  # type: ignore
+        assert_tensor_equal_and_different_objects(cloned_td.b, td.b)  # type: ignore
+        assert cloned_td.a.requires_grad == td.a.requires_grad  # type: ignore
+        assert cloned_td.b.requires_grad == td.b.requires_grad  # type: ignore
 
+    @skipif_no_compile
     def test_clone_compile(self):
         """Tests that a function using TensorDataclass.clone() can be torch.compiled."""
         from tests.tensor_dict.compile_utils import run_and_compare_compiled
@@ -141,7 +106,7 @@ class TestClone:
             y: torch.Tensor
 
         def func(td: MyData) -> MyData:
-            return td.clone()
+            return td.clone()  # type: ignore
 
         data = MyData(
             x=torch.ones(3, 4),
@@ -151,27 +116,26 @@ class TestClone:
         )
         run_and_compare_compiled(func, data)
 
+    def test_clone_mutable_metadata(self):
+        """Test that clone() deepcopies mutable metadata."""
 
-def test_clone_mutable_metadata():
-    """Test that clone() deepcopies mutable metadata."""
+        class MutableMetadata(TensorDataclass):
+            shape: tuple
+            device: Optional[torch.device]
+            a: torch.Tensor
+            metadata: list
 
-    class MutableMetadata(TensorDataclass):
-        shape: tuple
-        device: Optional[torch.device]
-        a: torch.Tensor
-        metadata: list
+        td = MutableMetadata(
+            shape=(2,),
+            device=torch.device("cpu"),
+            a=torch.randn(2),
+            metadata=[1, 2],
+        )
 
-    td = MutableMetadata(
-        shape=(2,),
-        device=torch.device("cpu"),
-        a=torch.randn(2),
-        metadata=[1, 2],
-    )
+        cloned_td = td.clone()
+        assert cloned_td.metadata == [1, 2]  # type: ignore
+        assert cloned_td.metadata is not td.metadata  # type: ignore
 
-    cloned_td = td.clone()
-    assert cloned_td.metadata == [1, 2]
-    assert cloned_td.metadata is not td.metadata
-
-    cloned_td.metadata.append(3)
-    assert td.metadata == [1, 2]
-    assert cloned_td.metadata == [1, 2, 3]
+        cloned_td.metadata.append(3)  # type: ignore
+        assert td.metadata == [1, 2]  # type: ignore
+        assert cloned_td.metadata == [1, 2, 3]  # type: ignore

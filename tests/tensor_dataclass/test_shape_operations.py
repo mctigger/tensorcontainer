@@ -1,128 +1,156 @@
 from typing import Optional
 
 import pytest
-
 import torch
 
 from rtd.tensor_dataclass import TensorDataclass
 from tests.conftest import skipif_no_compile
-
-
-class ShapeTestClass(TensorDataclass):
-    shape: tuple
-    device: Optional[torch.device]
-    a: torch.Tensor
-    b: torch.Tensor
-    meta: int = 42
+from tests.tensor_dataclass.conftest import (
+    ShapeTestClass,
+    assert_shape_consistency,
+)
 
 
 # Note: The view and reshape tests have been moved to test_view_reshape.py
 # This file now focuses on shape inference and other shape-related operations
 
 
-def test_shape_inference_on_unflatten():
-    original = ShapeTestClass(
-        shape=(2, 5),
-        device=torch.device("cpu"),
-        a=torch.randn(2, 5),
-        b=torch.ones(2, 5),
-    )
+class TestShapeOperations:
+    """Test suite for shape-related operations on TensorDataclass instances."""
 
-    # Flatten and modify leaves
-    leaves, context = original._pytree_flatten()
-    modified_leaves = [t * 2 for t in leaves]
+    def test_shape_inference_on_unflatten(self, shape_test_instance):
+        """Test that shape is correctly inferred during pytree unflatten operations."""
+        original = shape_test_instance
 
-    # Reconstruct with original context
-    reconstructed = ShapeTestClass._pytree_unflatten(modified_leaves, context)
-    assert reconstructed.shape == (2, 5)
-    assert reconstructed.a.shape == (2, 5)
+        # Flatten and modify leaves
+        leaves, context = original._pytree_flatten()
+        modified_leaves = [t * 2 for t in leaves]
 
+        # Reconstruct with original context
+        reconstructed = ShapeTestClass._pytree_unflatten(modified_leaves, context)
+        assert_shape_consistency(reconstructed, original.shape)
 
-def test_invalid_shape_raises():
-    td = ShapeTestClass(
-        shape=(4, 5),
-        device=torch.device("cpu"),
-        a=torch.randn(4, 5),
-        b=torch.ones(4, 5),
-    )
+    def test_invalid_shape_raises(self, shape_test_instance):
+        """Test that invalid shape operations raise appropriate errors."""
+        td = shape_test_instance
 
-    with pytest.raises(RuntimeError):
-        td.view(21)  # Invalid size
+        with pytest.raises(RuntimeError):
+            td.view(21)  # Invalid size for (4, 5) -> 20 elements
 
+    @skipif_no_compile
+    def test_shape_compile(self, shape_test_instance):
+        """Test that shape operations work correctly with torch.compile."""
+        td = shape_test_instance
 
-@skipif_no_compile
-def test_shape_compile():
-    td = ShapeTestClass(
-        shape=(4, 5),
-        device=torch.device("cpu"),
-        a=torch.randn(4, 5),
-        b=torch.ones(4, 5),
-    )
+        def view_fn(td_input):
+            return td_input.view(20)
 
-    def view_fn(td):
-        return td.view(20)
+        compiled_fn = torch.compile(view_fn, fullgraph=True)
+        result = compiled_fn(td)
 
-    compiled_fn = torch.compile(view_fn, fullgraph=True)
-    result = compiled_fn(td)
+        assert result.shape == (20,)
+        assert result.a.shape == (20,)
 
-    assert result.shape == (20,)
-    assert result.a.shape == (20,)
-
-
-def test_zero_sized_batch():
-    """Test initialization and operations with a batch size of 0."""
-    td = ShapeTestClass(
-        shape=(0, 10),
-        device=torch.device("cpu"),
-        a=torch.randn(0, 10),
-        b=torch.randn(0, 10),
-    )
-
-    assert td.shape == (0, 10)
-    assert td.a.shape == (0, 10)
-    assert td.b.shape == (0, 10)
-
-    # Test clone
-    cloned_td = td.clone()
-    assert cloned_td.shape == (0, 10)
-    assert torch.equal(cloned_td.a, td.a)
-
-    # Test stack
-    stacked_td = torch.stack([td, td], dim=0)
-    assert stacked_td.shape == (2, 0, 10)
-
-
-def test_inconsistent_trailing_shapes():
-    """Test initialization with tensors that have different trailing shapes."""
-    try:
+    def test_zero_sized_batch(self):
+        """Test initialization and operations with a batch size of 0."""
         td = ShapeTestClass(
-            shape=(4,),
+            shape=(0, 10),
             device=torch.device("cpu"),
-            a=torch.randn(4, 10),
-            b=torch.randn(4, 5),  # Different trailing dimension
+            a=torch.randn(0, 10),
+            b=torch.randn(0, 10),
         )
-        assert td.shape == (4,)
-        assert td.a.shape == (4, 10)
-        assert td.b.shape == (4, 5)
-    except ValueError:
-        pytest.fail("Initialization failed with inconsistent trailing shapes.")
 
+        assert_shape_consistency(td, (0, 10))
 
-def test_no_tensor_fields():
-    """Test a TensorDataclass with no tensor fields."""
+        # Test clone
+        cloned_td = td.clone()
+        assert isinstance(cloned_td, ShapeTestClass)
+        assert_shape_consistency(cloned_td, (0, 10))
+        assert torch.equal(cloned_td.a, td.a)
+        assert cloned_td.a is not td.a
 
-    class NoTensorData(TensorDataclass):
-        shape: tuple
-        device: Optional[torch.device]
-        meta: str
+        # Test stack
+        stacked_td = torch.stack([td, td], dim=0)  # type: ignore
+        assert isinstance(stacked_td, ShapeTestClass)
+        assert_shape_consistency(stacked_td, (2, 0, 10))
 
-    # Initialization
-    td = NoTensorData(shape=(2, 3), device=torch.device("cpu"), meta="test")
-    assert td.shape == (2, 3)
-    assert td.device == torch.device("cpu")
-    assert td.meta == "test"
+    def test_inconsistent_trailing_shapes(self):
+        """Test initialization with tensors that have different trailing shapes."""
+        try:
+            td = ShapeTestClass(
+                shape=(4,),
+                device=torch.device("cpu"),
+                a=torch.randn(4, 10),
+                b=torch.randn(4, 5),  # Different trailing dimension
+            )
+            assert td.shape == (4,)
+            assert td.a.shape == (4, 10)
+            assert td.b.shape == (4, 5)
+        except ValueError:
+            pytest.fail("Initialization failed with inconsistent trailing shapes.")
 
-    # Clone
-    cloned_td = td.clone()
-    assert cloned_td.shape == (2, 3)
-    assert cloned_td.meta == "test"
+    def test_no_tensor_fields(self):
+        """Test a TensorDataclass with no tensor fields."""
+
+        class NoTensorData(TensorDataclass):
+            shape: tuple
+            device: Optional[torch.device]
+            meta: str
+
+        # Initialization
+        td = NoTensorData(shape=(2, 3), device=torch.device("cpu"), meta="test")
+        assert td.shape == (2, 3)
+        assert td.device == torch.device("cpu")
+        assert td.meta == "test"
+
+        # Clone
+        cloned_td = td.clone()
+        assert isinstance(cloned_td, NoTensorData)
+        assert cloned_td.shape == (2, 3)
+        assert cloned_td.meta == "test"
+
+    @pytest.mark.parametrize(
+        "original_shape,expected_elements",
+        [
+            ((2, 3), 6),
+            ((4, 5), 20),
+            ((1, 10), 10),
+            ((3, 2, 2), 12),
+        ],
+    )
+    def test_shape_numel_consistency(self, original_shape, expected_elements):
+        """Test that shape and tensor element count are consistent."""
+        td = ShapeTestClass(
+            shape=original_shape,
+            device=torch.device("cpu"),
+            a=torch.randn(original_shape),
+            b=torch.ones(original_shape),
+        )
+
+        assert td.a.numel() == expected_elements
+        assert td.b.numel() == expected_elements
+
+    @skipif_no_compile
+    @pytest.mark.parametrize(
+        "original_shape,view_shape",
+        [
+            ((2, 3), (6,)),
+            ((4, 5), (20,)),
+            ((2, 2, 3), (4, 3)),
+        ],
+    )
+    def test_shape_view_compile(self, original_shape, view_shape):
+        """Test that view operations work correctly with torch.compile."""
+        from tests.tensor_dict.compile_utils import run_and_compare_compiled
+
+        td = ShapeTestClass(
+            shape=original_shape,
+            device=torch.device("cpu"),
+            a=torch.randn(original_shape),
+            b=torch.ones(original_shape),
+        )
+
+        def view_fn(td_input):
+            return td_input.view(*view_shape)
+
+        run_and_compare_compiled(view_fn, td)

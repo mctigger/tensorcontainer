@@ -4,114 +4,140 @@ import pytest
 import torch
 
 from rtd.tensor_dataclass import TensorDataclass
+from tests.conftest import skipif_no_compile
+from tests.tensor_dataclass.conftest import DeviceTestClass
 
 
-class ExpandTestClass(TensorDataclass):
-    shape: tuple
-    device: Optional[torch.device]
-    a: torch.Tensor
-    b: torch.Tensor
-    meta: int = 42
-
-
-@pytest.mark.skipif_no_compile
 class TestExpand:
-    def test_basic_expand(self):
-        """Test basic expansion of a TensorDataclass."""
-        td = ExpandTestClass(
-            a=torch.randn(2, 1),
-            b=torch.ones(2, 1),
-            shape=(2, 1),
-            device=torch.device("cpu"),
-        )
-        expanded_td = td.expand(2, 3)
+    """Test class for TensorDataclass expand functionality."""
 
-        assert expanded_td.shape == (2, 3)
-        assert expanded_td.a.shape == (2, 3)
-        assert expanded_td.b.shape == (2, 3)
+    @pytest.mark.parametrize("execution_mode", ["eager", "compiled"])
+    @pytest.mark.parametrize(
+        "expand_shape,original_shape,expected_shape",
+        [
+            # Basic expansion
+            ((2, 3), (2, 1), (2, 3)),
+            # Scalar expansion
+            ((2, 3), (), (2, 3)),
+            # Multi-dimensional expansion
+            ((3, 2, 4), (1, 2, 1), (3, 2, 4)),
+            # Keep some dimensions unchanged with -1
+            ((-1, 5), (2, 1), (2, 5)),
+        ],
+    )
+    def test_expand_basic(
+        self, execution_mode, expand_shape, original_shape, expected_shape
+    ):
+        """Test basic expansion of a TensorDataclass."""
+        if execution_mode == "compiled":
+            pytest.importorskip("torch", minversion="2.0")
+
+        # Create test instance with the specified original shape
+        if original_shape == ():
+            # Scalar case
+            td = DeviceTestClass(
+                a=torch.tensor(1.0),
+                b=torch.tensor(2.0),
+                shape=original_shape,
+                device=torch.device("cpu"),
+            )
+        else:
+            td = DeviceTestClass(
+                a=torch.randn(original_shape),
+                b=torch.ones(original_shape),
+                shape=original_shape,
+                device=torch.device("cpu"),
+            )
+
+        def expand_func(td_input):
+            return td_input.expand(*expand_shape)
+
+        if execution_mode == "compiled":
+            expand_func = torch.compile(expand_func)
+
+        expanded_td = expand_func(td)
+
+        assert expanded_td.shape == expected_shape
+        assert expanded_td.a.shape == expected_shape
+        assert expanded_td.b.shape == expected_shape
         assert expanded_td.meta == 42
 
-        # Check that data is expanded correctly (values should be broadcasted)
-        assert torch.equal(expanded_td.a[:, 0], td.a.squeeze(-1))
-        assert torch.equal(expanded_td.a[:, 1], td.a.squeeze(-1))
-        assert torch.equal(expanded_td.a[:, 2], td.a.squeeze(-1))
+        # Check that data is expanded correctly for non-scalar cases
+        if original_shape != ():
+            # For basic expansion, verify broadcasting worked correctly
+            if expand_shape == (2, 3) and original_shape == (2, 1):
+                assert torch.equal(expanded_td.a[:, 0], td.a.squeeze(-1))
+                assert torch.equal(expanded_td.a[:, 1], td.a.squeeze(-1))
+                assert torch.equal(expanded_td.a[:, 2], td.a.squeeze(-1))
+        else:
+            # For scalar expansion, check values are broadcasted
+            if expand_shape == (2, 3):
+                assert torch.equal(expanded_td.a, torch.full((2, 3), 1.0))
+                assert torch.equal(expanded_td.b, torch.full((2, 3), 2.0))
 
-    def test_expand_with_negative_one(self):
-        """Test expansion using -1 to keep original dimension size."""
-        td = ExpandTestClass(
-            a=torch.randn(2, 3),
-            b=torch.ones(2, 3),
-            shape=(2, 3),
-            device=torch.device("cpu"),
-        )
-        # Create a new tensor with the first dimension expanded
-        a_expanded = torch.cat([td.a, td.a[:, :2]], dim=1)
-        b_expanded = torch.cat([td.b, td.b[:, :2]], dim=1)
-
-        # Create a new TensorDataclass with the expanded tensors
-        expanded_td = ExpandTestClass(
-            a=a_expanded,
-            b=b_expanded,
-            shape=(2, 5),
-            device=torch.device("cpu"),
-        )
-
-        assert expanded_td.shape == (2, 5)
-        assert expanded_td.a.shape == (2, 5)
-        assert expanded_td.b.shape == (2, 5)
-
-        # Check that data is expanded correctly
-        assert torch.equal(expanded_td.a[:, :3], td.a)
-        assert torch.equal(expanded_td.b[:, :3], td.b)
-
-    def test_expand_scalar(self):
-        """Test expanding a scalar TensorDataclass."""
-        td = ExpandTestClass(
-            a=torch.tensor(1.0),
-            b=torch.tensor(2.0),
-            shape=(),
-            device=torch.device("cpu"),
-        )
-        expanded_td = td.expand(2, 3)
-
-        assert expanded_td.shape == (2, 3)
-        assert expanded_td.a.shape == (2, 3)
-        assert expanded_td.b.shape == (2, 3)
-        assert torch.equal(expanded_td.a, torch.full((2, 3), 1.0))
-        assert torch.equal(expanded_td.b, torch.full((2, 3), 2.0))
-
-    def test_expand_invalid_args_raises(self):
+    @pytest.mark.parametrize("execution_mode", ["eager", "compiled"])
+    @pytest.mark.parametrize(
+        "invalid_expand_shape,original_shape",
+        [
+            # Cannot expand dimension 0 from 2 to 4
+            ((4, 3), (2, 3)),
+            # Too many dimensions
+            ((2, 4, 5), (2, 3)),
+        ],
+    )
+    def test_expand_invalid_args_raises(
+        self, execution_mode, invalid_expand_shape, original_shape
+    ):
         """Test that invalid expand arguments raise RuntimeError."""
-        td = ExpandTestClass(
-            a=torch.randn(2, 3),
-            b=torch.ones(2, 3),
-            shape=(2, 3),
+        if execution_mode == "compiled":
+            pytest.importorskip("torch", minversion="2.0")
+
+        td = DeviceTestClass(
+            a=torch.randn(original_shape),
+            b=torch.ones(original_shape),
+            shape=original_shape,
             device=torch.device("cpu"),
         )
-        with pytest.raises(RuntimeError):
-            td.expand(4, 3)  # Cannot expand dimension 0 from 2 to 4
+
+        def expand_func(td_input):
+            return td_input.expand(*invalid_expand_shape)
+
+        if execution_mode == "compiled":
+            expand_func = torch.compile(expand_func)
 
         with pytest.raises(RuntimeError):
-            td.expand(2, 4, 5)  # Too many dimensions
+            expand_func(td)
 
+    @pytest.mark.parametrize("execution_mode", ["eager", "compiled"])
     @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
-    def test_expand_on_cuda(self):
+    def test_expand_on_cuda(self, execution_mode):
         """Test expanding a TensorDataclass on CUDA."""
-        td = ExpandTestClass(
+        if execution_mode == "compiled":
+            pytest.importorskip("torch", minversion="2.0")
+
+        td = DeviceTestClass(
             a=torch.randn(2, 1, device="cuda"),
             b=torch.ones(2, 1, device="cuda"),
             shape=(2, 1),
             device=torch.device("cuda"),
         )
-        expanded_td = td.expand(2, 3)
 
-        assert expanded_td.device.type == "cuda"
+        def expand_func(td_input):
+            return td_input.expand(2, 3)
+
+        if execution_mode == "compiled":
+            expand_func = torch.compile(expand_func)
+
+        expanded_td = expand_func(td)
+
+        assert expanded_td.device is not None and expanded_td.device.type == "cuda"
         assert expanded_td.a.device.type == "cuda"
         assert expanded_td.b.device.type == "cuda"
         assert expanded_td.shape == (2, 3)
         assert expanded_td.a.shape == (2, 3)
 
-    def test_expand_compile(self):
+    @skipif_no_compile
+    def test_expand_compile_integration(self):
         """Tests that a function using TensorDataclass.expand() can be torch.compiled."""
         from tests.tensor_dict.compile_utils import run_and_compare_compiled
 

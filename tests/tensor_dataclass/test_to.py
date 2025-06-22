@@ -1,129 +1,69 @@
+import pytest
 import torch
 
-from rtd.tensor_dataclass import TensorDataclass
+from .conftest import assert_device_consistency
 
 
-class ToTestClass(TensorDataclass):
-    # Parent class required fields (no defaults)
-    device: torch.device
-    shape: tuple
+class TestTo:
+    """Test .to() method functionality of TensorDataclass."""
 
-    # Tensor fields
-    a: torch.Tensor
-    b: torch.Tensor
+    def test_to_different_device(self, to_test_instance):
+        """Test moving TensorDataclass to a different device."""
+        td = to_test_instance
 
-    # Non-tensor field
-    meta: int = 42
+        # Move to CUDA if available
+        if torch.cuda.is_available():
+            td_cuda = td.to(torch.device("cuda"))
+            assert_device_consistency(td_cuda, torch.device("cuda"))
+        else:
+            # Move to a different CPU device
+            td_cpu1 = td.to(torch.device("cpu"))
+            assert_device_consistency(td_cpu1, torch.device("cpu"))
 
+    def test_to_same_device(self, to_test_instance):
+        """Test moving TensorDataclass to the same device."""
+        td = to_test_instance
 
-def test_to_different_device():
-    """Test moving TensorDataclass to a different device."""
-    td = ToTestClass(
-        a=torch.randn(2, 3, device=torch.device("cpu")),
-        b=torch.ones(2, 3, device=torch.device("cpu")),
-        shape=(2, 3),
-        device=torch.device("cpu"),
-    )
+        # Move to the same device
+        td_same = td.to(torch.device("cpu"))
+        assert_device_consistency(td_same, torch.device("cpu"))
 
-    # Move to CUDA if available
-    if torch.cuda.is_available():
-        td_cuda = td.to(torch.device("cuda"))
+    def test_to_with_dtype_change(self, to_test_instance):
+        """Test moving TensorDataclass with dtype change."""
+        td = to_test_instance
 
-        assert td_cuda.device.type == "cuda"
-        assert td_cuda.a.device.type == "cuda"
-        assert td_cuda.b.device.type == "cuda"
-    else:
-        # Move to a different CPU device
-        td_cpu1 = td.to(torch.device("cpu"))
-        assert td_cpu1.device.type == "cpu"
-        assert td_cpu1.a.device.type == "cpu"
-        assert td_cpu1.b.device.type == "cpu"
+        # Move to float64
+        td_double = td.to(dtype=torch.float64)
 
+        assert td_double.a.dtype == torch.float64
+        assert td_double.b.dtype == torch.float64
 
-def test_to_same_device():
-    """Test moving TensorDataclass to the same device."""
-    td = ToTestClass(
-        a=torch.randn(2, 3, device=torch.device("cpu")),
-        b=torch.ones(2, 3, device=torch.device("cpu")),
-        shape=(2, 3),
-        device=torch.device("cpu"),
-    )
+    @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
+    def test_to_with_non_blocking_and_memory_format(self, to_test_4d_instance):
+        """Test moving TensorDataclass with non_blocking and memory_format arguments."""
+        td = to_test_4d_instance
 
-    # Move to the same device
-    td_same = td.to(torch.device("cpu"))
-
-    assert td_same.device.type == "cpu"
-    assert td_same.a.device.type == "cpu"
-    assert td_same.b.device.type == "cpu"
-
-
-def test_to_with_dtype_change():
-    """Test moving TensorDataclass with dtype change."""
-    td = ToTestClass(
-        a=torch.randn(2, 3, dtype=torch.float32, device=torch.device("cpu")),
-        b=torch.ones(2, 3, dtype=torch.float32, device=torch.device("cpu")),
-        shape=(2, 3),
-        device=torch.device("cpu"),
-    )
-
-    # Move to float64
-    td_double = td.to(dtype=torch.float64)
-
-    assert td_double.a.dtype == torch.float64
-    assert td_double.b.dtype == torch.float64
-
-
-def test_to_with_non_blocking_and_memory_format():
-    """Test moving TensorDataclass with non_blocking and memory_format arguments."""
-    td = ToTestClass(
-        a=torch.randn(
-            2, 3, 4, 5, device=torch.device("cpu")
-        ),  # 4D tensor for channels_last
-        b=torch.ones(
-            2, 3, 4, 5, device=torch.device("cpu")
-        ),  # 4D tensor for channels_last
-        shape=(2, 3, 4, 5),
-        device=torch.device("cpu"),
-    )
-
-    # Move with non_blocking=True and channels_last memory format
-    if torch.cuda.is_available():
+        # Move with non_blocking=True and channels_last memory format
         td_non_blocking = td.to(
             torch.device("cuda"), non_blocking=True, memory_format=torch.channels_last
         )
 
-        assert td_non_blocking.device.type == "cuda"
+        assert_device_consistency(td_non_blocking, torch.device("cuda"))
         # Check if the tensor is in channels_last format by verifying its layout
-        # For channels_last format, the stride should be (1, C, H*W, W)
-        # Check if the tensor is in channels_last format by verifying its layout
-        # For channels_last format, the stride should be (1, C, H*W, W)
-        # Check if the tensor is contiguous (required for channels_last format)
         assert td_non_blocking.a.is_contiguous(memory_format=torch.channels_last)
         assert td_non_blocking.b.is_contiguous(memory_format=torch.channels_last)
 
+    def test_to_mixed_fields(self, to_test_instance):
+        """Test moving a TensorDataclass with mixed tensor and non-tensor fields."""
+        td = to_test_instance
 
-def test_to_mixed_fields():
-    """Test moving a TensorDataclass with mixed tensor and non-tensor fields."""
-    td = ToTestClass(
-        a=torch.randn(2, 3, device=torch.device("cpu")),
-        b=torch.ones(2, 3, device=torch.device("cpu")),
-        shape=(2, 3),
-        device=torch.device("cpu"),
-        meta=42,
-    )
-
-    # Move to CUDA if available
-    if torch.cuda.is_available():
-        td_cuda = td.to(torch.device("cuda"))
-
-        assert td_cuda.device.type == "cuda"
-        assert td_cuda.a.device.type == "cuda"
-        assert td_cuda.b.device.type == "cuda"
-        assert td_cuda.meta == 42  # Non-tensor field should remain unchanged
-    else:
-        # Move to a different CPU device
-        td_cpu1 = td.to(torch.device("cpu"))
-        assert td_cpu1.device.type == "cpu"
-        assert td_cpu1.a.device.type == "cpu"
-        assert td_cpu1.b.device.type == "cpu"
-        assert td_cpu1.meta == 42  # Non-tensor field should remain unchanged
+        # Move to CUDA if available
+        if torch.cuda.is_available():
+            td_cuda = td.to(torch.device("cuda"))
+            assert_device_consistency(td_cuda, torch.device("cuda"))
+            assert td_cuda.meta == 42  # Non-tensor field should remain unchanged
+        else:
+            # Move to a different CPU device
+            td_cpu1 = td.to(torch.device("cpu"))
+            assert_device_consistency(td_cpu1, torch.device("cpu"))
+            assert td_cpu1.meta == 42  # Non-tensor field should remain unchanged

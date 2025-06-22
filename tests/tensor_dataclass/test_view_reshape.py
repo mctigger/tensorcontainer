@@ -1,32 +1,16 @@
-from typing import Optional
-
 import pytest
-
 import torch
 from torch._dynamo import exc
 
 from tests.conftest import skipif_no_compile
 
-from rtd.tensor_dataclass import TensorDataclass
 
-
-class A(TensorDataclass):
-    shape: tuple
-    device: Optional[torch.device]
-    a: torch.Tensor
-    b: torch.Tensor
-
-
-# Parametrize test cases for both eager and compile modes
 class TestViewAndReshape:
-    def test_view_eager(self):
+    """Test view and reshape functionality of TensorDataclass."""
+
+    def test_view_eager(self, view_reshape_test_instance):
         """Test the view method of TensorDataclass."""
-        td = A(
-            a=torch.randn(4, 5),
-            b=torch.ones(4, 5),
-            shape=(4, 5),
-            device=torch.device("cpu"),
-        )
+        td = view_reshape_test_instance
 
         def view_fn(td):
             return td.view(20)
@@ -40,14 +24,9 @@ class TestViewAndReshape:
         assert torch.equal(result.b, td.b.view(20))
 
     @skipif_no_compile
-    def test_view_compile(self):
-        """Test the view method of TensorDataclass."""
-        td = A(
-            a=torch.randn(4, 5),
-            b=torch.ones(4, 5),
-            shape=(4, 5),
-            device=torch.device("cpu"),
-        )
+    def test_view_compile(self, view_reshape_test_instance):
+        """Test the view method of TensorDataclass with compilation."""
+        td = view_reshape_test_instance
 
         def view_fn(td):
             return td.view(20)
@@ -61,14 +40,9 @@ class TestViewAndReshape:
         assert torch.equal(result.a, td.a.view(20))
         assert torch.equal(result.b, td.b.view(20))
 
-    def test_reshape_eager(self):
+    def test_reshape_eager(self, view_reshape_test_instance_2x6):
         """Test the reshape method of TensorDataclass."""
-        td = A(
-            a=torch.randn(2, 6),
-            b=torch.ones(2, 6),
-            shape=(2, 6),
-            device=torch.device("cpu"),
-        )
+        td = view_reshape_test_instance_2x6
 
         def reshape_fn(td):
             return td.reshape(4, 3)
@@ -82,14 +56,9 @@ class TestViewAndReshape:
         assert torch.equal(result.b, td.b.reshape(4, 3))
 
     @skipif_no_compile
-    def test_reshape_compile(self):
-        """Test the reshape method of TensorDataclass."""
-        td = A(
-            a=torch.randn(2, 6),
-            b=torch.ones(2, 6),
-            shape=(2, 6),
-            device=torch.device("cpu"),
-        )
+    def test_reshape_compile(self, view_reshape_test_instance_2x6):
+        """Test the reshape method of TensorDataclass with compilation."""
+        td = view_reshape_test_instance_2x6
 
         def reshape_fn(td):
             return td.reshape(4, 3)
@@ -103,14 +72,9 @@ class TestViewAndReshape:
         assert torch.equal(result.a, td.a.reshape(4, 3))
         assert torch.equal(result.b, td.b.reshape(4, 3))
 
-    def test_invalid_view_raises_eager(self):
+    def test_invalid_view_raises_eager(self, view_reshape_test_instance):
         """Test that invalid view operations raise RuntimeError."""
-        td = A(
-            a=torch.randn(4, 5),
-            b=torch.ones(4, 5),
-            shape=(4, 5),
-            device=torch.device("cpu"),
-        )
+        td = view_reshape_test_instance
 
         def invalid_view_fn(td):
             return td.view(21)  # Invalid size
@@ -119,14 +83,9 @@ class TestViewAndReshape:
             invalid_view_fn(td)
 
     @skipif_no_compile
-    def test_invalid_view_raises_compile(self):
-        """Test that invalid view operations raise RuntimeError."""
-        td = A(
-            a=torch.randn(4, 5),
-            b=torch.ones(4, 5),
-            shape=(4, 5),
-            device=torch.device("cpu"),
-        )
+    def test_invalid_view_raises_compile(self, view_reshape_test_instance):
+        """Test that invalid view operations raise RuntimeError with compilation."""
+        td = view_reshape_test_instance
 
         def invalid_view_fn(td):
             return td.view(21)  # Invalid size
@@ -135,14 +94,9 @@ class TestViewAndReshape:
         with pytest.raises(RuntimeError):
             compiled_invalid_view(td)
 
-    def test_invalid_reshape_raises_eager(self):
+    def test_invalid_reshape_raises_eager(self, view_reshape_test_instance):
         """Test that invalid reshape operations raise RuntimeError."""
-        td = A(
-            a=torch.randn(4, 5),
-            b=torch.ones(4, 5),
-            shape=(4, 5),
-            device=torch.device("cpu"),
-        )
+        td = view_reshape_test_instance
 
         def invalid_reshape_fn(td):
             return td.reshape(3, 7)  # Invalid size
@@ -151,14 +105,9 @@ class TestViewAndReshape:
             invalid_reshape_fn(td)
 
     @skipif_no_compile
-    def test_invalid_reshape_raises_compile(self):
-        """Test that invalid reshape operations raise RuntimeError."""
-        td = A(
-            a=torch.randn(4, 5),
-            b=torch.ones(4, 5),
-            shape=(4, 5),
-            device=torch.device("cpu"),
-        )
+    def test_invalid_reshape_raises_compile(self, view_reshape_test_instance):
+        """Test that invalid reshape operations raise RuntimeError with compilation."""
+        td = view_reshape_test_instance
 
         def invalid_reshape_fn(td):
             return td.reshape(3, 7)  # Invalid size
@@ -167,14 +116,9 @@ class TestViewAndReshape:
         with pytest.raises(RuntimeError):
             compiled_invalid_reshape(td)
 
-    def test_view_reshape_eager(self):
-        """Test that view and reshape operations can be compiled."""
-        td = A(
-            a=torch.randn(4, 5),
-            b=torch.ones(4, 5),
-            shape=(4, 5),
-            device=torch.device("cpu"),
-        )
+    def test_view_reshape_eager(self, view_reshape_test_instance):
+        """Test that view and reshape operations work together."""
+        td = view_reshape_test_instance
 
         def view_reshape_fn(td):
             viewed = td.view(20)
@@ -190,14 +134,9 @@ class TestViewAndReshape:
         assert torch.equal(result.b, td.b)
 
     @skipif_no_compile
-    def test_view_reshape_compile(self):
+    def test_view_reshape_compile(self, view_reshape_test_instance):
         """Test that view and reshape operations can be compiled."""
-        td = A(
-            a=torch.randn(4, 5),
-            b=torch.ones(4, 5),
-            shape=(4, 5),
-            device=torch.device("cpu"),
-        )
+        td = view_reshape_test_instance
 
         def view_reshape_fn(td):
             viewed = td.view(20)
@@ -213,15 +152,9 @@ class TestViewAndReshape:
         assert torch.equal(result.a, td.a)
         assert torch.equal(result.b, td.b)
 
-    def test_non_contiguous_view_raises_eager(self):
+    def test_non_contiguous_view_raises_eager(self, view_reshape_test_instance_5x4):
         """Test that view() on non-contiguous tensor raises a RuntimeError."""
-        # Create a dataclass with a tensor that can be transposed
-        td_orig = A(
-            shape=(5, 4),
-            device=torch.device("cpu"),
-            a=torch.randn(5, 4),
-            b=torch.randn(5, 4),
-        )
+        td_orig = view_reshape_test_instance_5x4
 
         # Create a non-contiguous version by transposing
         td_non_contiguous = td_orig.transpose(0, 1)
@@ -234,15 +167,9 @@ class TestViewAndReshape:
             view_fn(td_non_contiguous)
 
     @skipif_no_compile
-    def test_non_contiguous_view_raises_compile(self):
-        """Test that view() on non-contiguous tensor raises a RuntimeError."""
-        # Create a dataclass with a tensor that can be transposed
-        td_orig = A(
-            shape=(5, 4),
-            device=torch.device("cpu"),
-            a=torch.randn(5, 4),
-            b=torch.randn(5, 4),
-        )
+    def test_non_contiguous_view_raises_compile(self, view_reshape_test_instance_5x4):
+        """Test that view() on non-contiguous tensor raises a RuntimeError with compilation."""
+        td_orig = view_reshape_test_instance_5x4
 
         # Create a non-contiguous version by transposing
         td_non_contiguous = td_orig.transpose(0, 1)

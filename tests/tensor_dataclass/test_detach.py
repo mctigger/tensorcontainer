@@ -1,36 +1,41 @@
 from typing import Optional
 
+import pytest
 import torch
 
-from src.rtd.tensor_dataclass import TensorDataclass
+from rtd.tensor_dataclass import TensorDataclass
+from tests.conftest import skipif_no_compile
+from tests.tensor_dataclass.conftest import SimpleTensorData
 
 
+@skipif_no_compile
 class TestDetach:
-    def test_basic_detach(self):
-        """Test that tensors are detached and still have the same data."""
+    """Test suite for detach operations on TensorDataclass instances."""
 
-        class TestClass(TensorDataclass):
-            shape: tuple
-            device: Optional[torch.device]
-            a: torch.Tensor
-            b: torch.Tensor
+    @staticmethod
+    def _detach_operation(tensor_dataclass_instance):
+        """Helper method for detach operations."""
+        return tensor_dataclass_instance.detach()
 
-        # Create instance with tensors
-        test_instance = TestClass(
-            shape=(3,),
-            device=torch.device("cpu"),
-            a=torch.tensor([1.0, 2.0, 3.0]),
-            b=torch.tensor([4.0, 5.0, 6.0]),
-        )
+    @pytest.mark.parametrize("compile_mode", [False, True])
+    def test_basic_detach(self, simple_tensor_data_instance, compile_mode):
+        """Test that tensors are detached and still have the same data in both eager and compile modes."""
+        if compile_mode:
+            pytest.importorskip("torch._dynamo", reason="Compilation not available")
 
-        # Detach the instance
-        detached_instance = test_instance.detach()
+        test_instance = simple_tensor_data_instance
+
+        if compile_mode:
+            compiled_detach = torch.compile(self._detach_operation, fullgraph=True)
+            detached_instance = compiled_detach(test_instance)
+        else:
+            detached_instance = self._detach_operation(test_instance)
 
         # Check that tensors are detached
         assert not detached_instance.a.requires_grad
         assert not detached_instance.b.requires_grad
 
-        # Check that original tensors still have gradients
+        # Check that original tensors still have gradients (should be False for fixture)
         assert test_instance.a.requires_grad == False
         assert test_instance.b.requires_grad == False
 
@@ -38,25 +43,25 @@ class TestDetach:
         assert torch.equal(detached_instance.a, test_instance.a)
         assert torch.equal(detached_instance.b, test_instance.b)
 
-    def test_detach_with_gradients(self):
-        """Test detach with tensors requiring gradients."""
-
-        class TestClass(TensorDataclass):
-            shape: tuple
-            device: Optional[torch.device]
-            a: torch.Tensor
-            b: torch.Tensor
+    @pytest.mark.parametrize("compile_mode", [False, True])
+    def test_detach_with_gradients(self, compile_mode):
+        """Test detach with tensors requiring gradients in both eager and compile modes."""
+        if compile_mode:
+            pytest.importorskip("torch._dynamo", reason="Compilation not available")
 
         # Create instance with tensors requiring gradients
-        test_instance = TestClass(
-            shape=(3,),
-            device=torch.device("cpu"),
+        test_instance = SimpleTensorData(
             a=torch.tensor([1.0, 2.0, 3.0], requires_grad=True),
             b=torch.tensor([4.0, 5.0, 6.0], requires_grad=True),
+            shape=(3,),
+            device=torch.device("cpu"),
         )
 
-        # Detach the instance
-        detached_instance = test_instance.detach()
+        if compile_mode:
+            compiled_detach = torch.compile(self._detach_operation, fullgraph=True)
+            detached_instance = compiled_detach(test_instance)
+        else:
+            detached_instance = self._detach_operation(test_instance)
 
         # Check that tensors are detached
         assert not detached_instance.a.requires_grad
@@ -70,8 +75,11 @@ class TestDetach:
         assert torch.equal(detached_instance.a, test_instance.a)
         assert torch.equal(detached_instance.b, test_instance.b)
 
-    def test_nested_detach(self):
-        """Test detach with nested TensorDataclass instances."""
+    @pytest.mark.parametrize("compile_mode", [False, True])
+    def test_nested_detach(self, compile_mode):
+        """Test detach with nested TensorDataclass instances in both eager and compile modes."""
+        if compile_mode:
+            pytest.importorskip("torch._dynamo", reason="Compilation not available")
 
         class NestedClass(TensorDataclass):
             shape: tuple
@@ -97,8 +105,11 @@ class TestDetach:
             b=nested,
         )
 
-        # Detach the instance
-        detached_instance = test_instance.detach()
+        if compile_mode:
+            compiled_detach = torch.compile(self._detach_operation, fullgraph=True)
+            detached_instance = compiled_detach(test_instance)
+        else:
+            detached_instance = self._detach_operation(test_instance)
 
         # Check that tensors are detached
         assert not detached_instance.a.requires_grad
@@ -112,8 +123,11 @@ class TestDetach:
         assert torch.equal(detached_instance.a, test_instance.a)
         assert torch.equal(detached_instance.b.c, test_instance.b.c)
 
-    def test_non_tensor_fields(self):
-        """Test that non-tensor fields are preserved."""
+    @pytest.mark.parametrize("compile_mode", [False, True])
+    def test_non_tensor_fields(self, compile_mode):
+        """Test that non-tensor fields are preserved in both eager and compile modes."""
+        if compile_mode:
+            pytest.importorskip("torch._dynamo", reason="Compilation not available")
 
         class TestClass(TensorDataclass):
             shape: tuple
@@ -131,8 +145,11 @@ class TestDetach:
             c="test",
         )
 
-        # Detach the instance
-        detached_instance = test_instance.detach()
+        if compile_mode:
+            compiled_detach = torch.compile(self._detach_operation, fullgraph=True)
+            detached_instance = compiled_detach(test_instance)
+        else:
+            detached_instance = self._detach_operation(test_instance)
 
         # Check that non-tensor fields are preserved
         assert detached_instance.b == 42

@@ -1,80 +1,98 @@
+import pytest
 import torch
 
 from rtd.tensor_dataclass import TensorDataclass
 
 
-def test_subclassing_of_subclass():
-    class A(TensorDataclass):
-        x: torch.Tensor
+class TestSubclassing:
+    """Test subclassing functionality of TensorDataclass."""
 
-    class B(A):
-        new_attribute: str
+    def test_subclassing_of_subclass(self):
+        """Test that subclasses of TensorDataclass subclasses work correctly."""
 
-    # Test instantiation of B
-    x_tensor = torch.randn(2, 3)
-    b_instance = B(
-        x=x_tensor, new_attribute="hello", shape=(2, 3), device=torch.device("cpu")
-    )
+        class A(TensorDataclass):
+            x: torch.Tensor
 
-    assert isinstance(b_instance, B)
-    assert isinstance(b_instance, A)
-    assert isinstance(b_instance, TensorDataclass)
+        class B(A):
+            new_attribute: str
 
-    assert torch.equal(b_instance.x, x_tensor)
-    assert b_instance.new_attribute == "hello"
-    assert b_instance.shape == (2, 3)
-    assert b_instance.device == torch.device("cpu")
+        # Test instantiation of B
+        x_tensor = torch.randn(2, 3)
+        b_instance = B(
+            x=x_tensor, new_attribute="hello", shape=(2, 3), device=torch.device("cpu")
+        )
 
-    # Test that methods from TensorDataclass are available
-    cloned_b = b_instance.clone()
-    assert isinstance(cloned_b, B)
-    assert torch.equal(cloned_b.x, b_instance.x)
-    assert cloned_b.new_attribute == b_instance.new_attribute
+        assert isinstance(b_instance, B)
+        assert isinstance(b_instance, A)
+        assert isinstance(b_instance, TensorDataclass)
 
-    # Test that B's attributes are correctly handled by TensorDataclass methods
-    assert cloned_b.new_attribute == "hello"
+        assert torch.equal(b_instance.x, x_tensor)
+        assert b_instance.new_attribute == "hello"
+        assert b_instance.shape == (2, 3)
+        assert b_instance.device == torch.device("cpu")
 
+        # Test that methods from TensorDataclass are available
+        cloned_b = b_instance.clone()
+        assert isinstance(cloned_b, B)
+        assert torch.equal(cloned_b.x, b_instance.x)
+        assert cloned_b.new_attribute == b_instance.new_attribute
 
-def test_subclass_with_tensor_attribute():
-    class A(TensorDataclass):
-        x: torch.Tensor
+        # Test that B's attributes are correctly handled by TensorDataclass methods
+        assert cloned_b.new_attribute == "hello"
 
-    class B(A):
-        y: torch.Tensor  # New tensor attribute
+    def test_subclass_with_tensor_attribute(self):
+        """Test subclass with additional tensor attributes."""
 
-    # Test instantiation of B
-    x_tensor = torch.randn(2, 3)
-    y_tensor = torch.ones(2, 3)
-    b_instance = B(x=x_tensor, y=y_tensor, shape=(2, 3), device=torch.device("cpu"))
+        class A(TensorDataclass):
+            x: torch.Tensor
 
-    assert isinstance(b_instance, B)
-    assert isinstance(b_instance, A)
-    assert isinstance(b_instance, TensorDataclass)
+        class B(A):
+            y: torch.Tensor  # New tensor attribute
 
-    assert torch.equal(b_instance.x, x_tensor)
-    assert torch.equal(b_instance.y, y_tensor)
-    assert b_instance.shape == (2, 3)
-    assert b_instance.device == torch.device("cpu")
+        # Test instantiation of B
+        x_tensor = torch.randn(2, 3)
+        y_tensor = torch.ones(2, 3)
+        b_instance = B(x=x_tensor, y=y_tensor, shape=(2, 3), device=torch.device("cpu"))
 
-    # Test that methods from TensorDataclass are available and handle the new tensor attribute
-    cloned_b = b_instance.clone()
-    assert isinstance(cloned_b, B)
-    assert torch.equal(cloned_b.x, b_instance.x)
-    assert torch.equal(cloned_b.y, b_instance.y)
-    assert cloned_b.x is not b_instance.x
-    assert cloned_b.y is not b_instance.y
+        assert isinstance(b_instance, B)
+        assert isinstance(b_instance, A)
+        assert isinstance(b_instance, TensorDataclass)
 
-    detached_b = b_instance.detach()
-    assert isinstance(detached_b, B)
-    assert not detached_b.x.requires_grad
-    assert not detached_b.y.requires_grad
-    assert torch.equal(detached_b.x, b_instance.x)
-    assert torch.equal(detached_b.y, b_instance.y)
+        assert torch.equal(b_instance.x, x_tensor)
+        assert torch.equal(b_instance.y, y_tensor)
+        assert b_instance.shape == (2, 3)
+        assert b_instance.device == torch.device("cpu")
 
-    to_cuda_b = (
-        b_instance.to(torch.device("cuda")) if torch.cuda.is_available() else b_instance
-    )
-    if torch.cuda.is_available():
-        assert to_cuda_b.device.type == "cuda"
+        # Test that methods from TensorDataclass are available and handle the new tensor attribute
+        cloned_b = b_instance.clone()
+        assert isinstance(cloned_b, B)
+        assert torch.equal(cloned_b.x, b_instance.x)
+        assert torch.equal(cloned_b.y, b_instance.y)
+        assert cloned_b.x is not b_instance.x
+        assert cloned_b.y is not b_instance.y
+
+        detached_b = b_instance.detach()
+        assert isinstance(detached_b, B)
+        assert not detached_b.x.requires_grad
+        assert not detached_b.y.requires_grad
+        assert torch.equal(detached_b.x, b_instance.x)
+        assert torch.equal(detached_b.y, b_instance.y)
+
+    @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
+    def test_subclass_cuda_operations(self):
+        """Test CUDA operations on subclassed TensorDataclass."""
+
+        class A(TensorDataclass):
+            x: torch.Tensor
+
+        class B(A):
+            y: torch.Tensor
+
+        x_tensor = torch.randn(2, 3)
+        y_tensor = torch.ones(2, 3)
+        b_instance = B(x=x_tensor, y=y_tensor, shape=(2, 3), device=torch.device("cpu"))
+
+        to_cuda_b = b_instance.to(torch.device("cuda"))
+        assert to_cuda_b.device is not None and to_cuda_b.device.type == "cuda"
         assert to_cuda_b.x.device.type == "cuda"
         assert to_cuda_b.y.device.type == "cuda"
