@@ -431,6 +431,31 @@ def create_nested_tensor_dataclass():
     return outer, inner
 
 
+@pytest.fixture
+def nested_tensor_data_instance():
+    """Returns a nested TensorDataclass instance."""
+    outer, _ = create_nested_tensor_dataclass()
+    return outer
+
+
+class CopyTestClass(TensorDataclass):
+    a: torch.Tensor
+    b: torch.Tensor
+    metadata: list
+
+
+@pytest.fixture
+def copy_test_instance():
+    """Returns a CopyTestClass instance with a list as metadata."""
+    return CopyTestClass(
+        a=torch.randn(3, 4),
+        b=torch.randn(3, 4),
+        metadata=[1, 2, 3],
+        shape=(3, 4),
+        device=torch.device("cpu"),
+    )
+
+
 # ============================================================================
 # ASSERTION HELPERS
 # ============================================================================
