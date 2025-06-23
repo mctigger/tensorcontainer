@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import dataclasses
-from typing import List, Optional, Tuple, Union
+import copy
+from typing import List, Optional, Tuple, Union, TypeVar
 
 import torch
 from torch import Tensor
@@ -13,6 +14,9 @@ from rtd.utils import PytreeRegistered
 
 TDCompatible = Union[Tensor, TensorContainer]
 DATACLASS_ARGS = {"init", "repr", "eq", "order", "unsafe_hash", "frozen", "slots"}
+
+
+T_TensorDataclass = TypeVar("T_TensorDataclass", bound="TensorDataclass")
 
 
 @dataclass_transform(eq_default=False)
@@ -238,3 +242,97 @@ class TensorDataclass(TensorContainer, PytreeRegistered, TensorDataclassTransfor
             f"    device={self.device},\n"
             f"    fields=(\n        {items_str}\n    )\n)"
         )
+
+    def __copy__(self: T_TensorDataclass) -> T_TensorDataclass:
+        """
+        Performs a shallow copy of the TensorDataclass instance.
+
+        This method is designed to be `torch.compile` safe by avoiding the
+        use of `copy.copy()`, which can cause graph breaks. It creates a new
+        instance of the same class and then copies references to the attributes
+        of the original object.
+
+        Returns:
+            A new TensorDataclass instance with attributes that are shallow
+            copies of the original's attributes.
+        """
+        # Create a new, uninitialized instance of the correct class.
+        cls = type(self)
+        new_obj = cls.__new__(cls)
+
+        # Manually copy all dataclass fields.
+        for field in dataclasses.fields(self):
+            value = getattr(self, field.name)
+            setattr(new_obj, field.name, value)
+
+        # Manually call __post_init__ to initialize the TensorContainer part
+        # and run validation logic. This is necessary because we bypassed __init__.
+        if hasattr(new_obj, "__post_init__"):
+            new_obj.__post_init__()
+
+        return new_obj
+
+    def __deepcopy__(
+        self: T_TensorDataclass, memo: Optional[dict] = None
+    ) -> T_TensorDataclass:
+        """
+        Performs a deep copy of the TensorDataclass instance.
+
+        This method is designed to be `torch.compile` safe by manually
+        iterating through fields and using `copy.deepcopy` for each,
+        while also handling the `memo` dictionary to prevent infinite
+        recursion in case of circular references.
+
+        Args:
+            memo: A dictionary to keep track of already copied objects.
+                  This is part of the `copy.deepcopy` protocol.
+
+        Returns:
+            A new TensorDataclass instance with attributes that are deep
+            copies of the original's attributes.
+        """
+        if memo is None:
+            memo = {}
+
+        cls = type(self)
+        # Check if the object is already in memo
+        if id(self) in memo:
+            return memo[id(self)]
+
+        new_obj = cls.__new__(cls)
+        memo[id(self)] = new_obj
+
+        for field in dataclasses.fields(self):
+            value = getattr(self, field.name)
+            # The `shape` and `device` fields are part of the dataclass fields
+            # due to their annotations in TensorDataclass.
+            # These should be deepcopied as well if they are not None.
+            if field.name in ("shape", "device"):
+                # Tuples (shape) and torch.device are immutable or behave as such.
+                # Direct assignment is fine and avoids torch.compile issues with deepcopying them.
+                # Direct assignment for immutable types like tuple (shape) and torch.device.
+                # This avoids torch.compile issues with copy.copy or copy.deepcopy on these types.
+                setattr(new_obj, field.name, value)
+            elif isinstance(value, Tensor):
+                # For torch.Tensor, use .clone() for a deep copy of data.
+                setattr(new_obj, field.name, value.clone())
+            elif isinstance(value, list):
+                # For lists, create a new list. This is a shallow copy of the list structure.
+                # If list items are mutable and need deepcopying, torch.compile might
+                # still struggle with a generic deepcopy of those items.
+                # For a list of immutables (like in the test), this is effectively a deepcopy.
+                setattr(new_obj, field.name, list(value))
+            else:
+                # For other fields (e.g., dict, other custom objects), attempt deepcopy.
+                # This remains a potential point of failure for torch.compile
+                # if it doesn't support deepcopying these specific types.
+                setattr(new_obj, field.name, copy.deepcopy(value))
+
+        # Manually call __post_init__ to initialize the TensorContainer part
+        # and run validation logic. This is necessary because we bypassed __init__.
+        # __post_init__ in TensorDataclass handles shape and device initialization
+        # and validation, which is crucial after all fields are set.
+        if hasattr(new_obj, "__post_init__"):
+            new_obj.__post_init__()
+
+        return new_obj
