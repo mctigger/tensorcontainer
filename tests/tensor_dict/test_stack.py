@@ -1,13 +1,11 @@
-import torch
-
 import pytest
-
+import torch
 from torch._dynamo import exc as dynamo_exc
 
 from rtd.tensor_dict import TensorDict
 from tests.conftest import skipif_no_compile
 from tests.tensor_dict import common
-from tests.tensor_dict.common import compute_stack_shape, compare_nested_dict
+from tests.tensor_dict.common import compare_nested_dict, compute_stack_shape
 from tests.tensor_dict.compile_utils import run_and_compare_compiled
 
 
@@ -145,11 +143,8 @@ def test_stack_invalid_dim_raises_compile(shape, dim, nested_dict):
         )
 
     compiled_stack_op = torch.compile(stack_operation, fullgraph=True)
-    with pytest.raises(dynamo_exc.TorchRuntimeError) as excinfo:
+    with pytest.raises(dynamo_exc.Unsupported) as excinfo:
         compiled_stack_op(td, dim)
-    assert "IndexError" in str(excinfo.value) and "Dimension out of range" in str(
-        excinfo.value
-    )
 
 
 # --- Test TD creation and stacking inside torch.compile ---

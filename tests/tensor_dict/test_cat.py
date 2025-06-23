@@ -1,11 +1,10 @@
 import pytest
 import torch
-from torch._dynamo import exc as dynamo_exc  # Import for TorchRuntimeError
 
 from rtd.tensor_dict import TensorDict  # adjust import as needed
 from tests.conftest import skipif_no_compile
 from tests.tensor_dict import common
-from tests.tensor_dict.common import compute_cat_shape, compare_nested_dict
+from tests.tensor_dict.common import compare_nested_dict, compute_cat_shape
 
 nested_dict = common.nested_dict
 
@@ -96,9 +95,5 @@ def test_cat_invalid_dim_raises_compile(shape, dim, nested_dict):
     # are often wrapped in TorchRuntimeError.
     # We compile first, then expect the error upon execution of the compiled function.
     compiled_cat_op = torch.compile(cat_operation)
-    with pytest.raises(dynamo_exc.TorchRuntimeError) as excinfo:
+    with pytest.raises(IndexError, match="Dimension out of range"):
         compiled_cat_op(td, dim)
-    # Verify that the TorchRuntimeError was caused by an IndexError related to dimension
-    assert "IndexError" in str(excinfo.value) and "Dimension out of range" in str(
-        excinfo.value
-    )

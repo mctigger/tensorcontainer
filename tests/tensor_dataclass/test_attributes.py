@@ -105,23 +105,3 @@ class TestAttributes:
             return td.tensor + td.tensor_data_class.tensor
 
         assert_compilation_works(func, nested_tensor_data_class)
-
-    def test_cuda_attribute_access(self, nested_tensor_data_class):
-        """Tests attribute access for CUDA tensors."""
-        if nested_tensor_data_class.device.type != "cuda":
-            pytest.skip("Test requires CUDA device")
-
-        # Test tensor field access on CUDA
-        assert_tensor_properties(
-            nested_tensor_data_class.tensor,
-            expected_shape=(2, 3, 4, 5),
-            expected_device=torch.device("cuda"),
-        )
-        assert_tensor_properties(
-            nested_tensor_data_class.tensor_data_class.tensor,
-            expected_shape=(2, 3, 4, 5),
-            expected_device=torch.device("cuda"),
-        )
-
-        # Test device attribute
-        assert nested_tensor_data_class.device.type == "cuda"

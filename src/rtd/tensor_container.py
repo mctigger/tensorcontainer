@@ -315,8 +315,31 @@ class TensorContainer:
 def _stack(
     tensors: Union[Tuple[TensorContainer, ...], List[TensorContainer]], dim: int = 0
 ) -> TensorContainer:
-    returns = pytree.tree_map(lambda *x: torch.stack(x, dim), *tensors)
-    return returns
+    if not tensors:
+        # Replicate PyTorch's error for an empty list
+        raise RuntimeError("stack expects a non-empty TensorList")
+
+    first_tc = tensors[0]
+    batch_ndim = first_tc.ndim
+
+    # Normalize dim to handle negative values; for stack, the new dim is added
+    if dim < 0:
+        dim = dim + batch_ndim + 1
+
+    if dim < 0 or dim > batch_ndim:
+        raise IndexError("Dimension out of range")
+
+    shape_expected = first_tc.shape
+
+    for t in tensors:
+        shape_is = t.shape
+        if shape_is != shape_expected:
+            raise ValueError("stack expects each TensorContainer to be equal size")
+
+    # Pytree handles the stacking of individual tensors and metadata consistency
+    result_td = pytree.tree_map(lambda *x: torch.stack(x, dim), *tensors)
+
+    return result_td
 
 
 @implements(torch.cat)
@@ -324,8 +347,8 @@ def _cat(
     tensors: Union[Tuple[TensorContainer, ...], List[TensorContainer]], dim: int = 0
 ) -> TensorContainer:
     # Get the first tensor container to determine the base shape and type
-    first_td = tensors[0]
-    batch_ndim = first_td.ndim
+    first_tc = tensors[0]
+    batch_ndim = first_tc.ndim
 
     # Normalize dim to be positive
     if dim < 0:
@@ -334,7 +357,7 @@ def _cat(
     if dim < 0 or dim > batch_ndim - 1:
         raise IndexError("Dimension out of range")
 
-    shape_expected = first_td.shape[:dim] + first_td.shape[dim + 1 :]
+    shape_expected = first_tc.shape[:dim] + first_tc.shape[dim + 1 :]
 
     for t in tensors:
         shape_is = t.shape[:dim] + t.shape[dim + 1 :]

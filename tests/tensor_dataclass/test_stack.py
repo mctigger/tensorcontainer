@@ -1,177 +1,133 @@
-from typing import Optional
+from typing import Any, List, Optional
 
 import pytest
 import torch
+from torch._dynamo import exc as dynamo_exc
 
 from rtd.tensor_dataclass import TensorDataClass
 from tests.conftest import skipif_no_compile
 from tests.tensor_dataclass.conftest import (
-    StackTestClass,
+    NestedTensorDataClass,
+    compute_stack_shape,
 )
+from tests.tensor_dict.compile_utils import run_and_compare_compiled
 
 
 class TestStack:
     """Test suite for torch.stack operations on TensorDataclass instances."""
 
-    def test_basic_stack(self, stack_test_instances):
-        """Test basic torch.stack operation on a list of TensorDataclass instances."""
-        td1, td2 = stack_test_instances
+    @staticmethod
+    def _stack_operation(tensor_dataclass_list, dim_arg):
+        """Helper method for stack operations."""
+        return torch.stack(tensor_dataclass_list, dim=dim_arg)
 
-        stacked_td = torch.stack([td1, td2], dim=0)  # type: ignore
+    def _create_test_pair(self, nested_tensor_data_class):
+        """Creates a pair of dataclass instances for testing."""
+        td1 = nested_tensor_data_class
+        td2 = td1.clone()
 
-        expected_shape = (2,) + td1.shape  # Stack adds a new dimension at the front
-        assert stacked_td.shape == expected_shape
-        assert isinstance(stacked_td, StackTestClass)
-        assert stacked_td.a.shape == expected_shape
-        assert stacked_td.b.shape == expected_shape
-        assert (
-            stacked_td.meta == 42
-        )  # Non-tensor fields should be preserved (first one)
+        # Normalize to prevent pytree context mismatches
+        td2.device = td1.device
+        td2.shape = td1.shape
+        td2.tensor_data_class.device = td1.tensor_data_class.device
+        td2.tensor_data_class.shape = td1.tensor_data_class.shape
 
-        assert torch.equal(stacked_td.a[0], td1.a)
-        assert torch.equal(stacked_td.a[1], td2.a)
-        assert torch.equal(stacked_td.b[0], td1.b)
-        assert torch.equal(stacked_td.b[1], td2.b)
+        return td1, td2
 
-    def test_stack_different_dim(self, stack_test_instances):
-        """Test torch.stack with a different dimension."""
-        td1, td2 = stack_test_instances
+    def _verify_stack_result(self, stacked_td, td1, td2, dim):
+        """Helper method to verify stack operation results."""
+        assert isinstance(stacked_td, NestedTensorDataClass)
 
-        stacked_td = torch.stack([td1, td2], dim=1)  # type: ignore
+        original_batch_shape = td1.shape
+        expected_batch_shape = compute_stack_shape(original_batch_shape, dim)
+        event_shape = td1.tensor.shape[len(original_batch_shape) :]
+        expected_tensor_shape = expected_batch_shape + event_shape
 
-        assert isinstance(stacked_td, StackTestClass)
-        assert stacked_td.shape == (2, 2, 3)
-        assert stacked_td.a.shape == (2, 2, 3)
-        assert stacked_td.b.shape == (2, 2, 3)
+        assert stacked_td.shape == expected_batch_shape
+        assert stacked_td.tensor.shape == expected_tensor_shape
+        assert stacked_td.tensor_data_class.tensor.shape == expected_tensor_shape
 
-        assert torch.equal(stacked_td.a[:, 0], td1.a)
-        assert torch.equal(stacked_td.a[:, 1], td2.a)
+        assert stacked_td.meta_data == td1.meta_data
 
-    def test_stack_inconsistent_shapes_raises(self):
+        normalized_dim = dim if dim >= 0 else dim + len(original_batch_shape) + 1
+        slicer: List[Any] = [slice(None)] * len(expected_tensor_shape)
+
+        slicer[normalized_dim] = 0
+        assert torch.equal(stacked_td.tensor[tuple(slicer)], td1.tensor)
+
+        slicer[normalized_dim] = 1
+        assert torch.equal(stacked_td.tensor[tuple(slicer)], td2.tensor)
+
+    @pytest.mark.parametrize("dim", [0, 1, 2, -1, -2, -3])  # Valid batch dimensions
+    def test_stack_valid_dims(self, nested_tensor_data_class, dim):
+        """Test stack operation with valid dimensions."""
+        td1, td2 = self._create_test_pair(nested_tensor_data_class)
+        stacked_td = self._stack_operation([td1, td2], dim)
+        self._verify_stack_result(stacked_td, td1, td2, dim)
+
+    @pytest.mark.parametrize("dim", [3, -4])  # Invalid dimensions
+    def test_stack_invalid_dim_raises(self, nested_tensor_data_class, dim):
+        """Test stack operation raises with invalid dimensions."""
+        td1, td2 = self._create_test_pair(nested_tensor_data_class)
+        with pytest.raises(IndexError, match="Dimension out of range"):
+            self._stack_operation([td1, td2], dim)
+
+    def test_stack_inconsistent_shapes_raises(self, nested_tensor_data_class):
         """Test that stacking with inconsistent shapes raises an error."""
-        td1 = StackTestClass(
-            a=torch.randn(2, 3),
-            b=torch.ones(2, 3),
-            shape=(2, 3),
-            device=torch.device("cpu"),
-        )
-        td2 = StackTestClass(
-            a=torch.randn(2, 4),  # Inconsistent shape
-            b=torch.ones(2, 4),
-            shape=(2, 4),
-            device=torch.device("cpu"),
-        )
+        td1, td2 = self._create_test_pair(nested_tensor_data_class)
 
-        with pytest.raises(ValueError):
-            torch.stack([td1, td2], dim=0)  # type: ignore
+        # Create an inconsistent shape for one of the tensors.
+        td2.shape = (td1.shape[0] + 1, td1.shape[1])
 
-    def test_stack_inconsistent_meta_data_raises(self):
+        with pytest.raises(
+            ValueError, match="stack expects each TensorContainer to be equal size"
+        ):
+            self._stack_operation([td1, td2], 0)
+
+    def test_stack_inconsistent_meta_data_raises(self, nested_tensor_data_class):
         """Test that stacking with inconsistent meta data raises an error."""
-        td1 = StackTestClass(
-            a=torch.randn(2, 3),
-            b=torch.ones(2, 3),
-            shape=(2, 3),
-            device=torch.device("cpu"),
-            meta=42,
-        )
-        td2 = StackTestClass(
-            a=torch.randn(2, 3),
-            b=torch.ones(2, 3),
-            shape=(2, 3),
-            device=torch.device("cpu"),
-            meta=99,  # Inconsistent meta data
-        )
-
-        # The current pytree implementation for TensorDataclass will take the meta_data
-        # from the first element. If this behavior is desired, this test should be removed
-        # or modified to assert that the first meta_data is kept.
-        # For now, we assume inconsistent meta data should raise an error if it's not handled
-        # by the pytree unflattening in a way that preserves consistency or raises.
-        # Given the current _pytree_unflatten, it will just take the first meta_data.
-        # So, this test should check if the meta data is taken from the first element.
-        with pytest.raises(ValueError):
-            torch.stack([td1, td2], dim=0)  # type: ignore
-
-    @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
-    def test_stack_on_cuda(self):
-        """Test torch.stack on CUDA devices."""
-        td1 = StackTestClass(
-            a=torch.randn(2, 3, device="cuda"),
-            b=torch.ones(2, 3, device="cuda"),
-            shape=(2, 3),
-            device=torch.device("cuda"),
-        )
-        td2 = StackTestClass(
-            a=torch.randn(2, 3, device="cuda"),
-            b=torch.ones(2, 3, device="cuda"),
-            shape=(2, 3),
-            device=torch.device("cuda"),
-        )
-
-        stacked_td = torch.stack([td1, td2], dim=0)  # type: ignore
-
-        assert isinstance(stacked_td, StackTestClass)
-        assert stacked_td.device.type == "cuda"
-        assert stacked_td.a.device.type == "cuda"
-        assert stacked_td.b.device.type == "cuda"
-        assert stacked_td.shape == (2, 2, 3)
+        td1, td2 = self._create_test_pair(nested_tensor_data_class)
+        td2.meta_data = "different_meta"
+        with pytest.raises(ValueError, match="Node context mismatch"):
+            self._stack_operation([td1, td2], 0)
 
     @skipif_no_compile
-    def test_stack_compile(self):
+    def test_stack_compile(self, nested_tensor_data_class):
         """Tests that a function using torch.stack with TensorDataclass can be torch.compiled."""
-        from tests.tensor_dict.compile_utils import run_and_compare_compiled
+        td1, td2 = self._create_test_pair(nested_tensor_data_class)
+        td2.tensor.mul_(2)
+        td2.tensor_data_class.tensor.mul_(2)
+        run_and_compare_compiled(self._stack_operation, [td1, td2], 0)
 
-        class MyData(TensorDataClass):
+    @skipif_no_compile
+    def test_stack_compile_invalid_dim_raises(self, nested_tensor_data_class):
+        """Test stack operation raises with invalid dimensions in compile mode."""
+        td1, td2 = self._create_test_pair(nested_tensor_data_class)
+        compiled_stack_op = torch.compile(self._stack_operation, fullgraph=True)
+        with pytest.raises(dynamo_exc.Unsupported) as excinfo:
+            compiled_stack_op([td1, td2], 3)  # Invalid dimension
+        assert "IndexError" in str(excinfo.value)
+
+    def test_stack_empty_list_raises(self):
+        """Test that torch.stack on an empty list raises a RuntimeError."""
+        with pytest.raises(RuntimeError, match="stack expects a non-empty TensorList"):
+            self._stack_operation([], 0)
+
+    def test_stack_mixed_optional_raises(self):
+        """Test that stacking with mixed None and Tensor for an optional field raises."""
+
+        class OptionalStack(TensorDataClass):
             shape: tuple
             device: Optional[torch.device]
-            x: torch.Tensor
-            y: torch.Tensor
+            a: torch.Tensor
+            b: Optional[torch.Tensor] = None
 
-        def func(tds):
-            return torch.stack(tds, dim=0)  # type: ignore
-
-        data1 = MyData(
-            x=torch.ones(3, 4),
-            y=torch.zeros(3, 4),
-            shape=(3, 4),
-            device=torch.device("cpu"),
+        td1 = OptionalStack(
+            shape=(3,), device=torch.device("cpu"), a=torch.randn(3), b=torch.ones(3)
         )
-        data2 = MyData(
-            x=torch.ones(3, 4) * 2,
-            y=torch.zeros(3, 4) * 2,
-            shape=(3, 4),
-            device=torch.device("cpu"),
+        td2 = OptionalStack(
+            shape=(3,), device=torch.device("cpu"), a=torch.randn(3), b=None
         )
-        run_and_compare_compiled(func, [data1, data2])
 
-
-def test_stack_empty_list_raises():
-    """Test that torch.stack on an empty list raises a RuntimeError."""
-    with pytest.raises(RuntimeError, match="stack expects a non-empty TensorList"):
-        torch.stack([], dim=0)
-
-
-def test_stack_mixed_optional_raises():
-    """Test that stacking with mixed None and Tensor for an optional field raises."""
-
-    class OptionalStack(TensorDataClass):
-        shape: tuple
-        device: Optional[torch.device]
-        a: torch.Tensor
-        b: Optional[torch.Tensor] = None
-
-    td1 = OptionalStack(
-        shape=(3,),
-        device=torch.device("cpu"),
-        a=torch.randn(3),
-        b=torch.ones(3),
-    )
-    td2 = OptionalStack(
-        shape=(3,),
-        device=torch.device("cpu"),
-        a=torch.randn(3),
-        b=None,  # b is None here
-    )
-
-    with pytest.raises(ValueError, match="Node arity mismatch"):
-        torch.stack([td1, td2], dim=0)  # type: ignore
+        with pytest.raises(ValueError, match="Node arity mismatch"):
+            torch.stack([td1, td2], dim=0)  # type: ignore
