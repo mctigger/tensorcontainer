@@ -3,7 +3,7 @@ from typing import Optional
 import pytest
 import torch
 
-from rtd.tensor_dataclass import TensorDataclass
+from rtd.tensor_dataclass import TensorDataClass
 from tests.conftest import skipif_no_compile
 from tests.tensor_dataclass.conftest import DeviceTestClass
 
@@ -141,7 +141,7 @@ class TestExpand:
         """Tests that a function using TensorDataclass.expand() can be torch.compiled."""
         from tests.tensor_dict.compile_utils import run_and_compare_compiled
 
-        class MyData(TensorDataclass):
+        class MyData(TensorDataClass):
             shape: tuple
             device: Optional[torch.device]
             x: torch.Tensor

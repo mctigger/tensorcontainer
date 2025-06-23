@@ -2,13 +2,13 @@ import pytest
 import torch
 from torch._dynamo import exc as dynamo_exc
 
-from rtd.tensor_dataclass import TensorDataclass
+from rtd.tensor_dataclass import TensorDataClass
 from tests.conftest import skipif_no_compile
 from tests.tensor_dataclass.conftest import (
-    compute_cat_shape,
-    SimpleTensorData,
-    SHAPE_DIM_PARAMS_VALID,
     SHAPE_DIM_PARAMS_INVALID,
+    SHAPE_DIM_PARAMS_VALID,
+    SimpleTensorData,
+    compute_cat_shape,
     create_inconsistent_meta_data_pair,
 )
 from tests.tensor_dict.compile_utils import run_and_compare_compiled
@@ -116,7 +116,7 @@ class TestCat:
         if compile_mode:
             pytest.importorskip("torch._dynamo", reason="Compilation not available")
 
-        class MetaData(TensorDataclass):
+        class MetaData(TensorDataClass):
             a: torch.Tensor
             b: torch.Tensor
             meta: int = 42

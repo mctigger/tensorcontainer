@@ -1,7 +1,7 @@
 import pytest
 import torch
 
-from rtd.tensor_dataclass import TensorDataclass
+from rtd.tensor_dataclass import TensorDataClass
 
 
 class TestSubclassing:
@@ -10,7 +10,7 @@ class TestSubclassing:
     def test_subclassing_of_subclass(self):
         """Test that subclasses of TensorDataclass subclasses work correctly."""
 
-        class A(TensorDataclass):
+        class A(TensorDataClass):
             x: torch.Tensor
 
         class B(A):
@@ -24,7 +24,7 @@ class TestSubclassing:
 
         assert isinstance(b_instance, B)
         assert isinstance(b_instance, A)
-        assert isinstance(b_instance, TensorDataclass)
+        assert isinstance(b_instance, TensorDataClass)
 
         assert torch.equal(b_instance.x, x_tensor)
         assert b_instance.new_attribute == "hello"
@@ -43,7 +43,7 @@ class TestSubclassing:
     def test_subclass_with_tensor_attribute(self):
         """Test subclass with additional tensor attributes."""
 
-        class A(TensorDataclass):
+        class A(TensorDataClass):
             x: torch.Tensor
 
         class B(A):
@@ -56,7 +56,7 @@ class TestSubclassing:
 
         assert isinstance(b_instance, B)
         assert isinstance(b_instance, A)
-        assert isinstance(b_instance, TensorDataclass)
+        assert isinstance(b_instance, TensorDataClass)
 
         assert torch.equal(b_instance.x, x_tensor)
         assert torch.equal(b_instance.y, y_tensor)
@@ -82,7 +82,7 @@ class TestSubclassing:
     def test_subclass_cuda_operations(self):
         """Test CUDA operations on subclassed TensorDataclass."""
 
-        class A(TensorDataclass):
+        class A(TensorDataClass):
             x: torch.Tensor
 
         class B(A):

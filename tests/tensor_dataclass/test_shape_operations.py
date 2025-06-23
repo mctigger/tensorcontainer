@@ -3,13 +3,12 @@ from typing import Optional
 import pytest
 import torch
 
-from rtd.tensor_dataclass import TensorDataclass
+from rtd.tensor_dataclass import TensorDataClass
 from tests.conftest import skipif_no_compile
 from tests.tensor_dataclass.conftest import (
     ShapeTestClass,
     assert_shape_consistency,
 )
-
 
 # Note: The view and reshape tests have been moved to test_view_reshape.py
 # This file now focuses on shape inference and other shape-related operations
@@ -92,7 +91,7 @@ class TestShapeOperations:
     def test_no_tensor_fields(self):
         """Test a TensorDataclass with no tensor fields."""
 
-        class NoTensorData(TensorDataclass):
+        class NoTensorData(TensorDataClass):
             shape: tuple
             device: Optional[torch.device]
             meta: str

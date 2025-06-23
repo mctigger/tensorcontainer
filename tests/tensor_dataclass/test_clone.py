@@ -3,13 +3,13 @@ from typing import Optional
 import pytest
 import torch
 
-from rtd.tensor_dataclass import TensorDataclass
+from rtd.tensor_dataclass import TensorDataClass
+from tests.conftest import skipif_no_compile
 from tests.tensor_dataclass.conftest import (
     CloneTestClass,
     assert_tensor_equal_and_different_objects,
     create_nested_tensor_dataclass,
 )
-from tests.conftest import skipif_no_compile
 
 
 class TestClone:
@@ -64,7 +64,7 @@ class TestClone:
     def test_clone_empty_dataclass(self):
         """Test cloning an empty TensorDataclass."""
 
-        class EmptyCloneTestClass(TensorDataclass):
+        class EmptyCloneTestClass(TensorDataClass):
             shape: tuple
             device: Optional[torch.device]
 
@@ -99,7 +99,7 @@ class TestClone:
         """Tests that a function using TensorDataclass.clone() can be torch.compiled."""
         from tests.tensor_dict.compile_utils import run_and_compare_compiled
 
-        class MyData(TensorDataclass):
+        class MyData(TensorDataClass):
             shape: tuple
             device: Optional[torch.device]
             x: torch.Tensor
@@ -119,7 +119,7 @@ class TestClone:
     def test_clone_mutable_metadata(self):
         """Test that clone() deepcopies mutable metadata."""
 
-        class MutableMetadata(TensorDataclass):
+        class MutableMetadata(TensorDataClass):
             shape: tuple
             device: Optional[torch.device]
             a: torch.Tensor

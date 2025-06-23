@@ -3,7 +3,7 @@ from typing import Optional
 import pytest
 import torch
 
-from rtd.tensor_dataclass import TensorDataclass
+from rtd.tensor_dataclass import TensorDataClass
 from tests.conftest import skipif_no_compile
 from tests.tensor_dataclass.conftest import assert_device_consistency
 
@@ -90,12 +90,12 @@ class TestDevice:
     def test_nested_device_mismatch_raises(self):
         """Test that device validation catches mismatches in nested TensorDataclasses."""
 
-        class Inner(TensorDataclass):
+        class Inner(TensorDataClass):
             shape: tuple
             device: Optional[torch.device]
             c: torch.Tensor
 
-        class Outer(TensorDataclass):
+        class Outer(TensorDataClass):
             shape: tuple
             device: Optional[torch.device]
             inner: Inner

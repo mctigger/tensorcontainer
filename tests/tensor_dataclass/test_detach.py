@@ -3,7 +3,7 @@ from typing import Optional
 import pytest
 import torch
 
-from rtd.tensor_dataclass import TensorDataclass
+from rtd.tensor_dataclass import TensorDataClass
 from tests.conftest import skipif_no_compile
 from tests.tensor_dataclass.conftest import SimpleTensorData
 
@@ -81,12 +81,12 @@ class TestDetach:
         if compile_mode:
             pytest.importorskip("torch._dynamo", reason="Compilation not available")
 
-        class NestedClass(TensorDataclass):
+        class NestedClass(TensorDataClass):
             shape: tuple
             device: Optional[torch.device]
             c: torch.Tensor
 
-        class TestClass(TensorDataclass):
+        class TestClass(TensorDataClass):
             shape: tuple
             device: Optional[torch.device]
             a: torch.Tensor
@@ -129,7 +129,7 @@ class TestDetach:
         if compile_mode:
             pytest.importorskip("torch._dynamo", reason="Compilation not available")
 
-        class TestClass(TensorDataclass):
+        class TestClass(TensorDataClass):
             shape: tuple
             device: Optional[torch.device]
             a: torch.Tensor

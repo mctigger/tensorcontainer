@@ -3,11 +3,11 @@ from typing import Optional
 import pytest
 import torch
 
-from rtd.tensor_dataclass import TensorDataclass
+from rtd.tensor_dataclass import TensorDataClass
+from tests.conftest import skipif_no_compile
 from tests.tensor_dataclass.conftest import (
     StackTestClass,
 )
-from tests.conftest import skipif_no_compile
 
 
 class TestStack:
@@ -121,7 +121,7 @@ class TestStack:
         """Tests that a function using torch.stack with TensorDataclass can be torch.compiled."""
         from tests.tensor_dict.compile_utils import run_and_compare_compiled
 
-        class MyData(TensorDataclass):
+        class MyData(TensorDataClass):
             shape: tuple
             device: Optional[torch.device]
             x: torch.Tensor
@@ -154,7 +154,7 @@ def test_stack_empty_list_raises():
 def test_stack_mixed_optional_raises():
     """Test that stacking with mixed None and Tensor for an optional field raises."""
 
-    class OptionalStack(TensorDataclass):
+    class OptionalStack(TensorDataClass):
         shape: tuple
         device: Optional[torch.device]
         a: torch.Tensor

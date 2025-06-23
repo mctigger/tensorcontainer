@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-import dataclasses
 import copy
-from typing import List, Optional, Tuple, Union, TypeVar
+import dataclasses
+from typing import List, Optional, Tuple, TypeVar, Union
 
 import torch
 from torch import Tensor
@@ -26,7 +26,7 @@ class TensorDataclassTransform:
     pass
 
 
-class TensorDataclass(TensorContainer, PytreeRegistered, TensorDataclassTransform):
+class TensorDataClass(TensorContainer, PytreeRegistered, TensorDataclassTransform):
     """A dataclass-based tensor container with PyTree compatibility."""
 
     # Added here to make shape and device part of the data class.
@@ -180,7 +180,7 @@ class TensorDataclass(TensorContainer, PytreeRegistered, TensorDataclassTransfor
         return keypath_leaf_list, context
 
     @classmethod
-    def _pytree_unflatten(cls, leaves: List[Tensor], context: Tuple) -> TensorDataclass:
+    def _pytree_unflatten(cls, leaves: List[Tensor], context: Tuple) -> TensorDataClass:
         """Unflattens component values into a dataclass instance."""
         (
             children_spec,

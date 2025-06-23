@@ -21,7 +21,7 @@ from torch.distributions import (
 from rtd.distributions.sampling import SamplingDistribution
 from rtd.distributions.soft_bernoulli import SoftBernoulli
 from rtd.distributions.truncated_normal import TruncatedNormal
-from rtd.tensor_dataclass import TensorDataclass
+from rtd.tensor_dataclass import TensorDataClass
 
 
 class ClampedTanhTransform(torch.distributions.transforms.Transform):
@@ -55,7 +55,7 @@ class ClampedTanhTransform(torch.distributions.transforms.Transform):
         )  # Adding small epsilon for numerical stability
 
 
-class TensorDistribution(TensorDataclass):
+class TensorDistribution(TensorDataClass):
     def __post_init__(self):
         # infer shape and device if not provided
         for f in dataclasses.fields(self):

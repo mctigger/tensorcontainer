@@ -3,7 +3,7 @@ from typing import Optional
 import pytest
 import torch
 
-from rtd.tensor_dataclass import TensorDataclass
+from rtd.tensor_dataclass import TensorDataClass
 from tests.conftest import skipif_no_compile
 from tests.tensor_dataclass.conftest import (
     assert_raises_with_message,
@@ -11,7 +11,7 @@ from tests.tensor_dataclass.conftest import (
 )
 
 
-class SubclassedTensorDataclass(TensorDataclass):
+class SubclassedTensorDataclass(TensorDataClass):
     """Test subclass with custom __post_init__ method."""
 
     my_tensor: torch.Tensor
@@ -24,7 +24,7 @@ class SubclassedTensorDataclass(TensorDataclass):
         self.initialized_value = 100
 
 
-class NoSuperPostInit(TensorDataclass):
+class NoSuperPostInit(TensorDataClass):
     """Test subclass that doesn't call super().__post_init__()."""
 
     shape: tuple

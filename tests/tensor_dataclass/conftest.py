@@ -4,8 +4,7 @@ from typing import List, Optional
 import pytest
 import torch
 
-from rtd.tensor_dataclass import TensorDataclass
-
+from rtd.tensor_dataclass import TensorDataClass
 
 # ============================================================================
 # COMMON TENSORDATACLASS DEFINITIONS
@@ -13,12 +12,12 @@ from rtd.tensor_dataclass import TensorDataclass
 
 
 # Define a simple, reusable TensorDataclass for tests
-class SimpleTensorData(TensorDataclass):
+class SimpleTensorData(TensorDataClass):
     a: torch.Tensor
     b: torch.Tensor
 
 
-class DeviceTestClass(TensorDataclass):
+class DeviceTestClass(TensorDataClass):
     """TensorDataclass for device-related testing."""
 
     device: Optional[torch.device]
@@ -28,7 +27,7 @@ class DeviceTestClass(TensorDataclass):
     meta: int = 42
 
 
-class CloneTestClass(TensorDataclass):
+class CloneTestClass(TensorDataClass):
     """TensorDataclass for clone-related testing."""
 
     a: torch.Tensor
@@ -36,7 +35,7 @@ class CloneTestClass(TensorDataclass):
     meta: int = 42
 
 
-class StackTestClass(TensorDataclass):
+class StackTestClass(TensorDataClass):
     """TensorDataclass for stack-related testing."""
 
     shape: tuple
@@ -46,7 +45,7 @@ class StackTestClass(TensorDataclass):
     meta: int = 42
 
 
-class ToTestClass(TensorDataclass):
+class ToTestClass(TensorDataClass):
     """TensorDataclass for to() method testing."""
 
     device: Optional[torch.device]
@@ -56,7 +55,7 @@ class ToTestClass(TensorDataclass):
     meta: int = 42
 
 
-class ShapeTestClass(TensorDataclass):
+class ShapeTestClass(TensorDataClass):
     """TensorDataclass for shape-related testing."""
 
     shape: tuple
@@ -66,7 +65,7 @@ class ShapeTestClass(TensorDataclass):
     meta: int = 42
 
 
-class OptionalFieldsTestClass(TensorDataclass):
+class OptionalFieldsTestClass(TensorDataClass):
     """TensorDataclass with optional and default_factory fields for testing."""
 
     obs: torch.Tensor
@@ -79,7 +78,7 @@ class OptionalFieldsTestClass(TensorDataclass):
     )
 
 
-class ViewReshapeTestClass(TensorDataclass):
+class ViewReshapeTestClass(TensorDataClass):
     """TensorDataclass for view/reshape method testing."""
 
     shape: tuple
@@ -406,12 +405,12 @@ def create_inconsistent_shape_pair(base_class, shapes, device):
 def create_nested_tensor_dataclass():
     """Helper to create nested TensorDataclass instances for testing."""
 
-    class Inner(TensorDataclass):
+    class Inner(TensorDataClass):
         shape: tuple
         device: Optional[torch.device]
         c: torch.Tensor
 
-    class Outer(TensorDataclass):
+    class Outer(TensorDataClass):
         shape: tuple
         device: Optional[torch.device]
         inner: Inner
@@ -438,7 +437,7 @@ def nested_tensor_data_instance():
     return outer
 
 
-class CopyTestClass(TensorDataclass):
+class CopyTestClass(TensorDataClass):
     a: torch.Tensor
     b: torch.Tensor
     metadata: list
@@ -454,6 +453,67 @@ def copy_test_instance():
         shape=(3, 4),
         device=torch.device("cpu"),
     )
+
+
+# ============================================================================
+# COMPLEX TENSORDATACLASS DEFINITIONS FOR REFACTORING
+# ============================================================================
+
+
+class FlatTensorDataClass(TensorDataClass):
+    tensor: torch.Tensor
+    meta_data: str
+
+
+class NestedTensorDataClass(TensorDataClass):
+    tensor: torch.Tensor
+    tensor_data_class: FlatTensorDataClass
+    meta_data: str
+    optional_tensor: Optional[torch.Tensor] = None
+    optional_meta_data: Optional[str] = None
+
+
+# ============================================================================
+# REFACTORING FIXTURES
+# ============================================================================
+
+
+@pytest.fixture(
+    params=[
+        "cpu",
+        pytest.param(
+            "cuda",
+            marks=pytest.mark.skipif(
+                not torch.cuda.is_available(), reason="CUDA not available"
+            ),
+        ),
+    ]
+)
+def nested_tensor_data_class(request):
+    """
+    Returns a complex, nested TensorDataclass instance on the specified device.
+    """
+    device = torch.device(request.param)
+    N = 2
+
+    # Create the nested dataclass instance
+    flat = FlatTensorDataClass(
+        tensor=torch.randn(N, 3, 4, device=device),
+        meta_data="meta_data_str",
+        shape=(N,),
+        device=device,
+    )
+
+    # Create the main dataclass instance
+    tdc = NestedTensorDataClass(
+        tensor=torch.randn(N, 3, 4, device=device),
+        tensor_data_class=flat,
+        meta_data="meta_data_str",
+        shape=(N,),
+        device=device,
+    )
+
+    return tdc
 
 
 # ============================================================================
