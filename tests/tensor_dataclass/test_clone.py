@@ -134,8 +134,8 @@ class TestClone:
 
         cloned_td = td.clone()
         assert cloned_td.metadata == [1, 2]  # type: ignore
-        assert cloned_td.metadata is not td.metadata  # type: ignore
+        assert cloned_td.metadata is td.metadata  # type: ignore
 
         cloned_td.metadata.append(3)  # type: ignore
-        assert td.metadata == [1, 2]  # type: ignore
+        assert td.metadata == [1, 2, 3]  # type: ignore
         assert cloned_td.metadata == [1, 2, 3]  # type: ignore

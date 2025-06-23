@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import copy  # Added for deepcopy
 import dataclasses
 from typing import List, Optional, Tuple, Union
 
@@ -239,41 +238,3 @@ class TensorDataclass(TensorContainer, PytreeRegistered, TensorDataclassTransfor
             f"    device={self.device},\n"
             f"    fields=(\n        {items_str}\n    )\n)"
         )
-
-    def clone(
-        self, *, memory_format: Optional[torch.memory_format] = None
-    ) -> TensorDataclass:
-        """
-        Returns a new TensorDataclass instance with all tensor data cloned.
-        Non-tensor fields (metadata) are deepcopied.
-        """
-        # Flatten to get tensor leaves and context (which includes meta_data)
-        flat_leaves, context = self._pytree_flatten()
-        children_spec, event_ndims, original_shape, original_device, meta_data = context
-
-        # Clone tensor leaves
-        cloned_leaves = [
-            leaf.clone(memory_format=memory_format)
-            if isinstance(leaf, torch.Tensor)
-            else leaf.clone(memory_format=memory_format)
-            for leaf in flat_leaves
-        ]
-
-        # Deepcopy metadata to ensure independence, especially for mutable types
-        # Apply deepcopy to values to be more torch.compile friendly than deepcopying the ConstDictVariable
-        cloned_meta_data = {k: copy.deepcopy(v) for k, v in meta_data.items()}
-
-        # Reconstruct with cloned leaves and deepcopied metadata
-        # The original_shape and original_device from context are appropriate here,
-        # as clone() should preserve these aspects from the source.
-        # The _pytree_unflatten method will correctly determine the new shape and device
-        # based on the cloned_leaves if they were to change (though clone() preserves them).
-        cloned_context = (
-            children_spec,
-            event_ndims,
-            original_shape,
-            original_device,
-            cloned_meta_data,
-        )
-
-        return self.__class__._pytree_unflatten(cloned_leaves, cloned_context)

@@ -39,6 +39,10 @@ class TensorContainer:
     in the container. This allows us to write code that is agnostic to the
     specific container type.
 
+    Important: All methods do only apply to torch.Tensor or subclasses of TensorContainer.
+    If a subclass defines non-tensor data (e.g. meta data), no transformations happens to this data.
+    For example .clone() will only clone the meta data, but not the meta-data!
+
     Args:
         shape (torch.Size): The shape of the container.
         device (torch.device): The device of the container.
