@@ -494,22 +494,23 @@ def nested_tensor_data_class(request):
     Returns a complex, nested TensorDataclass instance on the specified device.
     """
     device = torch.device(request.param)
-    N = 2
+    batch_shape = (2, 3)
+    event_shape = (4, 5)
 
     # Create the nested dataclass instance
     flat = FlatTensorDataClass(
-        tensor=torch.randn(N, 3, 4, device=device),
+        tensor=torch.randn(*batch_shape, *event_shape, device=device),
         meta_data="meta_data_str",
-        shape=(N,),
+        shape=batch_shape,
         device=device,
     )
 
     # Create the main dataclass instance
     tdc = NestedTensorDataClass(
-        tensor=torch.randn(N, 3, 4, device=device),
+        tensor=torch.randn(*batch_shape, *event_shape, device=device),
         tensor_data_class=flat,
         meta_data="meta_data_str",
-        shape=(N,),
+        shape=batch_shape,
         device=device,
     )
 

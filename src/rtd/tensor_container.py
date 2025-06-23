@@ -1,13 +1,12 @@
 from __future__ import annotations
 
 import functools
-from typing import List, Tuple, Union, TypeVar, Optional
+from typing import List, Optional, Tuple, TypeVar, Union
 
 import torch
 
 # Use the official PyTree utility from torch
 import torch.utils._pytree as pytree
-
 
 HANDLED_FUNCTIONS = {}
 
@@ -324,4 +323,28 @@ def _stack(
 def _cat(
     tensors: Union[Tuple[TensorContainer, ...], List[TensorContainer]], dim: int = 0
 ) -> TensorContainer:
-    return pytree.tree_map(lambda *x: torch.cat(x, dim), *tensors)
+    # Get the first tensor container to determine the base shape and type
+    first_td = tensors[0]
+    batch_ndim = first_td.ndim
+
+    # Normalize dim to be positive
+    if dim < 0:
+        dim = dim + batch_ndim
+
+    if dim < 0 or dim > batch_ndim - 1:
+        raise IndexError("Dimension out of range")
+
+    shape_expected = first_td.shape[:dim] + first_td.shape[dim + 1 :]
+
+    for t in tensors:
+        shape_is = t.shape[:dim] + t.shape[dim + 1 :]
+        if shape_is != shape_expected:
+            raise ValueError(
+                "TensorContainer batch shapes must be identical except for 'dim'"
+            )
+
+    # Create a new TensorContainer of the same type as the first one
+    # and apply torch.cat to its internal tensors
+    result_td = pytree.tree_map(lambda *x: torch.cat(x, dim), *tensors)
+
+    return result_td
