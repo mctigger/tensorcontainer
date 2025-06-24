@@ -116,7 +116,7 @@ class TensorContainer:
 
     def __getitem__(self: T, key: Any) -> T:
         if isinstance(key, tuple):
-            if len(key) > self.ndim:
+            if len(key) > self.ndim + key.count(None):
                 raise IndexError(
                     f"Too many indices for TensorContainer: target has {self.ndim} batch dimensions, but {len(key)} were indexed."
                 )
