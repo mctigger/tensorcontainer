@@ -41,6 +41,8 @@ class MyTensorDataClass(TensorDataClass):
             slice(None),
             torch.rand(5) > 0.5,
         ),  # Tuple with slice and bool tensor for second batch dim
+        (Ellipsis, None),  # Add dimension with Ellipsis and None
+        (None, Ellipsis),  # Add dimension at the start with None
     ],
 )
 def test_setitem_with_scalar(idx):
@@ -99,6 +101,8 @@ def test_setitem_with_scalar(idx):
             slice(None),
             torch.rand(5) > 0.5,
         ),  # Tuple with slice and bool tensor for second batch dim
+        (Ellipsis, None),  # Add dimension with Ellipsis and None
+        (None, Ellipsis),  # Add dimension at the start with None
     ],
 )
 def test_setitem_with_tensor_dataclass(idx):
@@ -126,8 +130,33 @@ def test_setitem_with_tensor_dataclass(idx):
 
     expected_features = original_dest_features
     expected_labels = original_dest_labels
-    expected_features[idx] = tdc_source.features
-    expected_labels[idx] = tdc_source.labels
+
+    def _get_leaf_key(leaf_tensor, key, batch_ndim):
+        """Constructs the correct key for a leaf tensor."""
+        if not isinstance(key, tuple):
+            key = (key,)
+
+        event_ndim = leaf_tensor.ndim - batch_ndim
+        num_none = key.count(None)
+
+        try:
+            ellipsis_pos = key.index(Ellipsis)
+            pre_key = key[:ellipsis_pos]
+            post_key = key[ellipsis_pos + 1 :]
+            n_ellipsis = batch_ndim + num_none - len(key) + 1
+            if n_ellipsis < 0:
+                raise IndexError("too many indices for tensor")
+            expanded_batch_key = pre_key + (slice(None),) * n_ellipsis + post_key
+        except ValueError:
+            expanded_batch_key = key
+
+        return expanded_batch_key + (slice(None),) * event_ndim
+
+    final_key_features = _get_leaf_key(expected_features, idx, tdc_dest.ndim)
+    final_key_labels = _get_leaf_key(expected_labels, idx, tdc_dest.ndim)
+
+    expected_features[final_key_features] = tdc_source.features
+    expected_labels[final_key_labels] = tdc_source.labels
 
     torch.testing.assert_close(tdc_dest.features, expected_features)
     torch.testing.assert_close(tdc_dest.labels, expected_labels)

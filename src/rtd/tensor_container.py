@@ -165,14 +165,36 @@ class TensorContainer:
                     f"The shape of the assigned TensorContainer {value.shape} does not "
                     f"match the shape of the slice {slice_shape}."
                 )
-        else:
+
+        def _get_leaf_key(leaf_tensor, key, batch_ndim):
+            """Constructs the correct key for a leaf tensor."""
+            if not isinstance(key, tuple):
+                key = (key,)
+
+            event_ndim = leaf_tensor.ndim - batch_ndim
+            num_none = key.count(None)
+
+            try:
+                ellipsis_pos = key.index(Ellipsis)
+                pre_key = key[:ellipsis_pos]
+                post_key = key[ellipsis_pos + 1 :]
+                n_ellipsis = batch_ndim + num_none - len(key) + 1
+                if n_ellipsis < 0:
+                    raise IndexError("too many indices for tensor")
+                expanded_batch_key = pre_key + (slice(None),) * n_ellipsis + post_key
+            except ValueError:
+                expanded_batch_key = key
+
+            return expanded_batch_key + (slice(None),) * event_ndim
+
+        if not isinstance(value, TensorContainer):
             # If value is not a TensorContainer, iterate through leaves and assign directly.
-            # This performs the "value broadcasting" by assigning the single value to all relevant slices.
             self_leaves = pytree.tree_leaves(self)
             for self_leaf in self_leaves:
                 if isinstance(self_leaf, torch.Tensor):
-                    self_leaf[key] = value
-            return  # Exit after direct assignment for scalar/tensor values
+                    final_key = _get_leaf_key(self_leaf, key, self.ndim)
+                    self_leaf[final_key] = value
+            return
 
         # If value is a TensorContainer, get leaves from both and assign leaf by leaf.
         self_leaves = pytree.tree_leaves(self)
@@ -181,7 +203,8 @@ class TensorContainer:
         # Perform the in-place assignment leaf by leaf.
         for self_leaf, value_leaf in zip(self_leaves, value_leaves):
             if isinstance(self_leaf, torch.Tensor):
-                self_leaf[key] = value_leaf
+                final_key = _get_leaf_key(self_leaf, key, self.ndim)
+                self_leaf[final_key] = value_leaf
 
     def view(self: T, *shape: int) -> T:
         return pytree.tree_map(lambda x: x.view(*shape, *x.shape[self.ndim :]), self)
