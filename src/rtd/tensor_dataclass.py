@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import copy
 import dataclasses
-from typing import List, Optional, Tuple, TypeVar, Union
+from typing import Any, List, Optional, Tuple, TypeVar, Union
 
 import torch
 from torch import Tensor
@@ -16,7 +16,7 @@ TDCompatible = Union[Tensor, TensorContainer]
 DATACLASS_ARGS = {"init", "repr", "eq", "order", "unsafe_hash", "frozen", "slots"}
 
 
-T_TensorDataclass = TypeVar("T_TensorDataclass", bound="TensorDataclass")
+T_TensorDataclass = TypeVar("T_TensorDataclass", bound="TensorDataClass")
 
 
 @dataclass_transform(eq_default=False)
@@ -137,7 +137,7 @@ class TensorDataClass(TensorContainer, PytreeRegistered, TensorDataclassTransfor
 
         return (children_spec, event_ndims, self.shape, self.device, meta_data)
 
-    def _pytree_flatten(self) -> Tuple[List[TDCompatible], Tuple]:
+    def _pytree_flatten(self) -> Tuple[List[Any], Tuple]:
         """
         Flattens the TensorDict into its tensor leaves and static metadata.
         """
@@ -158,7 +158,7 @@ class TensorDataClass(TensorContainer, PytreeRegistered, TensorDataclassTransfor
 
     def _pytree_flatten_with_keys_fn(
         self,
-    ) -> Tuple[List[Tuple[pytree.KeyPath, TDCompatible]], Tuple]:
+    ) -> Tuple[List[Tuple[pytree.KeyPath, Any]], Tuple]:
         """
         Flattens the TensorDict into key-path/leaf pairs and static metadata.
         """

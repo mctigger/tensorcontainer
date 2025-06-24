@@ -1,16 +1,18 @@
 from __future__ import annotations
 
 import functools
-from typing import List, Optional, Tuple, TypeVar, Union
+from typing import Any, List, Optional, Tuple, TypeAlias, TypeVar, Union
 
 import torch
+from torch import Tensor
 
 # Use the official PyTree utility from torch
 import torch.utils._pytree as pytree
 
+
 HANDLED_FUNCTIONS = {}
 
-
+TCCompatible: TypeAlias = Union[torch.Tensor, "TensorContainer"]
 T = TypeVar("T", bound="TensorContainer")
 
 
@@ -58,7 +60,7 @@ class TensorContainer:
         if kwargs is None:
             kwargs = {}
         if func not in HANDLED_FUNCTIONS or not all(
-            issubclass(t, (torch.Tensor, TensorContainer)) for t in types
+            issubclass(t, (Tensor, TensorContainer)) for t in types
         ):
             return NotImplemented
         return HANDLED_FUNCTIONS[func](*args, **kwargs)
@@ -111,6 +113,19 @@ class TensorContainer:
         return len(self.shape)
 
     # --- Overloaded methods leveraging PyTrees ---
+
+    def __getitem__(self: T, key: Any) -> T:
+        if isinstance(key, tuple):
+            if len(key) > self.ndim:
+                raise IndexError(
+                    f"Too many indices for TensorContainer: target has {self.ndim} batch dimensions, but {len(key)} were indexed."
+                )
+        elif self.ndim == 0:
+            raise IndexError(
+                "Cannot index a 0-dimensional TensorContainer with a single index. Use a tuple of indices matching the batch shape, or an empty tuple for a scalar."
+            )
+        return pytree.tree_map(lambda x: x[key], self)
+
     def view(self: T, *shape: int) -> T:
         return pytree.tree_map(lambda x: x.view(*shape, *x.shape[self.ndim :]), self)
 

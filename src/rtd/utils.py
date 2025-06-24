@@ -1,9 +1,8 @@
 from abc import abstractmethod
-from typing import List, Tuple, TypeVar, Type, Any
+from typing import Iterable, TypeVar, Type, Any
 
-from torch import Tensor
 import torch.utils._pytree as pytree
-from torch.utils._pytree import KeyEntry
+from torch.utils._pytree import Context, PyTree, KeyEntry
 
 _PytreeRegistered = TypeVar("_PytreeRegistered", bound="PytreeRegistered")
 
@@ -31,18 +30,18 @@ class PytreeRegistered:
         )
 
     @abstractmethod
-    def _pytree_flatten(self) -> tuple[list[tuple[KeyEntry, Any]], Any]:
+    def _pytree_flatten(self) -> tuple[list[Any], Context]:
         pass
 
     @abstractmethod
     def _pytree_flatten_with_keys_fn(
         self,
-    ) -> Tuple[List[Tuple[pytree.KeyPath, Tensor]], Tuple]:
+    ) -> tuple[list[tuple[KeyEntry, Any]], Any]:
         pass
 
     @classmethod
     @abstractmethod
     def _pytree_unflatten(
-        cls: Type[_PytreeRegistered], leaves, context
-    ) -> _PytreeRegistered:
+        cls: Type[_PytreeRegistered], leaves: Iterable[Any], context: Context
+    ) -> PyTree:
         pass

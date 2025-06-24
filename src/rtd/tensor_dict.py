@@ -13,6 +13,7 @@ from typing import (
     overload,
 )
 
+
 import torch
 
 # Use the official PyTree utility from torch
@@ -156,7 +157,7 @@ class TensorDict(TensorContainer, PytreeRegistered):
 
     def _pytree_flatten_with_keys_fn(
         self,
-    ) -> Tuple[List[Tuple[pytree.KeyPath, TDCompatible]], Tuple]:
+    ) -> tuple[list[tuple[pytree.KeyEntry, Any]], Any]:
         """
         Flattens the TensorDict into key-path/leaf pairs and static metadata.
         """
@@ -219,7 +220,7 @@ class TensorDict(TensorContainer, PytreeRegistered):
         if isinstance(key, str):
             return self.data[key]
 
-        return pytree.tree_map(lambda x: x[key], self)
+        return super().__getitem__(key)
 
     def __setitem__(self, key: str, value: TDCompatible):
         if not isinstance(value, (Tensor, TensorContainer)):
