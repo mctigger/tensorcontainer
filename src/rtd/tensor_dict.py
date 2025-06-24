@@ -18,10 +18,10 @@ from typing import (
 
 
 import torch
+from torch import Tensor
 
 # Use the official PyTree utility from torch
 import torch.utils._pytree as pytree
-from torch import Tensor
 from torch.utils._pytree import (
     KeyEntry,
     MappingKey,
@@ -255,15 +255,33 @@ class TensorDict(TensorContainer, PytreeRegistered):
 
         return super().__getitem__(key)
 
-    def __setitem__(self, key: str, value: TDCompatible):
-        if not isinstance(value, (Tensor, TensorContainer)):
-            raise ValueError(
-                f"value must be a Tensor or TensorContainer, got value of type {type(value)}"
-            )
-        self._tree_validate_shape(value)
-        self._tree_validate_device(value)
+    @overload
+    def __setitem__(self, key: str, value: TDCompatible): ...
 
-        self.data[key] = value
+    @overload
+    def __setitem__(
+        self,
+        key: Union[slice, Tensor, int, Tuple[Union[slice, Tensor, int], ...]],
+        value: Union[float, int, Tensor, TensorDict],
+    ): ...
+
+    def __setitem__(self, key: Any, value: Any):
+        if isinstance(key, str):
+            if not isinstance(value, (Tensor, TensorContainer)):
+                raise ValueError(
+                    f"value must be a Tensor or TensorContainer, got value of type {type(value)}"
+                )
+            self._tree_validate_shape(value)
+            self._tree_validate_device(value)
+            self.data[key] = value
+        else:
+            # Handle slicing operations
+            if isinstance(value, (float, int)):
+                # Convert scalar to a tensor for assignment via TensorContainer's __setitem__
+                value = torch.tensor(
+                    value, device=self.device, dtype=torch.float32
+                )  # Assuming float for scalar assignment
+            super().__setitem__(key, value)
 
     def __delitem__(self, key: str):
         del self.data[key]

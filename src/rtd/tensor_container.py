@@ -126,6 +126,63 @@ class TensorContainer:
             )
         return pytree.tree_map(lambda x: x[key], self)
 
+    def __setitem__(self: T, key: Any, value: Any) -> None:
+        """
+        Assigns a value to a slice of the TensorContainer in-place.
+
+        This method supports two main assignment types:
+        1.  Container-to-Container: Assigns leaves from a source TensorContainer
+            to the corresponding leaves in this container's slice.
+        2.  Scalar/Tensor Broadcasting: Assigns a single scalar or tensor value
+            to the slice of every tensor leaf in this container.
+
+        Args:
+            key: The index, slice, or key to assign to.
+            value: The value to assign. Can be a scalar, a tensor, or a
+                   compatible TensorContainer.
+
+        Raises:
+            ValueError: If value is a TensorContainer and its shape does not
+                        match the shape of the slice self[key].
+            IndexError: If the key is invalid for the container's dimensions.
+        """
+        value_tree = value
+
+        # If the value is a TensorContainer, validate its shape against the slice.
+        if isinstance(value, TensorContainer):
+            # Create a dummy tensor on the 'meta' device to avoid memory allocation
+            # while determining the shape of the resulting slice.
+            dummy_tensor = torch.empty(self.shape, device="meta")
+            try:
+                slice_shape = dummy_tensor[key].shape
+            except IndexError as e:
+                # Let the underlying tensor operation raise the final error,
+                # as it will be more descriptive.
+                raise e
+
+            if slice_shape != value.shape:
+                raise ValueError(
+                    f"The shape of the assigned TensorContainer {value.shape} does not "
+                    f"match the shape of the slice {slice_shape}."
+                )
+        else:
+            # If value is not a TensorContainer, iterate through leaves and assign directly.
+            # This performs the "value broadcasting" by assigning the single value to all relevant slices.
+            self_leaves = pytree.tree_leaves(self)
+            for self_leaf in self_leaves:
+                if isinstance(self_leaf, torch.Tensor):
+                    self_leaf[key] = value
+            return  # Exit after direct assignment for scalar/tensor values
+
+        # If value is a TensorContainer, get leaves from both and assign leaf by leaf.
+        self_leaves = pytree.tree_leaves(self)
+        value_leaves = pytree.tree_leaves(value_tree)
+
+        # Perform the in-place assignment leaf by leaf.
+        for self_leaf, value_leaf in zip(self_leaves, value_leaves):
+            if isinstance(self_leaf, torch.Tensor):
+                self_leaf[key] = value_leaf
+
     def view(self: T, *shape: int) -> T:
         return pytree.tree_map(lambda x: x.view(*shape, *x.shape[self.ndim :]), self)
 
