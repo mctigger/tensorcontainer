@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import copy
 import dataclasses
-from typing import Any, List, Optional, Tuple, TypeVar, Union
+from typing import Any, Iterable, List, Optional, Tuple, TypeVar, Union
 
 import torch
 from torch import Tensor
@@ -158,7 +158,7 @@ class TensorDataClass(TensorContainer, PytreeRegistered, TensorDataclassTransfor
 
     def _pytree_flatten_with_keys_fn(
         self,
-    ) -> Tuple[List[Tuple[pytree.KeyPath, Any]], Tuple]:
+    ) -> tuple[list[tuple[pytree.KeyEntry, Any]], Any]:
         """
         Flattens the TensorDict into key-path/leaf pairs and static metadata.
         """
@@ -180,7 +180,9 @@ class TensorDataClass(TensorContainer, PytreeRegistered, TensorDataclassTransfor
         return keypath_leaf_list, context
 
     @classmethod
-    def _pytree_unflatten(cls, leaves: List[Tensor], context: Tuple) -> TensorDataClass:
+    def _pytree_unflatten(
+        cls, leaves: Iterable[Any], context: pytree.Context
+    ) -> TensorDataClass:
         """Unflattens component values into a dataclass instance."""
         (
             children_spec,
@@ -189,6 +191,8 @@ class TensorDataClass(TensorContainer, PytreeRegistered, TensorDataclassTransfor
             device,
             meta_data,
         ) = context
+
+        leaves = list(leaves)  # Convert to list to allow indexing
 
         if not leaves:
             return cls(

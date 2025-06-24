@@ -126,6 +126,152 @@ class TensorContainer:
             )
         return pytree.tree_map(lambda x: x[key], self)
 
+    def _get_leaf_key(self, leaf_tensor: torch.Tensor, key_param: Any) -> Tuple:
+        """
+        Constructs the correct indexing key for a leaf tensor based on the
+        original key provided to __setitem__.
+        """
+        current_key_tuple = key_param
+        if not isinstance(current_key_tuple, tuple):
+            current_key_tuple = (current_key_tuple,)
+
+        try:
+            # Handle Ellipsis: expand it to the correct number of slice(None)
+            ellipsis_pos = current_key_tuple.index(Ellipsis)
+            pre_ellipsis = current_key_tuple[:ellipsis_pos]
+            post_ellipsis = current_key_tuple[ellipsis_pos + 1 :]
+
+            num_ellipsis_dims = (
+                leaf_tensor.ndim - len(pre_ellipsis) - len(post_ellipsis)
+            )
+
+            if num_ellipsis_dims < 0:
+                raise IndexError(
+                    f"Too many indices for tensor of dimension {leaf_tensor.ndim} "
+                    f"after expanding Ellipsis for key '{key_param}'."
+                )
+            return pre_ellipsis + (slice(None),) * num_ellipsis_dims + post_ellipsis
+
+        except ValueError:  # Ellipsis not found
+            # No Ellipsis: append slice(None) for remaining event dimensions of the leaf.
+            # current_key_tuple applies to the batch dimensions of the container.
+            num_indices_in_key = len(current_key_tuple)
+
+            if num_indices_in_key > leaf_tensor.ndim:
+                raise IndexError(
+                    f"too many indices for tensor of dimension {leaf_tensor.ndim} "  # Changed to lowercase 't'
+                    f"for key '{key_param}'."
+                )
+
+            event_dims_to_slice = leaf_tensor.ndim - num_indices_in_key
+            # This should ideally not happen if the above check is correct,
+            # but as a safeguard:
+            if event_dims_to_slice < 0:
+                raise IndexError(
+                    f"too many indices for tensor of dimension {leaf_tensor.ndim} "  # Changed to lowercase 't'
+                    f"for key '{key_param}' (key has {num_indices_in_key} elements)."
+                )
+            return current_key_tuple + (slice(None),) * event_dims_to_slice
+
+    def _setitem_from_tensor_container(
+        self: T, key: Any, value_container: TensorContainer
+    ) -> None:
+        """Handles __setitem__ when the value is a TensorContainer."""
+        # Validate shape compatibility
+        # Create a dummy tensor on 'meta' device for shape inference
+        dummy_tensor = torch.empty(self.shape, device="meta")
+        try:
+            slice_shape = dummy_tensor[key].shape
+        except IndexError as e:
+            # More informative error or let the actual assignment fail later
+            raise IndexError(
+                f"Invalid key '{key}' for TensorContainer with shape {self.shape}."
+            ) from e
+
+        try:
+            broadcasted_shape = torch.broadcast_shapes(
+                slice_shape, value_container.shape
+            )
+        except RuntimeError as e:
+            raise ValueError(
+                f"The shape of the assigned TensorContainer {value_container.shape} "
+                f"is not broadcastable to the shape of the slice {slice_shape}."
+            ) from e
+
+        if broadcasted_shape != slice_shape:
+            raise ValueError(
+                f"The shape of the assigned TensorContainer {value_container.shape} "
+                f"({broadcasted_shape} after broadcast) is not compatible with "
+                f"the shape of the slice {slice_shape}."
+            )
+
+        self_leaves = pytree.tree_leaves(self)
+        value_leaves = pytree.tree_leaves(value_container)
+
+        if len(self_leaves) != len(value_leaves):
+            # This case should ideally be caught by compatible tree structures
+            # or specific TensorContainer type checks.
+            raise ValueError(
+                "Source and target TensorContainers have different number of leaves."
+            )
+
+        for self_leaf, value_leaf in zip(self_leaves, value_leaves):
+            if isinstance(self_leaf, torch.Tensor):
+                # Ensure value_leaf is also a tensor, or handle type mismatch
+                if not isinstance(value_leaf, torch.Tensor):
+                    raise TypeError(
+                        f"Attempting to assign non-Tensor value of type "
+                        f"{type(value_leaf).__name__} to a Tensor leaf."
+                    )
+                final_key = self._get_leaf_key(self_leaf, key)
+                self_leaf[final_key] = value_leaf
+            # Non-tensor leaves in self are not modified by TensorContainer assignment
+
+    def _setitem_from_broadcastable(self: T, key: Any, item_value: Any) -> None:
+        """Handles __setitem__ when value is a scalar or a single tensor to be broadcast."""
+        # First, validate the key against the container's batch shape.
+        # This ensures consistent error reporting for invalid keys like "too many indices"
+        # for the batch dimensions, before attempting per-leaf operations.
+        try:
+            # Use a meta tensor to check key validity against batch shape without allocation.
+            # This will raise an IndexError if the key is invalid for the batch dimensions.
+            _ = torch.empty(self.shape, device="meta")[key]
+        except IndexError as e:
+            # Re-raise the IndexError. PyTorch's message (e.g., "index ... is out of bounds..." or "too many indices...")
+            # is usually what tests would expect for batch dimension errors.
+            # We prepend a bit of context for clarity.
+            raise IndexError(
+                f"Invalid key '{key}' for TensorContainer with batch shape {self.shape}. "
+                f"Underlying PyTorch error: {e}"
+            ) from e
+
+        # item_value can be a torch.Tensor or a Python scalar
+        is_value_tensor = isinstance(item_value, torch.Tensor)
+
+        self_leaves = pytree.tree_leaves(self)
+        for self_leaf in self_leaves:
+            if isinstance(self_leaf, torch.Tensor):
+                final_key = self._get_leaf_key(self_leaf, key)
+                # Basic type check for assignment compatibility
+                if not is_value_tensor and not isinstance(
+                    item_value, (int, float, bool)
+                ):
+                    # If item_value is not a tensor and not a common scalar,
+                    # it might be an unsupported type for direct assignment.
+                    # PyTorch's tensor assignment might handle more types;
+                    # this is a basic safeguard.
+                    try:
+                        # Attempt to convert to tensor to see if it's assignable
+                        # This is just for a more graceful error, actual assignment is below
+                        _ = torch.tensor(item_value, device=self_leaf.device)
+                    except Exception as e:
+                        raise TypeError(
+                            f"Cannot assign value of type {type(item_value).__name__} "
+                            f"to tensor leaf. Error during conversion attempt: {e}"
+                        ) from e
+                self_leaf[final_key] = item_value
+            # Non-tensor leaves in self are not modified
+
     def __setitem__(self: T, key: Any, value: Any) -> None:
         """
         Assigns a value to a slice of the TensorContainer in-place.
@@ -145,66 +291,13 @@ class TensorContainer:
             ValueError: If value is a TensorContainer and its shape does not
                         match the shape of the slice self[key].
             IndexError: If the key is invalid for the container's dimensions.
+            TypeError: If there's a type mismatch during assignment to tensor leaves.
         """
-        value_tree = value
-
-        # If the value is a TensorContainer, validate its shape against the slice.
         if isinstance(value, TensorContainer):
-            # Create a dummy tensor on the 'meta' device to avoid memory allocation
-            # while determining the shape of the resulting slice.
-            dummy_tensor = torch.empty(self.shape, device="meta")
-            try:
-                slice_shape = dummy_tensor[key].shape
-            except IndexError as e:
-                # Let the underlying tensor operation raise the final error,
-                # as it will be more descriptive.
-                raise e
-
-            if slice_shape != value.shape:
-                raise ValueError(
-                    f"The shape of the assigned TensorContainer {value.shape} does not "
-                    f"match the shape of the slice {slice_shape}."
-                )
-
-        def _get_leaf_key(leaf_tensor, key, batch_ndim):
-            """Constructs the correct key for a leaf tensor."""
-            if not isinstance(key, tuple):
-                key = (key,)
-
-            event_ndim = leaf_tensor.ndim - batch_ndim
-            num_none = key.count(None)
-
-            try:
-                ellipsis_pos = key.index(Ellipsis)
-                pre_key = key[:ellipsis_pos]
-                post_key = key[ellipsis_pos + 1 :]
-                n_ellipsis = batch_ndim + num_none - len(key) + 1
-                if n_ellipsis < 0:
-                    raise IndexError("too many indices for tensor")
-                expanded_batch_key = pre_key + (slice(None),) * n_ellipsis + post_key
-            except ValueError:
-                expanded_batch_key = key
-
-            return expanded_batch_key + (slice(None),) * event_ndim
-
-        if not isinstance(value, TensorContainer):
-            # If value is not a TensorContainer, iterate through leaves and assign directly.
-            self_leaves = pytree.tree_leaves(self)
-            for self_leaf in self_leaves:
-                if isinstance(self_leaf, torch.Tensor):
-                    final_key = _get_leaf_key(self_leaf, key, self.ndim)
-                    self_leaf[final_key] = value
-            return
-
-        # If value is a TensorContainer, get leaves from both and assign leaf by leaf.
-        self_leaves = pytree.tree_leaves(self)
-        value_leaves = pytree.tree_leaves(value_tree)
-
-        # Perform the in-place assignment leaf by leaf.
-        for self_leaf, value_leaf in zip(self_leaves, value_leaves):
-            if isinstance(self_leaf, torch.Tensor):
-                final_key = _get_leaf_key(self_leaf, key, self.ndim)
-                self_leaf[final_key] = value_leaf
+            self._setitem_from_tensor_container(key, value)
+        else:
+            # This branch handles torch.Tensor and scalar types for broadcasting
+            self._setitem_from_broadcastable(key, value)
 
     def view(self: T, *shape: int) -> T:
         return pytree.tree_map(lambda x: x.view(*shape, *x.shape[self.ndim :]), self)

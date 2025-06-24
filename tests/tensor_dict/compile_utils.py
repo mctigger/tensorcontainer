@@ -41,7 +41,7 @@ def _compare_results(eager_result, compiled_result):
         assert eager_result == compiled_result, "Eager and compiled results mismatch"
 
 
-def run_and_compare_compiled(fn, *args, **kwargs):
+def run_and_compare_compiled(fn, *args, fullgraph=True, **kwargs):
     """
     Runs a function in eager mode and compiled mode, compares results,
     and asserts no graph breaks.
@@ -54,16 +54,25 @@ def run_and_compare_compiled(fn, *args, **kwargs):
     eager_result = fn(*args, **kwargs)
 
     # Compiled run
-    torch.manual_seed(0)
-    compiled_fn = torch.compile(fn, fullgraph=True)
-    compiled_result = compiled_fn(*args, **kwargs)
+    # Temporarily enable dynamic shape capture for compilation
+    original_capture_dynamic = torch._dynamo.config.capture_dynamic_output_shape_ops
+    torch._dynamo.config.capture_dynamic_output_shape_ops = fullgraph
+    try:
+        torch.manual_seed(0)
+        compiled_fn = torch.compile(fn, fullgraph=fullgraph)
+        compiled_result = compiled_fn(*args, **kwargs)
+    finally:
+        # Reset to original value
+        torch._dynamo.config.capture_dynamic_output_shape_ops = original_capture_dynamic
 
     # Assert results are equal
     _compare_results(eager_result, compiled_result)
 
     # Assert no graph breaks
-    assert torch._dynamo.utils.counters["graph_break"]["total"] == 0, (
-        f"Graph breaks detected: {torch._dynamo.utils.counters['graph_break']['total']}"
-    )
+    # Only assert no graph breaks if fullgraph is True
+    if fullgraph:
+        assert torch._dynamo.utils.counters["graph_break"]["total"] == 0, (
+            f"Graph breaks detected: {torch._dynamo.utils.counters['graph_break']['total']}"
+        )
 
     return eager_result, compiled_result
