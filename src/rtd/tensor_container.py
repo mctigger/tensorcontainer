@@ -114,12 +114,47 @@ class TensorContainer:
 
     # --- Overloaded methods leveraging PyTrees ---
 
+    def transform_ellipsis_index(self, shape: tuple[int, ...], idx: tuple) -> tuple:
+        """
+        Transforms an indexing tuple with an ellipsis into an equivalent one without it.
+        ...
+        """
+        if Ellipsis not in idx:
+            return idx
+
+        if idx.count(Ellipsis) > 1:
+            raise IndexError("an index can only have a single ellipsis ('...')")
+
+        ellipsis_pos = idx.index(Ellipsis)
+
+        # Count how many items in the index "consume" an axis from the original shape.
+        # `None` adds a new axis, so it's not counted.
+        num_consuming_indices = sum(
+            1 for item in idx if item is not Ellipsis and item is not None
+        )
+
+        rank = len(shape)
+
+        if num_consuming_indices > rank:
+            raise IndexError(
+                f"too many indices for array: array is {rank}-dimensional, "
+                f"but {num_consuming_indices} were indexed"
+            )
+
+        # Calculate slices needed based on the consuming indices
+        num_slices_to_add = rank - num_consuming_indices
+
+        part_before_ellipsis = idx[:ellipsis_pos]
+        part_after_ellipsis = idx[ellipsis_pos + 1 :]
+        ellipsis_replacement = (slice(None),) * num_slices_to_add
+
+        final_index = part_before_ellipsis + ellipsis_replacement + part_after_ellipsis
+
+        return final_index
+
     def __getitem__(self: T, key: Any) -> T:
         if isinstance(key, tuple):
-            if len(key) > self.ndim + key.count(None):
-                raise IndexError(
-                    f"Too many indices for TensorContainer: target has {self.ndim} batch dimensions, but {len(key)} were indexed."
-                )
+            key = self.transform_ellipsis_index(self.shape, key)
         elif self.ndim == 0:
             raise IndexError(
                 "Cannot index a 0-dimensional TensorContainer with a single index. Use a tuple of indices matching the batch shape, or an empty tuple for a scalar."
