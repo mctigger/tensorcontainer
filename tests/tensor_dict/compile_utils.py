@@ -1,6 +1,7 @@
 import torch
-import torch.utils._pytree as pytree
+import torch._dynamo.testing
 import torch._dynamo.utils
+import torch.utils._pytree as pytree
 
 from rtd.tensor_container import TensorContainer
 
@@ -41,7 +42,13 @@ def _compare_results(eager_result, compiled_result):
         assert eager_result == compiled_result, "Eager and compiled results mismatch"
 
 
-def run_and_compare_compiled(fn, *args, fullgraph=True, **kwargs):
+def run_and_compare_compiled(
+    fn,
+    *args,
+    fullgraph=True,
+    expected_graph_breaks=None,
+    **kwargs,
+):
     """
     Runs a function in eager mode and compiled mode, compares results,
     and asserts no graph breaks.
@@ -59,6 +66,7 @@ def run_and_compare_compiled(fn, *args, fullgraph=True, **kwargs):
     torch._dynamo.config.capture_dynamic_output_shape_ops = fullgraph
     try:
         torch.manual_seed(0)
+        counter = torch._dynamo.testing.CompileCounter()
         compiled_fn = torch.compile(fn, fullgraph=fullgraph)
         compiled_result = compiled_fn(*args, **kwargs)
     finally:
@@ -68,11 +76,9 @@ def run_and_compare_compiled(fn, *args, fullgraph=True, **kwargs):
     # Assert results are equal
     _compare_results(eager_result, compiled_result)
 
-    # Assert no graph breaks
-    # Only assert no graph breaks if fullgraph is True
-    if fullgraph:
-        assert torch._dynamo.utils.counters["graph_break"]["total"] == 0, (
-            f"Graph breaks detected: {torch._dynamo.utils.counters['graph_break']['total']}"
+    if expected_graph_breaks is not None:
+        assert counter.frame_count == expected_graph_breaks, (
+            f"Expected {expected_graph_breaks} graph breaks, got {counter.frame_count}"
         )
 
     return eager_result, compiled_result

@@ -66,7 +66,7 @@ STANDARD_INDEXING_CASES = [
     STANDARD_INDEXING_CASES,
     ids=[case[0] for case in STANDARD_INDEXING_CASES],
 )
-def test_standard_indexing(test_name, idx):
+def test_standard_indexing(test_name, idx, request):
     """Test standard indexing operations on TensorDataClass.
 
     Verifies that indexing operations work correctly and return the expected
@@ -82,7 +82,13 @@ def test_standard_indexing(test_name, idx):
         fullgraph = False
 
     # Apply the index to the TensorDataClass instance
-    result, _ = run_and_compare_compiled(_get_item, tdc, idx, fullgraph=fullgraph)
+    result, _ = run_and_compare_compiled(
+        _get_item,
+        tdc,
+        idx,
+        fullgraph=fullgraph,
+        expected_graph_breaks=0 if fullgraph else None,
+    )
 
     # Verify that result is an instance of TensorDataClass
     assert isinstance(result, SampleTensorDataClass), (
@@ -174,7 +180,7 @@ ELLIPSIS_INDEXING_CASES = [
     ELLIPSIS_INDEXING_CASES,
     ids=[case[0] for case in ELLIPSIS_INDEXING_CASES],
 )
-def test_ellipsis_indexing(test_name, idx, expected_shape):
+def test_ellipsis_indexing(test_name, idx, expected_shape, request):
     """Test ellipsis (...) indexing operations on TensorDataClass.
 
     Verifies that ellipsis indexing works correctly with various combinations
@@ -189,7 +195,13 @@ def test_ellipsis_indexing(test_name, idx, expected_shape):
         fullgraph = False
 
     # Apply the index to the TensorDataClass instance
-    result, _ = run_and_compare_compiled(_get_item, tdc, idx, fullgraph=fullgraph)
+    result, _ = run_and_compare_compiled(
+        _get_item,
+        tdc,
+        idx,
+        fullgraph=fullgraph,
+        expected_graph_breaks=0 if fullgraph else None,
+    )
 
     # Verify that result is an instance of TensorDataClass
     assert isinstance(result, SampleTensorDataClass), (
@@ -260,7 +272,7 @@ class TestBooleanMaskIndexing:
         BOOLEAN_MASK_CASES,
         ids=[case[0] for case in BOOLEAN_MASK_CASES],
     )
-    def test_boolean_mask_indexing(self, test_name, shape, idx):
+    def test_boolean_mask_indexing(self, test_name, shape, idx, request):
         """Test boolean mask indexing on TensorDataClass.
 
         Verifies that boolean masking works correctly with various mask shapes
@@ -280,7 +292,13 @@ class TestBooleanMaskIndexing:
             fullgraph = False
 
         # Apply index
-        result, _ = run_and_compare_compiled(_get_item, tdc, idx, fullgraph=fullgraph)
+        result, _ = run_and_compare_compiled(
+            _get_item,
+            tdc,
+            idx,
+            fullgraph=fullgraph,
+            expected_graph_breaks=0 if fullgraph else None,
+        )
 
         # Verify type
         assert isinstance(result, SampleTensorDataClass), (
@@ -309,7 +327,7 @@ class TestBooleanMaskIndexing:
         "test_name,mask_value",
         [("zero_dim_true_mask", True), ("zero_dim_false_mask", False)],
     )
-    def test_zero_dim_boolean_masks(self, test_name, mask_value):
+    def test_zero_dim_boolean_masks(self, test_name, mask_value, request):
         """Test boolean masking on 0-dimensional TensorDataClass.
 
         Verifies that 0-dim boolean masks work correctly on 0-dim tensors.
@@ -330,7 +348,13 @@ class TestBooleanMaskIndexing:
             fullgraph = False
 
         # Apply index
-        result, _ = run_and_compare_compiled(_get_item, tdc, idx, fullgraph=fullgraph)
+        result, _ = run_and_compare_compiled(
+            _get_item,
+            tdc,
+            idx,
+            fullgraph=fullgraph,
+            expected_graph_breaks=0 if fullgraph else None,
+        )
 
         # Verify type
         assert isinstance(result, SampleTensorDataClass), (
