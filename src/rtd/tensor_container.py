@@ -129,7 +129,11 @@ class TensorContainer:
         if Ellipsis not in idx:
             return idx
 
-        if idx.count(Ellipsis) > 1:
+        ellipsis_count = 0
+        for item in idx:
+            if item is Ellipsis:
+                ellipsis_count += 1
+        if ellipsis_count > 1:
             raise IndexError("an index can only have a single ellipsis ('...')")
 
         ellipsis_pos = idx.index(Ellipsis)
