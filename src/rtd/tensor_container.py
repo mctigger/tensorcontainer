@@ -4,11 +4,10 @@ import functools
 from typing import Any, List, Optional, Tuple, TypeAlias, TypeVar, Union
 
 import torch
-from torch import Tensor
 
 # Use the official PyTree utility from torch
 import torch.utils._pytree as pytree
-
+from torch import Tensor
 
 HANDLED_FUNCTIONS = {}
 
@@ -114,6 +113,14 @@ class TensorContainer:
 
     # --- Overloaded methods leveraging PyTrees ---
 
+    def get_number_of_consuming_dims(self, item):
+        if item is Ellipsis:
+            return 0
+        if isinstance(item, torch.Tensor) and item.dtype == torch.bool:
+            return item.ndim
+
+        return 0
+
     def transform_ellipsis_index(self, shape: tuple[int, ...], idx: tuple) -> tuple:
         """
         Transforms an indexing tuple with an ellipsis into an equivalent one without it.
@@ -130,7 +137,9 @@ class TensorContainer:
         # Count how many items in the index "consume" an axis from the original shape.
         # `None` adds a new axis, so it's not counted.
         num_consuming_indices = sum(
-            1 for item in idx if item is not Ellipsis and item is not None
+            self.get_number_of_consuming_dims(item)
+            for item in idx
+            if item is not Ellipsis and item is not None
         )
 
         rank = len(shape)
