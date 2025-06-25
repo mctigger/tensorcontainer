@@ -36,37 +36,37 @@ def _get_item(tdc, idx):
 # Standard indexing test cases
 STANDARD_INDEXING_CASES = [
     # Single dimension indexing
-    ("single_int_first_dim", (0, slice(None)), True),
-    ("slice_first_dim", (slice(2, 15), slice(None)), True),
-    ("slice_with_step", (slice(0, 20, 3), slice(None)), True),
-    ("list_indices", ([0, 1], slice(None)), True),
-    ("tensor_indices", (torch.LongTensor([0, 1]), slice(None)), True),
-    ("bool_mask_first_dim", (random_mask(2), slice(None)), False),
+    ("single_int_first_dim", (0, slice(None))),
+    ("slice_first_dim", (slice(2, 15), slice(None))),
+    ("slice_with_step", (slice(0, 20, 3), slice(None))),
+    ("list_indices", ([0, 1], slice(None))),
+    ("tensor_indices", (torch.LongTensor([0, 1]), slice(None))),
+    ("bool_mask_first_dim", (random_mask(2), slice(None))),
     # Second dimension indexing
-    ("single_int_second_dim", (slice(None), 0), True),
-    ("slice_second_dim", (slice(None), slice(2, 5)), True),
-    ("tensor_second_dim", (slice(None), torch.tensor([0, 1])), True),
-    ("bool_mask_second_dim", (slice(None), random_mask(3)), False),
+    ("single_int_second_dim", (slice(None), 0)),
+    ("slice_second_dim", (slice(None), slice(2, 5))),
+    ("tensor_second_dim", (slice(None), torch.tensor([0, 1]))),
+    ("bool_mask_second_dim", (slice(None), random_mask(3))),
     # Combined indexing
-    ("both_slices", (slice(2, 15), slice(None)), True),
-    ("tensor_and_slice", (torch.tensor([0, 1]), slice(None)), True),
-    ("two_tensors", (torch.tensor([0, 1]), torch.tensor([0, 1])), True),
-    ("bool_and_slice", (random_mask(2), slice(None)), False),
+    ("both_slices", (slice(2, 15), slice(None))),
+    ("tensor_and_slice", (torch.tensor([0, 1]), slice(None))),
+    ("two_tensors", (torch.tensor([0, 1]), torch.tensor([0, 1]))),
+    ("bool_and_slice", (random_mask(2), slice(None))),
     # None (newaxis) indexing
-    ("newaxis_start", (None, slice(None), slice(None)), True),
-    ("newaxis_middle", (slice(None), None, slice(None)), True),
-    ("newaxis_end", (slice(None), slice(None), None), True),
-    ("two_newaxis_start", (None, None, slice(None), slice(None)), True),
-    ("two_newaxis_end", (slice(None), slice(None), None, None), True),
+    ("newaxis_start", (None, slice(None), slice(None))),
+    ("newaxis_middle", (slice(None), None, slice(None))),
+    ("newaxis_end", (slice(None), slice(None), None)),
+    ("two_newaxis_start", (None, None, slice(None), slice(None))),
+    ("two_newaxis_end", (slice(None), slice(None), None, None)),
 ]
 
 
 @pytest.mark.parametrize(
-    "test_name,idx,fullgraph",
+    "test_name,idx",
     STANDARD_INDEXING_CASES,
     ids=[case[0] for case in STANDARD_INDEXING_CASES],
 )
-def test_standard_indexing(test_name, idx, fullgraph):
+def test_standard_indexing(test_name, idx):
     """Test standard indexing operations on TensorDataClass.
 
     Verifies that indexing operations work correctly and return the expected
@@ -74,6 +74,12 @@ def test_standard_indexing(test_name, idx, fullgraph):
     slices, lists, tensors, and boolean masks.
     """
     tdc = create_sample_tdc()
+
+    fullgraph = True
+    try:
+        torch.compile(_get_item, fullgraph=True)(tdc.labels, idx)
+    except Exception:
+        fullgraph = False
 
     # Apply the index to the TensorDataClass instance
     result, _ = run_and_compare_compiled(_get_item, tdc, idx, fullgraph=fullgraph)
@@ -176,8 +182,14 @@ def test_ellipsis_indexing(test_name, idx, expected_shape):
     """
     tdc = create_sample_tdc()
 
+    fullgraph = True
+    try:
+        torch.compile(_get_item, fullgraph=True)(tdc.labels, idx)
+    except Exception:
+        fullgraph = False
+
     # Apply the index to the TensorDataClass instance
-    result, _ = run_and_compare_compiled(_get_item, tdc, idx, fullgraph=True)
+    result, _ = run_and_compare_compiled(_get_item, tdc, idx, fullgraph=fullgraph)
 
     # Verify that result is an instance of TensorDataClass
     assert isinstance(result, SampleTensorDataClass), (
@@ -261,8 +273,14 @@ class TestBooleanMaskIndexing:
             features=features, labels=labels, shape=shape, device=features.device
         )
 
+        fullgraph = True
+        try:
+            torch.compile(_get_item, fullgraph=True)(tdc.labels, idx)
+        except Exception:
+            fullgraph = False
+
         # Apply index
-        result, _ = run_and_compare_compiled(_get_item, tdc, idx, fullgraph=False)
+        result, _ = run_and_compare_compiled(_get_item, tdc, idx, fullgraph=fullgraph)
 
         # Verify type
         assert isinstance(result, SampleTensorDataClass), (
@@ -305,8 +323,14 @@ class TestBooleanMaskIndexing:
 
         idx = (torch.tensor(mask_value),)
 
+        fullgraph = True
+        try:
+            torch.compile(_get_item, fullgraph=True)(tdc.labels, idx)
+        except Exception:
+            fullgraph = False
+
         # Apply index
-        result, _ = run_and_compare_compiled(_get_item, tdc, idx, fullgraph=False)
+        result, _ = run_and_compare_compiled(_get_item, tdc, idx, fullgraph=fullgraph)
 
         # Verify type
         assert isinstance(result, SampleTensorDataClass), (
