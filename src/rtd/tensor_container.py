@@ -119,7 +119,7 @@ class TensorContainer:
         if isinstance(item, torch.Tensor) and item.dtype == torch.bool:
             return item.ndim
 
-        return 0
+        return 1
 
     def transform_ellipsis_index(self, shape: tuple[int, ...], idx: tuple) -> tuple:
         """

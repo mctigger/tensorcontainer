@@ -208,8 +208,6 @@ class TestGetitemBooleanMask:
         ),  # PyTorch will flatten the last two batch dims
         ("mixed_indexing_1", (10, 5, 8), (slice(2, 7), random_mask(5), 3)),
         ("mixed_indexing_2", (10, 5, 8), (random_mask(10), 2, slice(1, 4))),
-        ("0_dim_tdc_true_mask", (), (torch.tensor(True),)),
-        ("0_dim_tdc_false_mask", (), (torch.tensor(False),)),
     ]
 
     @pytest.mark.parametrize(
@@ -242,3 +240,39 @@ class TestGetitemBooleanMask:
         # Verify shape and device
         assert result.device == expected_features.device
         assert result.shape == expected_labels.shape
+
+    boolean_mask_0_dim_params = [
+        ("0_dim_tdc_true_mask", (), (torch.tensor(True),)),
+        ("0_dim_tdc_false_mask", (), (torch.tensor(False),)),
+    ]
+
+    @pytest.mark.parametrize(
+        "shape, idx",
+        [p[1:] for p in boolean_mask_0_dim_params],
+        ids=[p[0] for p in boolean_mask_0_dim_params],
+    )
+    def test_getitem_0_dim_masks(self, shape, idx):
+        # Setup: Create a 0-dim TensorDataClass
+        features = torch.randn(10)
+        labels = torch.arange(10)
+        tdc = MyTensorDataClass(
+            features=features, labels=labels, shape=shape, device=features.device
+        )
+
+        # Apply index
+        result = tdc[idx]
+
+        # Verify type
+        assert isinstance(result, MyTensorDataClass)
+
+        # Apply to source tensors
+        expected_features = features[idx]
+        expected_labels = labels[idx]
+
+        # Check content
+        torch.testing.assert_close(result.features, expected_features)
+        torch.testing.assert_close(result.labels, expected_labels)
+
+        # Verify shape and device
+        assert result.device == expected_features.device
+        assert (*result.shape, 10) == expected_labels.shape
