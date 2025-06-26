@@ -36,9 +36,6 @@ dev = [
 
 
 
-[project.scripts]
-test = "pytest"
-
 [tool.setuptools.packages.find]
 where = ["src"]
 
