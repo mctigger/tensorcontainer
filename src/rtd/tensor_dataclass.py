@@ -160,24 +160,38 @@ class TensorDataClass(TensorContainer, PytreeRegistered, TensorDataclassTransfor
         self,
     ) -> tuple[list[tuple[pytree.KeyEntry, Any]], Any]:
         """
-        Flattens the TensorDict into key-path/leaf pairs and static metadata.
+        Flattens the TensorDataclass into key-path/leaf pairs and static metadata,
+        using GetAttrKey for dataclass attributes.
         """
-        data = {
-            f.name: getattr(self, f.name)
-            for f in dataclasses.fields(self)
-            if isinstance(getattr(self, f.name), TDCompatible)
-        }
-        meta_data = {
-            f.name: getattr(self, f.name)
-            for f in dataclasses.fields(self)
-            if not isinstance(getattr(self, f.name), TDCompatible)
-            and f.name not in ["shape", "device"]
-        }
-        keypath_leaf_list, children_spec = pytree.tree_flatten_with_path(data)
-        flat_leaves = [leaf for _, leaf in keypath_leaf_list]
+        all_keypath_leaf_pairs = []
+        data_for_children_spec = {}
+        meta_data = {}
+
+        for f in dataclasses.fields(self):
+            value = getattr(self, f.name)
+            if isinstance(value, TDCompatible):
+                # Add to data_for_children_spec to get the correct TreeSpec later
+                data_for_children_spec[f.name] = value
+
+                # Recursively flatten TDCompatible fields to get their leaves and key paths
+                field_keypath_leaf_list, _ = pytree.tree_flatten_with_path(value)
+
+                # Prepend GetAttrKey to each key path
+                for key_path, leaf in field_keypath_leaf_list:
+                    new_key_path = (pytree.GetAttrKey(f.name),) + key_path
+                    all_keypath_leaf_pairs.append((new_key_path, leaf))
+            elif f.name not in ["shape", "device"]:
+                # Collect non-TDCompatible fields as metadata
+                meta_data[f.name] = value
+
+        # Get the children_spec from flattening the dictionary of TDCompatible fields.
+        # This ensures _pytree_unflatten can reconstruct the object correctly.
+        _, children_spec = pytree.tree_flatten_with_path(data_for_children_spec)
+
+        flat_leaves = [leaf for _, leaf in all_keypath_leaf_pairs]
         context = self._get_pytree_context(flat_leaves, children_spec, meta_data)
 
-        return keypath_leaf_list, context
+        return all_keypath_leaf_pairs, context
 
     @classmethod
     def _pytree_unflatten(

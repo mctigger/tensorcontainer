@@ -221,131 +221,73 @@ class TensorContainer:
                 )
             return current_key_tuple + (slice(None),) * event_dims_to_slice
 
-    def _setitem_from_tensor_container(
-        self: T, key: Any, value_container: TensorContainer
-    ) -> None:
-        """Handles __setitem__ when the value is a TensorContainer."""
-        # Validate shape compatibility
-        # Create a dummy tensor on 'meta' device for shape inference
-        dummy_tensor = torch.empty(self.shape, device="meta")
-        try:
-            slice_shape = dummy_tensor[key].shape
-        except IndexError as e:
-            # More informative error or let the actual assignment fail later
-            raise IndexError(
-                f"Invalid key '{key}' for TensorContainer with shape {self.shape}."
-            ) from e
+    def _format_path(self, path: pytree.KeyPath) -> str:
+        """Helper to format a PyTree KeyPath into a readable string."""
+        parts = []
+        for entry in path:
+            if isinstance(entry, tuple):  # Handle nested KeyPath tuples
+                parts.append(self._format_path(entry))
+            else:
+                parts.append(str(entry))
 
-        try:
-            broadcasted_shape = torch.broadcast_shapes(
-                slice_shape, value_container.shape
-            )
-        except RuntimeError as e:
-            raise ValueError(
-                f"The shape of the assigned TensorContainer {value_container.shape} "
-                f"is not broadcastable to the shape of the slice {slice_shape}."
-            ) from e
+        # Join parts and clean up leading dots if any
+        formatted_path = "".join(parts)
+        if formatted_path.startswith("."):
+            formatted_path = formatted_path[1:]
+        return formatted_path
 
-        if broadcasted_shape != slice_shape:
-            raise ValueError(
-                f"The shape of the assigned TensorContainer {value_container.shape} "
-                f"({broadcasted_shape} after broadcast) is not compatible with "
-                f"the shape of the slice {slice_shape}."
-            )
-
-        self_leaves = pytree.tree_leaves(self)
-        value_leaves = pytree.tree_leaves(value_container)
-
-        if len(self_leaves) != len(value_leaves):
-            # This case should ideally be caught by compatible tree structures
-            # or specific TensorContainer type checks.
-            raise ValueError(
-                "Source and target TensorContainers have different number of leaves."
-            )
-
-        for self_leaf, value_leaf in zip(self_leaves, value_leaves):
-            if isinstance(self_leaf, torch.Tensor):
-                # Ensure value_leaf is also a tensor, or handle type mismatch
-                if not isinstance(value_leaf, torch.Tensor):
-                    raise TypeError(
-                        f"Attempting to assign non-Tensor value of type "
-                        f"{type(value_leaf).__name__} to a Tensor leaf."
-                    )
-                final_key = self._get_leaf_key(self_leaf, key)
-                self_leaf[final_key] = value_leaf
-            # Non-tensor leaves in self are not modified by TensorContainer assignment
-
-    def _setitem_from_broadcastable(self: T, key: Any, item_value: Any) -> None:
-        """Handles __setitem__ when value is a scalar or a single tensor to be broadcast."""
-        # First, validate the key against the container's batch shape.
-        # This ensures consistent error reporting for invalid keys like "too many indices"
-        # for the batch dimensions, before attempting per-leaf operations.
-        try:
-            # Use a meta tensor to check key validity against batch shape without allocation.
-            # This will raise an IndexError if the key is invalid for the batch dimensions.
-            _ = torch.empty(self.shape, device="meta")[key]
-        except IndexError as e:
-            # Re-raise the IndexError. PyTorch's message (e.g., "index ... is out of bounds..." or "too many indices...")
-            # is usually what tests would expect for batch dimension errors.
-            # We prepend a bit of context for clarity.
-            raise IndexError(
-                f"Invalid key '{key}' for TensorContainer with batch shape {self.shape}. "
-                f"Underlying PyTorch error: {e}"
-            ) from e
-
-        # item_value can be a torch.Tensor or a Python scalar
-        is_value_tensor = isinstance(item_value, torch.Tensor)
-
-        self_leaves = pytree.tree_leaves(self)
-        for self_leaf in self_leaves:
-            if isinstance(self_leaf, torch.Tensor):
-                final_key = self._get_leaf_key(self_leaf, key)
-                # Basic type check for assignment compatibility
-                if not is_value_tensor and not isinstance(
-                    item_value, (int, float, bool)
-                ):
-                    # If item_value is not a tensor and not a common scalar,
-                    # it might be an unsupported type for direct assignment.
-                    # PyTorch's tensor assignment might handle more types;
-                    # this is a basic safeguard.
-                    try:
-                        # Attempt to convert to tensor to see if it's assignable
-                        # This is just for a more graceful error, actual assignment is below
-                        _ = torch.tensor(item_value, device=self_leaf.device)
-                    except Exception as e:
-                        raise TypeError(
-                            f"Cannot assign value of type {type(item_value).__name__} "
-                            f"to tensor leaf. Error during conversion attempt: {e}"
-                        ) from e
-                self_leaf[final_key] = item_value
-            # Non-tensor leaves in self are not modified
-
-    def __setitem__(self: T, key: Any, value: Any) -> None:
+    def __setitem__(self: T, key: Any, value: TCCompatible) -> None:
         """
-        Assigns a value to a slice of the TensorContainer in-place.
+        Sets the value of a slice of the container in-place.
 
-        This method supports two main assignment types:
-        1.  Container-to-Container: Assigns leaves from a source TensorContainer
-            to the corresponding leaves in this container's slice.
-        2.  Scalar/Tensor Broadcasting: Assigns a single scalar or tensor value
-            to the slice of every tensor leaf in this container.
+        This method mimics the behavior of `torch.Tensor.__setitem__`. It requires
+        that the `value` be broadcastable to the shape of the slice `self[key]`.
+
+        This approach correctly handles advanced indexing (e.g., boolean masks) by
+        relying on PyTorch's underlying shape-checking for the leaf-level assignments.
 
         Args:
-            key: The index, slice, or key to assign to.
-            value: The value to assign. Can be a scalar, a tensor, or a
-                   compatible TensorContainer.
-
-        Raises:
-            ValueError: If value is a TensorContainer and its shape does not
-                        match the shape of the slice self[key].
-            IndexError: If the key is invalid for the container's dimensions.
-            TypeError: If there's a type mismatch during assignment to tensor leaves.
+            key: The index or slice to set. Supports basic and advanced
+                 indexing, including Ellipsis (`...`).
+            value: The value to set. If it's a `TensorContainer`, its leaves must be
+                   broadcastable to the corresponding sliced leaves of `self`. If it's
+                   a scalar or `torch.Tensor`, it must be broadcastable to all sliced
+                   leaves of `self`.
         """
+        processed_key = key
+        if isinstance(key, tuple):
+            processed_key = self.transform_ellipsis_index(self.shape, key)
+
         if isinstance(value, TensorContainer):
-            self._setitem_from_tensor_container(key, value)
+            self_leaves_with_path = pytree.tree_leaves_with_path(self)
+            value_leaves_with_path = pytree.tree_leaves_with_path(value)
+
+            if len(self_leaves_with_path) != len(value_leaves_with_path):
+                raise ValueError(
+                    f"Expected a container with {len(self_leaves_with_path)} leaves, but got one with {len(value_leaves_with_path)}."
+                )
+
+            # Assign leaf by leaf. This requires that `value_leaf` is broadcastable
+            # to the shape of `self_leaf[processed_key]`, mimicking torch.Tensor behavior.
+            for (self_path, self_leaf), (value_path, value_leaf) in zip(
+                self_leaves_with_path, value_leaves_with_path
+            ):
+                try:
+                    self_leaf[processed_key] = value_leaf
+                except (RuntimeError, ValueError) as e:
+                    path_info = self._format_path(self_path)
+
+                    raise ValueError(
+                        f"Assignment failed for leaf at path '{path_info}'. "
+                        f"There might be a shape mismatch between the corresponding leaves of the source "
+                        f"and destination containers. Original error: {e}"
+                    ) from e
         else:
-            # This branch handles torch.Tensor and scalar types for broadcasting
-            self._setitem_from_broadcastable(key, value)
+            # For a scalar or single tensor, iterate through leaves and assign.
+            # PyTorch will raise a RuntimeError if `value` cannot be broadcast
+            # to the shape of `self_leaf[processed_key]`.
+            for self_leaf in pytree.tree_leaves(self):
+                self_leaf[processed_key] = value
 
     def view(self: T, *shape: int) -> T:
         return pytree.tree_map(lambda x: x.view(*shape, *x.shape[self.ndim :]), self)

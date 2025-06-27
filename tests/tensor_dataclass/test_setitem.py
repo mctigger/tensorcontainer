@@ -59,11 +59,11 @@ def _set_item(tdc, idx, value):
 class TestSetItem:
     """Consolidated test suite for __setitem__ operations on TensorDataClass."""
 
-
     def _run_and_verify_setitem(self, tdc, idx, value, test_name, fullgraph=True):
         """
         Central helper method to encapsulate common testing logic for __setitem__.
         """
+
         def setitem_op(target_tdc, op_key, op_value):
             cloned = target_tdc.clone()
             cloned[op_key] = op_value
@@ -112,7 +112,6 @@ class TestSetItem:
         value = 0.0
         self._run_and_verify_setitem(tdc_initial, idx, value, test_name)
 
-
     BROADCASTABLE_TENSOR_CASES = [
         ("int_idx_tensor_val", 5),
         ("slice_idx_tensor_val", slice(2, 15)),
@@ -132,7 +131,6 @@ class TestSetItem:
         value = torch.tensor(7.77, device=tdc_initial.device)
         self._run_and_verify_setitem(tdc_initial, idx, value, test_name)
 
-
     TDC_VALUE_CASES = [
         ("int", 5),
         ("slice", slice(2, 15)),
@@ -149,7 +147,6 @@ class TestSetItem:
         tdc_dest_initial = create_sample_tdc()
         tdc_source = create_source_tdc_for_slice(tdc_dest_initial, idx)
         self._run_and_verify_setitem(tdc_dest_initial, idx, tdc_source, test_name)
-
 
     # Advanced indexing test cases (excluding boolean masks)
     ADVANCED_INDEXING_CASES = [
@@ -173,10 +170,11 @@ class TestSetItem:
         processed_idx = idx
         # Ensure list-of-int is converted to a tensor for compile stability
         if isinstance(idx, list) and all(isinstance(i, int) for i in idx):
-            processed_idx = torch.tensor(idx, device=tdc_initial.device, dtype=torch.long)
+            processed_idx = torch.tensor(
+                idx, device=tdc_initial.device, dtype=torch.long
+            )
 
         self._run_and_verify_setitem(tdc_initial, processed_idx, value, test_name)
-
 
     # Boolean mask indexing test cases
     BOOLEAN_MASK_CASES = [
@@ -186,15 +184,16 @@ class TestSetItem:
 
     @pytest.mark.parametrize(
         "test_name,idx",
-        BOOLEAN_MASK_CASES, 
+        BOOLEAN_MASK_CASES,
         ids=[case[0] for case in BOOLEAN_MASK_CASES],
     )
     def test_setitem_bool_mask_indexing_with_scalar(self, test_name, idx):
         """Tests boolean mask indexing with a scalar using fullgraph=False."""
         tdc_initial = create_sample_tdc()
         value = 0.0
-        self._run_and_verify_setitem(tdc_initial, idx, value, test_name, fullgraph=False)
-
+        self._run_and_verify_setitem(
+            tdc_initial, idx, value, test_name, fullgraph=False
+        )
 
     ADVANCED_TDC_CASES = [
         ("long_tensor", torch.tensor([0, 4, 2, 19, 7])),
@@ -212,7 +211,6 @@ class TestSetItem:
         tdc_source = create_source_tdc_for_slice(tdc_dest_initial, idx)
         self._run_and_verify_setitem(tdc_dest_initial, idx, tdc_source, test_name)
 
-
     BOOLEAN_MASK_TDC_CASES = [
         ("bool_mask", torch.rand(20) > 0.5),
     ]
@@ -226,8 +224,9 @@ class TestSetItem:
         """Tests boolean mask indexing with a TDC using fullgraph=False."""
         tdc_dest_initial = create_sample_tdc()
         tdc_source = create_source_tdc_for_slice(tdc_dest_initial, idx)
-        self._run_and_verify_setitem(tdc_dest_initial, idx, tdc_source, test_name, fullgraph=False)
-
+        self._run_and_verify_setitem(
+            tdc_dest_initial, idx, tdc_source, test_name, fullgraph=False
+        )
 
     # Special ellipsis indexing test cases
     ELLIPSIS_CASES = [
@@ -246,7 +245,6 @@ class TestSetItem:
         value = 0.0
         self._run_and_verify_setitem(tdc_initial, idx, value, test_name)
 
-
     def test_setitem_broadcast_assign_tdc(self):
         """Tests assigning a broadcastable TDC is correct and compiles."""
         tdc_dest_initial = create_sample_tdc()
@@ -257,8 +255,9 @@ class TestSetItem:
             shape=(1, 5),
             device=tdc_dest_initial.device,
         )
-        self._run_and_verify_setitem(tdc_dest_initial, idx, tdc_source, "broadcast_assign_tdc")
-
+        self._run_and_verify_setitem(
+            tdc_dest_initial, idx, tdc_source, "broadcast_assign_tdc"
+        )
 
     # Invalid indexing test cases
     INVALID_INDEXING_CASES = [
@@ -267,10 +266,16 @@ class TestSetItem:
             (slice(None),),
             (19, 5),
             ValueError,
-            "The shape of the assigned TensorContainer \\(19, 5\\) is not broadcastable to the shape of the slice torch.Size\\(\\[20, 5\\]\\).",
+            r"Assignment failed for leaf at path '(features|labels)'. There might be a shape mismatch between the corresponding leaves of the source and destination containers. Original error: .+",
         ),
         ("index_out_of_bounds", 20, None, IndexError, "out of bounds"),
-        ("too_many_indices", (slice(None), slice(None), 0), None, IndexError, "too many indices"),
+        (
+            "too_many_indices",
+            (slice(None), slice(None), 0),
+            None,
+            IndexError,
+            "too many indices",
+        ),
     ]
 
     @pytest.mark.parametrize(
@@ -278,7 +283,9 @@ class TestSetItem:
         INVALID_INDEXING_CASES,
         ids=[case[0] for case in INVALID_INDEXING_CASES],
     )
-    def test_setitem_invalid_inputs_raise_errors(self, test_name, idx, value_shape, error, match):
+    def test_setitem_invalid_inputs_raise_errors(
+        self, test_name, idx, value_shape, error, match
+    ):
         """Tests that invalid inputs correctly raise errors in eager mode."""
         tdc = create_sample_tdc()
 
@@ -290,10 +297,11 @@ class TestSetItem:
                 shape=value_shape,
                 device=tdc.device,
             )
+        else:  # If value_shape is None, it's a scalar assignment
+            value_to_assign = torch.tensor(value_to_assign, device=tdc.device)
 
         with pytest.raises(error, match=match):
             tdc[idx] = value_to_assign
-
 
     # Raw tensor shape mismatch test cases
     RAW_TENSOR_MISMATCH_CASES = [
@@ -326,7 +334,12 @@ class TestSetItem:
         ids=[case[0] for case in RAW_TENSOR_MISMATCH_CASES],
     )
     def test_setitem_raw_tensor_shape_mismatch_raises_error(
-        self, test_name, idx, tensor_value_shape, field_name_expected_to_fail, expected_slice_shape_at_fail
+        self,
+        test_name,
+        idx,
+        tensor_value_shape,
+        field_name_expected_to_fail,
+        expected_slice_shape_at_fail,
     ):
         """Tests that assigning a raw tensor with a shape that is not broadcastable
         to all field slices raises an error in eager mode."""
