@@ -137,7 +137,7 @@ class TensorDataClass(TensorContainer, PytreeRegistered, TensorDataclassTransfor
 
         return flat_names, event_ndims, meta_data
 
-    def _pytree_flatten(self) -> Tuple[List[Any], Tuple]:
+    def _pytree_flatten(self) -> Tuple[List[Any], Any]:
         """
         Flattens the TensorDict into its tensor leaves and static metadata.
         """
@@ -167,9 +167,10 @@ class TensorDataClass(TensorContainer, PytreeRegistered, TensorDataclassTransfor
         """
         flat_values, context = self._pytree_flatten()
         flat_names = context[0]
-        return [
+        name_value_tuples = [
             (pytree.GetAttrKey(k), v) for k, v in zip(flat_names, flat_values)
-        ], context
+        ]
+        return name_value_tuples, context  # type: ignore[return-value]
 
     @classmethod
     def _pytree_unflatten(
