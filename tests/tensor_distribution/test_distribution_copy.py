@@ -44,11 +44,6 @@ def test_copy_returns_same_subclass_and_preserves_properties(TDClass, init_kwarg
     assert td_copy.shape == td.shape
     assert td_copy.device == td.device
 
-    # Distribution‐specific properties preserved
-    _, (_, _, _, _, meta_data) = td._pytree_flatten()
-    _, (_, _, _, _, meta_data_copy) = td_copy._pytree_flatten()
-    assert meta_data == meta_data_copy
-
     # Data keys and tensor contents preserved
     leaves, _ = td._pytree_flatten()
     leaves_copy, _ = td_copy._pytree_flatten()

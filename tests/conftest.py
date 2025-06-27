@@ -57,3 +57,19 @@ def pytest_configure(config):
         "markers",
         "skipif_no_compile: skip test if C++ compiler is not available",
     )
+
+
+@pytest.fixture(
+    params=[
+        pytest.param("cpu", id="cpu"),
+        pytest.param(
+            "cuda",
+            id="cuda",
+            marks=pytest.mark.skipif(
+                not torch.cuda.is_available(), reason="CUDA not available"
+            ),
+        ),
+    ]
+)
+def device(request):
+    return torch.device(request.param)

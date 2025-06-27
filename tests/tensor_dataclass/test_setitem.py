@@ -107,7 +107,17 @@ class TestSetItem:
         ids=[case[0] for case in BASIC_INDEXING_CASES],
     )
     def test_setitem_basic_indexing_with_scalar(self, test_name, idx):
-        """Tests basic indexing with a scalar is correct and compiles."""
+        """Tests setting a slice of a TensorDataClass to a scalar value.
+
+        This test covers basic indexing using integers and slices. It verifies
+        that assigning a scalar (float) to a part of the TensorDataClass works
+        as expected and that the operation is torch.compile compatible.
+
+        Example with torch.Tensor:
+            >>> tensor = torch.zeros(10)
+            >>> tensor[5] = 1.0
+            >>> tensor[2:5] = 1.0
+        """
         tdc_initial = create_sample_tdc()
         value = 0.0
         self._run_and_verify_setitem(tdc_initial, idx, value, test_name)
@@ -124,7 +134,18 @@ class TestSetItem:
         ids=[case[0] for case in BROADCASTABLE_TENSOR_CASES],
     )
     def test_setitem_basic_indexing_with_broadcastable_tensor(self, test_name, idx):
-        """Tests basic indexing with a broadcastable raw tensor value."""
+        """Tests basic indexing with a broadcastable raw tensor value.
+
+        This test verifies that assigning a broadcastable raw tensor (e.g., a
+        0-dim tensor) to a slice of a TensorDataClass works correctly. The
+        operation should be transparent and compile successfully.
+
+        Example with torch.Tensor:
+            >>> tensor = torch.zeros(10, 5)
+            >>> value = torch.tensor(7.77)
+            >>> tensor[5] = value
+            >>> tensor[2:5, :] = value
+        """
         tdc_initial = create_sample_tdc()
         # A tensor that is broadcastable to all fields' slices.
         # e.g. a 0-dim tensor or a tensor of shape (1,).
@@ -143,7 +164,21 @@ class TestSetItem:
         ids=[case[0] for case in TDC_VALUE_CASES],
     )
     def test_setitem_basic_indexing_with_tdc(self, test_name, idx):
-        """Tests basic indexing with a TDC is correct and compiles."""
+        """Tests basic indexing with another TensorDataClass as the value.
+
+        This test covers assigning a compatible TensorDataClass instance to a
+        slice of another TensorDataClass. It ensures that the leaf tensors are
+        correctly updated and that the operation compiles.
+
+        Example with torch.Tensor (conceptual):
+        While you can't assign a dict of tensors directly, the principle is
+        similar to updating slices of multiple tensors at once.
+            >>> features = torch.zeros(20, 5, 10)
+            >>> labels = torch.zeros(20, 5)
+            >>> # tdc_dest[5] = tdc_source
+            >>> features[5] = torch.ones(5, 10) # tdc_source.features
+            >>> labels[5] = torch.ones(5)       # tdc_source.labels
+        """
         tdc_dest_initial = create_sample_tdc()
         tdc_source = create_source_tdc_for_slice(tdc_dest_initial, idx)
         self._run_and_verify_setitem(tdc_dest_initial, idx, tdc_source, test_name)
@@ -163,7 +198,18 @@ class TestSetItem:
         ids=[case[0] for case in ADVANCED_INDEXING_CASES],
     )
     def test_setitem_advanced_indexing_with_scalar(self, test_name, idx):
-        """Tests advanced indexing (excluding boolean masks) with a scalar."""
+        """Tests advanced indexing with a scalar value.
+
+        This test covers advanced indexing using lists of integers or tensors.
+        It checks that assigning a scalar value to elements specified by
+        advanced indexing works correctly and compiles.
+
+        Example with torch.Tensor:
+            >>> tensor = torch.zeros(10)
+            >>> indices = [0, 4, 8]
+            >>> tensor[indices] = 1.0
+            >>> # tensor is now [1., 0., 0., 0., 1., 0., 0., 0., 1., 0.]
+        """
         tdc_initial = create_sample_tdc()
         value = 0.0
 
@@ -188,7 +234,18 @@ class TestSetItem:
         ids=[case[0] for case in BOOLEAN_MASK_CASES],
     )
     def test_setitem_bool_mask_indexing_with_scalar(self, test_name, idx):
-        """Tests boolean mask indexing with a scalar using fullgraph=False."""
+        """Tests boolean mask indexing with a scalar value.
+
+        This test verifies that assigning a scalar to elements of a
+        TensorDataClass selected by a boolean mask works correctly. Due to the
+        nature of boolean mask indexing, this is tested with `fullgraph=False`.
+
+        Example with torch.Tensor:
+            >>> tensor = torch.zeros(5)
+            >>> mask = torch.tensor([True, False, True, False, True])
+            >>> tensor[mask] = 1.0
+            >>> # tensor is now [1., 0., 1., 0., 1.]
+        """
         tdc_initial = create_sample_tdc()
         value = 0.0
         self._run_and_verify_setitem(
@@ -206,7 +263,22 @@ class TestSetItem:
         ids=[case[0] for case in ADVANCED_TDC_CASES],
     )
     def test_setitem_advanced_indexing_with_tdc(self, test_name, idx):
-        """Tests advanced indexing (excluding boolean masks) with a TDC."""
+        """Tests advanced indexing with a TensorDataClass as the value.
+
+        This test checks that assigning a compatible TensorDataClass to
+        elements selected by advanced indexing (e.g., a long tensor of
+        indices) works as expected and compiles.
+
+        Example with torch.Tensor (conceptual):
+            >>> features = torch.zeros(20, 5, 10)
+            >>> labels = torch.zeros(20, 5)
+            >>> indices = torch.tensor([0, 2, 4])
+            >>> # tdc_dest[indices] = tdc_source
+            >>> source_features = torch.ones(3, 5, 10) # tdc_source.features
+            >>> source_labels = torch.ones(3, 5)       # tdc_source.labels
+            >>> features[indices] = source_features
+            >>> labels[indices] = source_labels
+        """
         tdc_dest_initial = create_sample_tdc()
         tdc_source = create_source_tdc_for_slice(tdc_dest_initial, idx)
         self._run_and_verify_setitem(tdc_dest_initial, idx, tdc_source, test_name)
@@ -221,7 +293,20 @@ class TestSetItem:
         ids=[case[0] for case in BOOLEAN_MASK_TDC_CASES],
     )
     def test_setitem_bool_mask_indexing_with_tdc(self, test_name, idx):
-        """Tests boolean mask indexing with a TDC using fullgraph=False."""
+        """Tests boolean mask indexing with a TensorDataClass as the value.
+
+        This test verifies that assigning a TensorDataClass to elements
+        selected by a boolean mask works correctly. The operation is tested
+        with `fullgraph=False`.
+
+        Example with torch.Tensor (conceptual):
+            >>> features = torch.zeros(5, 2, 3)
+            >>> mask = torch.tensor([True, False, True, False, True]) # shape (5,)
+            >>> # tdc_dest[mask] = tdc_source
+            >>> # tdc_source must have shape (3, 2, 3) where 3 is mask.sum()
+            >>> source_features = torch.ones(3, 2, 3)
+            >>> features[mask] = source_features
+        """
         tdc_dest_initial = create_sample_tdc()
         tdc_source = create_source_tdc_for_slice(tdc_dest_initial, idx)
         self._run_and_verify_setitem(
@@ -240,13 +325,33 @@ class TestSetItem:
         ids=[case[0] for case in ELLIPSIS_CASES],
     )
     def test_setitem_ellipsis_with_scalar(self, test_name, idx):
-        """Tests ellipsis indexing with a scalar is correct and compiles."""
+        """Tests `__setitem__` with Ellipsis and a scalar value.
+
+        This test checks that using an Ellipsis (`...`) for indexing and
+        assigning a scalar value works correctly and compiles. Ellipsis is used
+        to select all dimensions not explicitly sliced.
+
+        Example with torch.Tensor:
+            >>> tensor = torch.zeros(2, 3, 4)
+            >>> tensor[..., 0] = 1.0 # sets all elements where last dim is 0
+            >>> tensor[0, ...] = 2.0 # sets all elements in the first slice
+        """
         tdc_initial = create_sample_tdc()
         value = 0.0
         self._run_and_verify_setitem(tdc_initial, idx, value, test_name)
 
     def test_setitem_broadcast_assign_tdc(self):
-        """Tests assigning a broadcastable TDC is correct and compiles."""
+        """Tests assigning a broadcastable TensorDataClass.
+
+        This test verifies that a TensorDataClass instance can be assigned to a
+        slice of another TensorDataClass, even if their batch dimensions are
+        different but broadcastable. The operation should compile.
+
+        Example with torch.Tensor:
+            >>> tensor = torch.zeros(10, 5, 2)
+            >>> value = torch.ones(1, 5, 2) # broadcastable
+            >>> tensor[0:5] = value # Assign to a slice of shape (5, 5, 2)
+        """
         tdc_dest_initial = create_sample_tdc()
         idx = slice(0, 10)
         tdc_source = SampleTensorDataClass(
@@ -286,7 +391,20 @@ class TestSetItem:
     def test_setitem_invalid_inputs_raise_errors(
         self, test_name, idx, value_shape, error, match
     ):
-        """Tests that invalid inputs correctly raise errors in eager mode."""
+        """Tests that invalid `__setitem__` operations raise appropriate errors.
+
+        This test ensures that `__setitem__` correctly raises errors in eager
+        mode for various invalid scenarios, such as shape mismatches when
+        assigning a TDC, out-of-bounds indices, and too many indices.
+
+        Example with torch.Tensor:
+            >>> import pytest
+            >>> tensor = torch.zeros(5)
+            >>> with pytest.raises(IndexError):
+            ...     tensor[10] = 0.0 # index out of bounds
+            >>> with pytest.raises(ValueError):
+            ...     tensor[0:3] = torch.zeros(4) # shape mismatch
+        """
         tdc = create_sample_tdc()
 
         value_to_assign = 0.0  # Default to scalar for non-TDC value cases
@@ -341,8 +459,20 @@ class TestSetItem:
         field_name_expected_to_fail,
         expected_slice_shape_at_fail,
     ):
-        """Tests that assigning a raw tensor with a shape that is not broadcastable
-        to all field slices raises an error in eager mode."""
+        """Tests that assigning a raw tensor with a non-broadcastable shape fails.
+
+        This test ensures that assigning a raw `torch.Tensor` to a slice of a
+        TensorDataClass raises a `RuntimeError` if the tensor's shape cannot
+        be broadcast to the shape of all leaf tensor slices.
+
+        Example with torch.Tensor:
+            >>> # This is the behavior being tested inside TensorDataClass for each leaf
+            >>> tensor_leaf = torch.zeros(5, 10)
+            >>> # tensor_leaf's slice has shape (10,)
+            >>> with pytest.raises(RuntimeError):
+            ...     # This Diffs as shape (5,) cannot be broadcast to (10,)
+            ...     tensor_leaf[0] = torch.rand(5)
+        """
         tdc = create_sample_tdc()
         value_tensor = torch.randn(*tensor_value_shape, device=tdc.device)
 

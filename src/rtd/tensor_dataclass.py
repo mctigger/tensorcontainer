@@ -125,7 +125,7 @@ class TensorDataClass(TensorContainer, PytreeRegistered, TensorDataclassTransfor
                 )
 
     def _get_pytree_context(
-        self, flat_leaves: List[TDCompatible], children_spec: pytree.TreeSpec, meta_data
+        self, flat_names: List[str], flat_leaves: List[TDCompatible], meta_data
     ) -> Tuple:
         """
         Private helper to compute the pytree context for this TensorDict.
@@ -135,26 +135,28 @@ class TensorDataClass(TensorContainer, PytreeRegistered, TensorDataclassTransfor
         batch_ndim = len(self.shape)
         event_ndims = tuple(leaf.ndim - batch_ndim for leaf in flat_leaves)
 
-        return (children_spec, event_ndims, self.shape, self.device, meta_data)
+        return flat_names, event_ndims, meta_data
 
     def _pytree_flatten(self) -> Tuple[List[Any], Tuple]:
         """
         Flattens the TensorDict into its tensor leaves and static metadata.
         """
-        data = {
-            f.name: getattr(self, f.name)
-            for f in dataclasses.fields(self)
-            if isinstance(getattr(self, f.name), TDCompatible)
-        }
-        meta_data = {
-            f.name: getattr(self, f.name)
-            for f in dataclasses.fields(self)
-            if not isinstance(getattr(self, f.name), TDCompatible)
-            and f.name not in ["shape", "device"]
-        }
-        flat_leaves, children_spec = pytree.tree_flatten(data)
-        context = self._get_pytree_context(flat_leaves, children_spec, meta_data)
-        return flat_leaves, context
+        flat_names = []
+        flat_values = []
+
+        meta_data = {}
+
+        for f in dataclasses.fields(self):
+            name, val = f.name, getattr(self, f.name)
+            if isinstance(val, TDCompatible):
+                flat_values.append(val)
+                flat_names.append(name)
+            else:
+                meta_data[name] = val
+
+        context = self._get_pytree_context(flat_names, flat_values, meta_data)
+
+        return flat_values, context
 
     def _pytree_flatten_with_keys_fn(
         self,
@@ -163,62 +165,25 @@ class TensorDataClass(TensorContainer, PytreeRegistered, TensorDataclassTransfor
         Flattens the TensorDataclass into key-path/leaf pairs and static metadata,
         using GetAttrKey for dataclass attributes.
         """
-        all_keypath_leaf_pairs = []
-        data_for_children_spec = {}
-        meta_data = {}
-
-        for f in dataclasses.fields(self):
-            value = getattr(self, f.name)
-            if isinstance(value, TDCompatible):
-                # Add to data_for_children_spec to get the correct TreeSpec later
-                data_for_children_spec[f.name] = value
-
-                # Recursively flatten TDCompatible fields to get their leaves and key paths
-                field_keypath_leaf_list, _ = pytree.tree_flatten_with_path(value)
-
-                # Prepend GetAttrKey to each key path
-                for key_path, leaf in field_keypath_leaf_list:
-                    new_key_path = (pytree.GetAttrKey(f.name),) + key_path
-                    all_keypath_leaf_pairs.append((new_key_path, leaf))
-            elif f.name not in ["shape", "device"]:
-                # Collect non-TDCompatible fields as metadata
-                meta_data[f.name] = value
-
-        # Get the children_spec from flattening the dictionary of TDCompatible fields.
-        # This ensures _pytree_unflatten can reconstruct the object correctly.
-        _, children_spec = pytree.tree_flatten_with_path(data_for_children_spec)
-
-        flat_leaves = [leaf for _, leaf in all_keypath_leaf_pairs]
-        context = self._get_pytree_context(flat_leaves, children_spec, meta_data)
-
-        return all_keypath_leaf_pairs, context
+        flat_values, context = self._pytree_flatten()
+        flat_names = context[0]
+        return [
+            (pytree.GetAttrKey(k), v) for k, v in zip(flat_names, flat_values)
+        ], context
 
     @classmethod
     def _pytree_unflatten(
         cls, leaves: Iterable[Any], context: pytree.Context
     ) -> TensorDataClass:
         """Unflattens component values into a dataclass instance."""
-        (
-            children_spec,
-            event_ndims,
-            shape,
-            device,
-            meta_data,
-        ) = context
+        flat_names, event_ndims, meta_data = context
 
         leaves = list(leaves)  # Convert to list to allow indexing
 
         if not leaves:
-            return cls(
-                **meta_data,
-                device=device,
-                shape=shape,
-            )
+            return cls(**meta_data)
 
         reconstructed_device = leaves[0].device
-
-        # Reconstruct the nested dictionary structure using the unflattened leaves
-        data = pytree.tree_unflatten(leaves, children_spec)
 
         # Calculate new_shape based on the (potentially transformed) leaves and event_ndims from context.
         # This correctly determines the batch shape of the TensorDict after operations like stack/cat.
@@ -233,8 +198,8 @@ class TensorDataClass(TensorContainer, PytreeRegistered, TensorDataclassTransfor
             reconstructed_shape = first_leaf_reconstructed.shape[: -event_ndims[0]]
 
         return cls(
-            **data,
-            **meta_data,
+            **dict(zip(flat_names, leaves)),
+            **{k: v for k, v in meta_data.items() if k not in ["device", "shape"]},
             device=reconstructed_device,
             shape=reconstructed_shape,
         )

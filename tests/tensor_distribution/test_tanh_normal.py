@@ -123,12 +123,7 @@ def test_copy():
     # Compare the underlying tensor values by converting to tensors
     assert torch.allclose(loc, dist_copy.loc)  # type: ignore
     assert torch.allclose(scale, dist_copy.scale)  # type: ignore
-    _, (_, _, _, _, meta_data) = dist._pytree_flatten()
-    _, (_, _, _, _, meta_data_copy) = dist_copy._pytree_flatten()
-    assert (
-        meta_data["reinterpreted_batch_ndims"]
-        == meta_data_copy["reinterpreted_batch_ndims"]
-    )
+    assert dist.reinterpreted_batch_ndims == dist_copy.reinterpreted_batch_ndims
     assert dist.shape == dist_copy.shape
     # Compare devices as strings to avoid type issues
     assert str(dist.device) == str(dist_copy.device)
