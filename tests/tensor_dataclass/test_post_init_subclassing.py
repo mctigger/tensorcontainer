@@ -107,7 +107,7 @@ class TestPostInitSubclassing:
     @skipif_no_compile
     def test_subclass_compile_compatibility(self):
         """Test that subclassed TensorDataclass works with torch.compile."""
-        from tests.tensor_dict.compile_utils import run_and_compare_compiled
+        from tests.compile_utils import run_and_compare_compiled
 
         def func(td: SubclassedTensorDataclass):
             return td.clone()

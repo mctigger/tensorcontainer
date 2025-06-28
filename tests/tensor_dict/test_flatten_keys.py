@@ -2,7 +2,7 @@ import pytest
 import torch
 
 from rtd.tensor_dict import TensorDict
-from tests.tensor_dict.compile_utils import run_and_compare_compiled
+from tests.compile_utils import run_and_compare_compiled
 
 
 @pytest.fixture
@@ -40,8 +40,10 @@ def test_flatten_keys_simple(simple_nested):
 
 def test_flatten_keys_custom_sep(simple_nested):
     td = simple_nested
+
     def flatten_keys_custom_sep(td):
         return td.flatten_keys(separator="_")
+
     td_flat = flatten_keys_custom_sep(td)
     run_and_compare_compiled(flatten_keys_custom_sep, td)
     assert "x_a" in td_flat.keys()
@@ -63,8 +65,10 @@ def test_flatten_keys_idempotent_on_flat():
     """Applying flatten_keys twice should yield the same result as applying it once."""
     data = {"z": torch.zeros(3, 4)}
     td = TensorDict(data, shape=(3, 4))
+
     def flatten_keys(td):
         return td.flatten_keys()
+
     td_flat = flatten_keys(td)
     run_and_compare_compiled(flatten_keys, td)
     assert "z" in td_flat.keys()
@@ -99,6 +103,7 @@ def test_flatten_keys_complex():
     assert "f" in td_flat.keys()
     assert isinstance(list(td_flat.keys())[0], str)
 
+
 def test_flatten_keys_torch_compile(simple_nested, deep_nested):
     td_simple = simple_nested
     td_simple_flat = td_simple.flatten_keys()
@@ -109,6 +114,7 @@ def test_flatten_keys_torch_compile(simple_nested, deep_nested):
     assert isinstance(list(td_simple_flat.keys())[0], str)
 
     td_deep = deep_nested
+
     def flatten_func(d):
         return d.flatten_keys()
 
@@ -119,7 +125,7 @@ def test_flatten_keys_torch_compile(simple_nested, deep_nested):
     assert isinstance(list(td_deep_flat.keys())[0], str)
 
     def flatten_custom_sep(td):
-        return td.flatten_keys(separator='_')
+        return td.flatten_keys(separator="_")
 
     td_simple = simple_nested
     td_custom_flat = flatten_custom_sep(td_simple)
@@ -133,7 +139,6 @@ def test_flatten_keys_torch_compile(simple_nested, deep_nested):
     td_empty_flat = td_empty.flatten_keys()
     run_and_compare_compiled(td_empty.flatten_keys)
     assert len(td_empty_flat.keys()) == 0
-
 
 
 def test_flatten_keys_items_correctly_mapped(simple_nested):

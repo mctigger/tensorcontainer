@@ -6,7 +6,7 @@ from src.rtd.tensor_distribution import (
     TensorCategorical,
     TensorNormal,
 )
-from tests.tensor_dict.compile_utils import run_and_compare_compiled
+from tests.compile_utils import run_and_compare_compiled
 
 
 @pytest.fixture(

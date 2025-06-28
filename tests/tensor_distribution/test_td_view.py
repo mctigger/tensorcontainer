@@ -3,7 +3,7 @@ import torch
 
 from rtd.tensor_dict import TensorDict
 from rtd.tensor_distribution import TensorNormal
-from tests.tensor_dict.compile_utils import run_and_compare_compiled
+from tests.compile_utils import run_and_compare_compiled
 
 
 def test_view_basic():

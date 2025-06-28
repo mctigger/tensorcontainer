@@ -4,7 +4,7 @@ import torch.testing
 from torch.distributions import Independent, OneHotCategorical
 
 from rtd.tensor_distribution import TensorCategorical
-from tests.tensor_dict.compile_utils import run_and_compare_compiled
+from tests.compile_utils import run_and_compare_compiled
 
 
 TEST_CASES = [

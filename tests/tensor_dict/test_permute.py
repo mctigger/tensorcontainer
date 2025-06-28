@@ -3,7 +3,7 @@ import torch
 
 from rtd.tensor_dict import TensorDict
 
-from .compile_utils import run_and_compare_compiled
+from tests.compile_utils import run_and_compare_compiled
 
 
 class TestPermute:

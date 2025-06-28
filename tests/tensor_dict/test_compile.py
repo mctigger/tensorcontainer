@@ -2,7 +2,7 @@ import pytest
 import torch
 
 from rtd.tensor_dict import TensorDict
-from tests.tensor_dict.compile_utils import assert_tc_equal, run_and_compare_compiled
+from tests.compile_utils import assert_tc_equal, run_and_compare_compiled
 
 
 @pytest.fixture

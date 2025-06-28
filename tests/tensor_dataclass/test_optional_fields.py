@@ -37,7 +37,7 @@ class TestOptionalFields:
             return stacked_data
 
         if execution_mode == "compiled":
-            from tests.tensor_dict.compile_utils import run_and_compare_compiled
+            from tests.compile_utils import run_and_compare_compiled
 
             run_and_compare_compiled(_test_stack_none)
         else:
@@ -82,7 +82,7 @@ class TestOptionalFields:
             return stacked_data
 
         if execution_mode == "compiled":
-            from tests.tensor_dict.compile_utils import run_and_compare_compiled
+            from tests.compile_utils import run_and_compare_compiled
 
             run_and_compare_compiled(_test_stack_tensor)
         else:
@@ -113,7 +113,7 @@ class TestOptionalFields:
             return data, cloned_data
 
         if execution_mode == "compiled":
-            from tests.tensor_dict.compile_utils import run_and_compare_compiled
+            from tests.compile_utils import run_and_compare_compiled
 
             run_and_compare_compiled(_test_default_factory)
         else:
@@ -143,7 +143,7 @@ class TestOptionalFields:
             return instance
 
         if execution_mode == "compiled":
-            from tests.tensor_dict.compile_utils import run_and_compare_compiled
+            from tests.compile_utils import run_and_compare_compiled
 
             run_and_compare_compiled(_test_init_none)
         else:
@@ -178,7 +178,7 @@ class TestOptionalFields:
             return instance
 
         if execution_mode == "compiled":
-            from tests.tensor_dict.compile_utils import run_and_compare_compiled
+            from tests.compile_utils import run_and_compare_compiled
 
             run_and_compare_compiled(_test_init_all_fields)
         else:
@@ -252,7 +252,7 @@ class TestOptionalFields:
             return data1, stacked_data
 
         if execution_mode == "compiled":
-            from tests.tensor_dict.compile_utils import run_and_compare_compiled
+            from tests.compile_utils import run_and_compare_compiled
 
             run_and_compare_compiled(_test_default_factory_tensor)
         else:

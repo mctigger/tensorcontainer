@@ -2,7 +2,7 @@ import pytest
 import torch
 
 from src.rtd.tensor_dataclass import TensorDataClass
-from tests.tensor_dict.compile_utils import run_and_compare_compiled
+from tests.compile_utils import run_and_compare_compiled
 
 
 class SampleTensorDataClass(TensorDataClass):

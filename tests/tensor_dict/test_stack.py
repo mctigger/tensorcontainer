@@ -6,7 +6,7 @@ from rtd.tensor_dict import TensorDict
 from tests.conftest import skipif_no_compile
 from tests.tensor_dict import common
 from tests.tensor_dict.common import compare_nested_dict, compute_stack_shape
-from tests.tensor_dict.compile_utils import run_and_compare_compiled
+from tests.compile_utils import run_and_compare_compiled
 
 
 @pytest.fixture(autouse=True)

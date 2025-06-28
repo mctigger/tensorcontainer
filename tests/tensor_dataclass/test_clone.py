@@ -97,7 +97,7 @@ class TestClone:
     @skipif_no_compile
     def test_clone_compile(self):
         """Tests that a function using TensorDataclass.clone() can be torch.compiled."""
-        from tests.tensor_dict.compile_utils import run_and_compare_compiled
+        from tests.compile_utils import run_and_compare_compiled
 
         class MyData(TensorDataClass):
             shape: tuple

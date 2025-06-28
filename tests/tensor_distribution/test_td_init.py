@@ -38,7 +38,7 @@ class TestTensorDistributionInit:
 
         loc = torch.randn(2, 3)
         scale = torch.rand(2, 3)
-        from tests.tensor_dict.compile_utils import run_and_compare_compiled
+        from tests.compile_utils import run_and_compare_compiled
 
         eager_result, compiled_result = run_and_compare_compiled(
             create_td_from_tensors, loc, scale

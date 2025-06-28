@@ -10,7 +10,7 @@ from tests.tensor_dataclass.conftest import (
     NestedTensorDataClass,
     compute_stack_shape,
 )
-from tests.tensor_dict.compile_utils import run_and_compare_compiled
+from tests.compile_utils import run_and_compare_compiled
 
 
 class TestStack:

@@ -524,7 +524,7 @@ def nested_tensor_data_class(request):
 
 def assert_compilation_works(func, *args, **kwargs):
     """Helper to assert that a function can be compiled and produces consistent results."""
-    from tests.tensor_dict.compile_utils import run_and_compare_compiled
+    from tests.compile_utils import run_and_compare_compiled
 
     run_and_compare_compiled(func, *args, **kwargs)
 

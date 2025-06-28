@@ -140,7 +140,7 @@ class TestShapeOperations:
     )
     def test_shape_view_compile(self, original_shape, view_shape):
         """Test that view operations work correctly with torch.compile."""
-        from tests.tensor_dict.compile_utils import run_and_compare_compiled
+        from tests.compile_utils import run_and_compare_compiled
 
         td = ShapeTestClass(
             shape=original_shape,
