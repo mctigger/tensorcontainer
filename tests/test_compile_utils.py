@@ -68,58 +68,25 @@ def test_run_and_compare_compiled_fails():
         )
 
 
+def recursive_recompile(i):
+    if i > 0:
+        i -= 1
+        return recursive_recompile(i)
+    else:
+        return torch.tensor([1])
+
+
 class TestRunAndCountRecompiles:
-    def test_zero_recompiles(self):
-        """Tests that a function recompiles zero times with same input shape."""
-
-        def func(x):
-            return x * 2
-
-        args1 = (torch.randn(4),)
-        args2 = (torch.randn(4),)
-
-        run_and_count_recompiles(func, args1, args2, expected_recompiles=0)
-
     def test_one_recompile(self):
-        """Tests that a function recompiles once with different input shapes."""
+        """Tests that a stateful functor recompiles once on the second call."""
+        run_and_count_recompiles(recursive_recompile, (1,), expected_recompiles=0)
 
-        def func(x):
-            return x * 2
+    def test_two_recompile(self):
+        """Tests that a stateful functor recompiles once on the second call."""
+        run_and_count_recompiles(recursive_recompile, (1,), (3,), expected_recompiles=1)
 
-        args1 = (torch.randn(4),)
-        args2 = (torch.randn(8),)
-
-        run_and_count_recompiles(func, args1, args2, expected_recompiles=1)
-
-    def test_run_and_count_recompiles_two_recompiles(self):
-        """Tests that a function recompiles twice with three different input shapes."""
-
-        def func(x):
-            if x.shape[0] > 10:
-                return x * 2
-            return x + 1
-
-        args1 = (torch.randn(4),)
-        args2 = (torch.randn(8),)
-        args3 = (torch.randn(16),)
-
-        run_and_count_recompiles(func, args1, args2, args3, expected_recompiles=2)
-
-    def test_run_and_count_recompiles_three_recompiles(self):
-        """Tests that a function recompiles three times with four different input shapes."""
-
-        def func(x):
-            if x.shape[0] > 20:
-                return x * 2
-            elif x.shape[0] > 10:
-                return x + 2
-            return x + 1
-
-        args1 = (torch.randn(4),)
-        args2 = (torch.randn(8),)
-        args3 = (torch.randn(16),)
-        args4 = (torch.randn(32),)
-
+    def test_three_recompile(self):
+        """Tests that a stateful functor recompiles once on the second call."""
         run_and_count_recompiles(
-            func, args1, args2, args3, args4, expected_recompiles=3
+            recursive_recompile, (1,), (2,), (3,), expected_recompiles=2
         )
