@@ -43,6 +43,20 @@ def _compare_results(eager_result, compiled_result):
         assert eager_result == compiled_result, "Eager and compiled results mismatch"
 
 
+class GraphBreakCounter:
+    def __enter__(self):
+        torch._dynamo.reset()
+        torch._dynamo.utils.counters.clear()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        pass
+
+    @property
+    def graph_breaks(self):
+        return sum(torch._dynamo.utils.counters["graph_break"].values())
+
+
 def run_and_compare_compiled(
     fn,
     *args,
@@ -54,27 +68,24 @@ def run_and_compare_compiled(
     Runs a function in eager mode and compiled mode, compares results,
     and asserts the number of graph breaks.
     """
-    # Reset dynamo counters
-    torch._dynamo.reset()
-    torch._dynamo.utils.counters.clear()
-
     # Eager run
     torch.manual_seed(0)
     eager_result = fn(*args, **kwargs)
 
     # Compiled run
     torch.manual_seed(0)
-    compiled_fn = torch.compile(fn, fullgraph=fullgraph)
-    compiled_result = compiled_fn(*args, **kwargs)
+    counter = torch._dynamo.testing.CompileCounter()
+    with GraphBreakCounter() as gb_counter:
+        compiled_fn = torch.compile(fn, fullgraph=fullgraph, backend=counter)
+        compiled_result = compiled_fn(*args, **kwargs)
 
     # Assert results are equal
     _compare_results(eager_result, compiled_result)
 
     if expected_graph_breaks is not None:
-        graph_breaks = sum(torch._dynamo.utils.counters["graph_break"].values())
-        assert graph_breaks == expected_graph_breaks, (
+        assert gb_counter.graph_breaks == expected_graph_breaks, (
             f"Expected {expected_graph_breaks} graph breaks, "
-            f"got {graph_breaks} graph breaks"
+            f"got {gb_counter.graph_breaks} graph breaks"
         )
 
     return eager_result, compiled_result
