@@ -1,7 +1,7 @@
 from __future__ import annotations
-
 import functools
-from typing import Any, List, Optional, Tuple, TypeAlias, TypeVar, Union
+from typing import Any, List, Optional, Tuple, TypeAlias, Union
+from typing_extensions import Self
 
 import torch
 
@@ -12,7 +12,6 @@ from torch import Tensor
 HANDLED_FUNCTIONS = {}
 
 TCCompatible: TypeAlias = Union[torch.Tensor, "TensorContainer"]
-T = TypeVar("T", bound="TensorContainer")
 
 
 def implements(torch_function):
@@ -113,8 +112,8 @@ class TensorContainer:
 
     # --- Overloaded methods leveraging PyTrees ---
 
-    def get_number_of_consuming_dims(self, item):
-        if item is Ellipsis:
+    def get_number_of_consuming_dims(self, item) -> int:
+        if item is Ellipsis or item is None:
             return 0
         if isinstance(item, torch.Tensor) and item.dtype == torch.bool:
             return item.ndim
@@ -141,9 +140,7 @@ class TensorContainer:
         # Count how many items in the index "consume" an axis from the original shape.
         # `None` adds a new axis, so it's not counted.
         num_consuming_indices = sum(
-            self.get_number_of_consuming_dims(item)
-            for item in idx
-            if item is not Ellipsis and item is not None
+            self.get_number_of_consuming_dims(item) for item in idx
         )
 
         rank = len(shape)
@@ -165,62 +162,6 @@ class TensorContainer:
 
         return final_index
 
-    def __getitem__(self: T, key: Any) -> T:
-        if isinstance(key, tuple):
-            key = self.transform_ellipsis_index(self.shape, key)
-        elif self.ndim == 0:
-            raise IndexError(
-                "Cannot index a 0-dimensional TensorContainer with a single index. Use a tuple of indices matching the batch shape, or an empty tuple for a scalar."
-            )
-        return pytree.tree_map(lambda x: x[key], self)
-
-    def _get_leaf_key(self, leaf_tensor: torch.Tensor, key_param: Any) -> Tuple:
-        """
-        Constructs the correct indexing key for a leaf tensor based on the
-        original key provided to __setitem__.
-        """
-        current_key_tuple = key_param
-        if not isinstance(current_key_tuple, tuple):
-            current_key_tuple = (current_key_tuple,)
-
-        try:
-            # Handle Ellipsis: expand it to the correct number of slice(None)
-            ellipsis_pos = current_key_tuple.index(Ellipsis)
-            pre_ellipsis = current_key_tuple[:ellipsis_pos]
-            post_ellipsis = current_key_tuple[ellipsis_pos + 1 :]
-
-            num_ellipsis_dims = (
-                leaf_tensor.ndim - len(pre_ellipsis) - len(post_ellipsis)
-            )
-
-            if num_ellipsis_dims < 0:
-                raise IndexError(
-                    f"Too many indices for tensor of dimension {leaf_tensor.ndim} "
-                    f"after expanding Ellipsis for key '{key_param}'."
-                )
-            return pre_ellipsis + (slice(None),) * num_ellipsis_dims + post_ellipsis
-
-        except ValueError:  # Ellipsis not found
-            # No Ellipsis: append slice(None) for remaining event dimensions of the leaf.
-            # current_key_tuple applies to the batch dimensions of the container.
-            num_indices_in_key = len(current_key_tuple)
-
-            if num_indices_in_key > leaf_tensor.ndim:
-                raise IndexError(
-                    f"too many indices for tensor of dimension {leaf_tensor.ndim} "  # Changed to lowercase 't'
-                    f"for key '{key_param}'."
-                )
-
-            event_dims_to_slice = leaf_tensor.ndim - num_indices_in_key
-            # This should ideally not happen if the above check is correct,
-            # but as a safeguard:
-            if event_dims_to_slice < 0:
-                raise IndexError(
-                    f"too many indices for tensor of dimension {leaf_tensor.ndim} "  # Changed to lowercase 't'
-                    f"for key '{key_param}' (key has {num_indices_in_key} elements)."
-                )
-            return current_key_tuple + (slice(None),) * event_dims_to_slice
-
     def _format_path(self, path: pytree.KeyPath) -> str:
         """Helper to format a PyTree KeyPath into a readable string."""
         parts = []
@@ -236,7 +177,16 @@ class TensorContainer:
             formatted_path = formatted_path[1:]
         return formatted_path
 
-    def __setitem__(self: T, key: Any, value: TCCompatible) -> None:
+    def __getitem__(self: Self, key: Any) -> Self:
+        if isinstance(key, tuple):
+            key = self.transform_ellipsis_index(self.shape, key)
+        elif self.ndim == 0:
+            raise IndexError(
+                "Cannot index a 0-dimensional TensorContainer with a single index. Use a tuple of indices matching the batch shape, or an empty tuple for a scalar."
+            )
+        return pytree.tree_map(lambda x: x[key], self)
+
+    def __setitem__(self: Self, key: Any, value: TCCompatible) -> None:
         """
         Sets the value of a slice of the container in-place.
 
@@ -289,20 +239,22 @@ class TensorContainer:
             for self_leaf in pytree.tree_leaves(self):
                 self_leaf[processed_key] = value
 
-    def view(self: T, *shape: int) -> T:
+    def view(self: Self, *shape: int) -> Self:
         return pytree.tree_map(lambda x: x.view(*shape, *x.shape[self.ndim :]), self)
 
-    def reshape(self: T, *shape: int) -> T:
+    def reshape(self: Self, *shape: int) -> Self:
         return pytree.tree_map(lambda x: x.reshape(*shape, *x.shape[self.ndim :]), self)
 
-    def to(self: T, *args, **kwargs) -> T:
+    def to(self: Self, *args, **kwargs) -> Self:
         # Move tensors and ensure they are contiguous
         return pytree.tree_map(lambda x: x.to(*args, **kwargs), self)
 
-    def detach(self: T) -> T:
+    def detach(self: Self) -> Self:
         return pytree.tree_map(lambda x: x.detach(), self)
 
-    def clone(self: T, *, memory_format: Optional[torch.memory_format] = None) -> T:
+    def clone(
+        self: Self, *, memory_format: Optional[torch.memory_format] = None
+    ) -> Self:
         # If memory_format is not specified, use torch.preserve_format as default
         if memory_format is None:
             memory_format = torch.preserve_format
@@ -313,10 +265,10 @@ class TensorContainer:
         cloned_td.device = self.device
         return cloned_td
 
-    def expand(self: T, *shape: int) -> T:
+    def expand(self: Self, *shape: int) -> Self:
         return pytree.tree_map(lambda x: x.expand(*shape, *x.shape[self.ndim :]), self)
 
-    def permute(self: T, *dims: int) -> T:
+    def permute(self: Self, *dims: int) -> Self:
         """Permutes the batch dimensions of the container.
 
         This is equivalent to calling :meth:`torch.Tensor.permute` on each tensor
@@ -343,7 +295,7 @@ class TensorContainer:
             lambda x: x.permute(*dims, *range(self.ndim, x.ndim)), self
         )
 
-    def squeeze(self: T, dim: Optional[int] = None) -> T:
+    def squeeze(self: Self, dim: Optional[int] = None) -> Self:
         """Squeezes the batch dimensions of the container.
 
         Args:
@@ -365,7 +317,7 @@ class TensorContainer:
                 return self.clone()
             return self.reshape(*new_shape)
 
-    def t(self: T) -> T:
+    def t(self: Self) -> Self:
         """Transposes the first two batch dimensions of the container.
 
         This is equivalent to ``self.transpose(0, 1)``.
@@ -380,7 +332,7 @@ class TensorContainer:
             )
         return self.transpose(0, 1)
 
-    def transpose(self: T, dim0: int, dim1: int) -> T:
+    def transpose(self: Self, dim0: int, dim1: int) -> Self:
         """Transposes two batch dimensions of the container.
 
         Args:
@@ -392,7 +344,7 @@ class TensorContainer:
         """
         return pytree.tree_map(lambda x: x.transpose(dim0, dim1), self)
 
-    def unsqueeze(self: T, dim: int) -> T:
+    def unsqueeze(self: Self, dim: int) -> Self:
         """Unsqueezes a batch dimension of the container.
 
         Args:
@@ -416,74 +368,74 @@ class TensorContainer:
         """Returns the total number of elements in the batch dimensions."""
         return self.size().numel()
 
-    def cpu(self: T) -> T:
+    def cpu(self: Self) -> Self:
         """Returns a new container with all tensors on the CPU."""
         return self.to("cpu")
 
-    def cuda(self: T, device=None, non_blocking: bool = False) -> T:
+    def cuda(self: Self, device=None, non_blocking: bool = False) -> Self:
         """Returns a new container with all tensors on the specified CUDA device."""
         return self.to(
             f"cuda:{device}" if device is not None else "cuda",
             non_blocking=non_blocking,
         )
 
-    def float(self: T) -> T:
+    def float(self: Self) -> Self:
         """Casts all tensors to float type."""
         return pytree.tree_map(lambda x: x.float(), self)
 
-    def double(self: T) -> T:
+    def double(self: Self) -> Self:
         """Casts all tensors to double type."""
         return pytree.tree_map(lambda x: x.double(), self)
 
-    def half(self: T) -> T:
+    def half(self: Self) -> Self:
         """Casts all tensors to half type."""
         return pytree.tree_map(lambda x: x.half(), self)
 
-    def long(self: T) -> T:
+    def long(self: Self) -> Self:
         """Casts all tensors to long type."""
         return pytree.tree_map(lambda x: x.long(), self)
 
-    def int(self: T) -> T:
+    def int(self: Self) -> Self:
         """Casts all tensors to int type."""
         return pytree.tree_map(lambda x: x.int(), self)
 
-    def abs(self: T) -> T:
+    def abs(self: Self) -> Self:
         """Computes the absolute value of each tensor in the container."""
         return pytree.tree_map(lambda x: x.abs(), self)
 
-    def add(self: T, other) -> T:
+    def add(self: Self, other) -> Self:
         """Adds a value to each tensor in the container."""
         return pytree.tree_map(lambda x: x.add(other), self)
 
-    def sub(self: T, other) -> T:
+    def sub(self: Self, other) -> Self:
         """Subtracts a value from each tensor in the container."""
         return pytree.tree_map(lambda x: x.sub(other), self)
 
-    def mul(self: T, other) -> T:
+    def mul(self: Self, other) -> Self:
         """Multiplies each tensor in the container by a value."""
         return pytree.tree_map(lambda x: x.mul(other), self)
 
-    def div(self: T, other) -> T:
+    def div(self: Self, other) -> Self:
         """Divides each tensor in the container by a value."""
         return pytree.tree_map(lambda x: x.div(other), self)
 
-    def pow(self: T, exponent) -> T:
+    def pow(self: Self, exponent) -> Self:
         """Raises each tensor in the container to a power."""
         return pytree.tree_map(lambda x: x.pow(exponent), self)
 
-    def sqrt(self: T) -> T:
+    def sqrt(self: Self) -> Self:
         """Computes the square root of each tensor in the container."""
         return pytree.tree_map(lambda x: x.sqrt(), self)
 
-    def log(self: T) -> T:
+    def log(self: Self) -> Self:
         """Computes the natural logarithm of each tensor in the container."""
         return pytree.tree_map(lambda x: x.log(), self)
 
-    def neg(self: T) -> T:
+    def neg(self: Self) -> Self:
         """Negates each tensor in the container."""
         return pytree.tree_map(lambda x: x.neg(), self)
 
-    def clamp(self: T, min, max) -> T:
+    def clamp(self: Self, min, max) -> Self:
         """Clamps each tensor in the container to a range."""
         return pytree.tree_map(lambda x: x.clamp(min, max), self)
 
