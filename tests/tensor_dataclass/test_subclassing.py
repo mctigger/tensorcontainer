@@ -1,7 +1,7 @@
 import pytest
 import torch
 
-from rtd.tensor_dataclass import TensorDataClass
+from tensorcontainer.tensor_dataclass import TensorDataClass
 
 
 class TestSubclassing:

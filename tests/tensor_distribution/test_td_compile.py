@@ -1,7 +1,7 @@
 import pytest
 import torch
 
-from src.rtd.tensor_distribution import (
+from src.tensorcontainer.tensor_distribution import (
     TensorBernoulli,
     TensorCategorical,
     TensorNormal,

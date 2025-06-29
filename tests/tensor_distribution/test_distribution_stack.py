@@ -1,7 +1,7 @@
 import pytest
 import torch
 
-from rtd.tensor_distribution import TensorBernoulli, TensorDistribution
+from tensorcontainer.tensor_distribution import TensorBernoulli, TensorDistribution
 
 
 def test_stack_tensordistribution_returns_tensordistribution():

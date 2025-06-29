@@ -4,7 +4,7 @@ from typing import List, Optional
 import pytest
 import torch
 
-from rtd.tensor_dataclass import TensorDataClass
+from tensorcontainer.tensor_dataclass import TensorDataClass
 
 # ============================================================================
 # COMMON TENSORDATACLASS DEFINITIONS

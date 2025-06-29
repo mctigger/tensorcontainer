@@ -1,7 +1,7 @@
 import pytest
 import torch
 
-from src.rtd.tensor_dataclass import TensorDataClass
+from src.tensorcontainer.tensor_dataclass import TensorDataClass
 from tests.compile_utils import run_and_compare_compiled
 
 

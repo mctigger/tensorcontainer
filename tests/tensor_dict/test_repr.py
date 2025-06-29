@@ -1,5 +1,5 @@
 import torch
-from rtd.tensor_dict import TensorDict  # adjust if the file/module is named differently
+from tensorcontainer.tensor_dict import TensorDict  # adjust if the file/module is named differently
 
 
 def test_tensordict_repr():

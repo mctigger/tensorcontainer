@@ -1,7 +1,7 @@
 import pytest
 import torch
 
-from rtd.tensor_dict import TensorDict
+from tensorcontainer.tensor_dict import TensorDict
 from tests.conftest import skipif_no_compile
 import torch._dynamo
 import torch._dynamo.utils

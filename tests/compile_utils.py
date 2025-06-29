@@ -4,7 +4,7 @@ import torch._dynamo.testing
 import torch._dynamo.utils
 import torch.utils._pytree as pytree
 
-from rtd.tensor_container import TensorContainer
+from tensorcontainer.tensor_container import TensorContainer
 
 
 def assert_tc_equal(tc_a: TensorContainer, tc_b: TensorContainer):

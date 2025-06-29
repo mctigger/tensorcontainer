@@ -1,7 +1,7 @@
 import pytest
 import torch
 
-from rtd.tensor_dict import TensorDict  # adjust import as needed
+from tensorcontainer.tensor_dict import TensorDict  # adjust import as needed
 from tests.conftest import skipif_no_compile
 from tests.tensor_dict import common
 from tests.tensor_dict.common import compare_nested_dict, compute_cat_shape

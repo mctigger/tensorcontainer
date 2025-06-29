@@ -1,7 +1,7 @@
 import pytest
 import torch
 
-from rtd.tensor_dict import TensorDict
+from tensorcontainer.tensor_dict import TensorDict
 
 
 def _get_tensor_dict(shape, device):

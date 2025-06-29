@@ -1,6 +1,6 @@
 import torch
 
-from src.rtd.tensor_distribution import TensorNormal
+from src.tensorcontainer.tensor_distribution import TensorNormal
 from tests.conftest import skipif_no_compile
 
 

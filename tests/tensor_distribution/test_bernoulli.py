@@ -1,7 +1,7 @@
 import pytest
 import torch
 
-from rtd.tensor_distribution import TensorBernoulli
+from tensorcontainer.tensor_distribution import TensorBernoulli
 
 from .conftest import normalize_device
 

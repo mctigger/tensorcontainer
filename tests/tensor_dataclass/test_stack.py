@@ -4,7 +4,7 @@ import pytest
 import torch
 from torch._dynamo import exc as dynamo_exc
 
-from rtd.tensor_dataclass import TensorDataClass
+from tensorcontainer.tensor_dataclass import TensorDataClass
 from tests.conftest import skipif_no_compile
 from tests.tensor_dataclass.conftest import (
     NestedTensorDataClass,

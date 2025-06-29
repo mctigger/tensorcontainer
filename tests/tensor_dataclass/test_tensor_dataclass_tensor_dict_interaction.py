@@ -2,8 +2,8 @@ import pytest
 import torch
 from typing import Tuple
 
-from rtd.tensor_dataclass import TensorDataClass
-from rtd.tensor_dict import TensorDict
+from tensorcontainer.tensor_dataclass import TensorDataClass
+from tensorcontainer.tensor_dict import TensorDict
 
 # Define compile_kwargs locally as it's not exported from compile_utils
 compile_kwargs = {"fullgraph": True}

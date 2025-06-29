@@ -1,7 +1,7 @@
 import pytest
 import torch
 
-from rtd.tensor_dict import TensorDict
+from tensorcontainer.tensor_dict import TensorDict
 
 # Assuming the TensorDict class from above is in the same file or imported.
 

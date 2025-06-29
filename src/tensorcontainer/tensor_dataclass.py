@@ -9,8 +9,8 @@ from torch import Tensor
 from torch.utils import _pytree as pytree
 from typing_extensions import dataclass_transform
 
-from rtd.tensor_container import TensorContainer
-from rtd.utils import PytreeRegistered
+from tensorcontainer.tensor_container import TensorContainer
+from tensorcontainer.utils import PytreeRegistered
 
 TDCompatible = Union[Tensor, TensorContainer]
 DATACLASS_ARGS = {"init", "repr", "eq", "order", "unsafe_hash", "frozen", "slots"}
@@ -164,7 +164,7 @@ class TensorDataClass(TensorContainer, PytreeRegistered, TensorDataclassTransfor
         shape (Tuple[int, ...]): The batch shape that all tensor fields must share
             as their leading dimensions.
         device (Optional[Union[str, torch.device]]): The device all tensors should
-            reside on. Must be explicitly specified - not inferred from tensor fields.
+            reside on. If None, device is inferred from the first tensor field.
 
     Raises:
         ValueError: If tensor field shapes are incompatible with batch shape.
@@ -235,14 +235,25 @@ class TensorDataClass(TensorContainer, PytreeRegistered, TensorDataclassTransfor
         This method is automatically called by the dataclass __init__ after all
         fields have been set. It:
 
-        1. Initializes the TensorContainer base class with shape and device
-        2. Validates that all tensor fields have compatible devices
-        3. Validates that all tensor fields have compatible batch shapes
+        1. Infers device from tensor fields if device was not specified
+        2. Initializes the TensorContainer base class with shape and device
+        3. Validates that all tensor fields have compatible devices
+        4. Validates that all tensor fields have compatible batch shapes
 
         Raises:
             ValueError: If tensor field shapes are incompatible with batch shape
             ValueError: If tensor field devices are incompatible with container device
         """
+        # Infer device from tensor fields if not provided
+        if self.device is None:
+            for field in dataclasses.fields(self):
+                if field.name in ("shape", "device"):
+                    continue
+                val = getattr(self, field.name)
+                if isinstance(val, Tensor):
+                    self.device = val.device
+                    break
+        
         super().__init__(self.shape, self.device)
 
         self._tree_validate_device()

@@ -1,7 +1,7 @@
 import pytest
 import torch
 
-from rtd.tensor_distribution import TensorDistribution, TensorTanhNormal
+from tensorcontainer.tensor_distribution import TensorDistribution, TensorTanhNormal
 
 from .conftest import normalize_device
 

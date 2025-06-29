@@ -1,7 +1,7 @@
 import pytest
 import torch
 
-from src.rtd.tensor_dict import TensorDict
+from src.tensorcontainer.tensor_dict import TensorDict
 
 
 # Define a common set of indices for slicing tests

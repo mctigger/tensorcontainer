@@ -2,7 +2,7 @@ import pytest
 import torch
 from torch._dynamo import exc as dynamo_exc
 
-from rtd.tensor_dict import TensorDict
+from tensorcontainer.tensor_dict import TensorDict
 from tests.conftest import skipif_no_compile
 from tests.tensor_dict import common
 from tests.tensor_dict.common import compare_nested_dict, compute_stack_shape

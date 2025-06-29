@@ -1,6 +1,6 @@
 import torch
 import pytest
-from rtd.tensor_dict import TensorDict
+from tensorcontainer.tensor_dict import TensorDict
 
 
 def test_view_basic():

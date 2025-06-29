@@ -1,7 +1,7 @@
 import torch
 
-from rtd.tensor_dict import TensorDict
-from rtd.tensor_distribution import TensorBernoulli
+from tensorcontainer.tensor_dict import TensorDict
+from tensorcontainer.tensor_distribution import TensorBernoulli
 
 
 def test_assign_and_retrieve_tensordistribution():

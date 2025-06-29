@@ -29,8 +29,8 @@ from torch.utils._pytree import (
 )  # Explicitly imported for clarity and Pylance
 
 
-from rtd.tensor_container import TensorContainer
-from rtd.utils import PytreeRegistered
+from tensorcontainer.tensor_container import TensorContainer
+from tensorcontainer.utils import PytreeRegistered
 
 TDCompatible: TypeAlias = Union[Tensor, TensorContainer]
 NestedTDCompatible: TypeAlias = Union[TDCompatible, Dict[str, TDCompatible]]

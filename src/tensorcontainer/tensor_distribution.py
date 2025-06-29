@@ -18,10 +18,10 @@ from torch.distributions import (
     register_kl,
 )
 
-from rtd.distributions.sampling import SamplingDistribution
-from rtd.distributions.soft_bernoulli import SoftBernoulli
-from rtd.distributions.truncated_normal import TruncatedNormal
-from rtd.tensor_dataclass import TensorDataClass
+from tensorcontainer.distributions.sampling import SamplingDistribution
+from tensorcontainer.distributions.soft_bernoulli import SoftBernoulli
+from tensorcontainer.distributions.truncated_normal import TruncatedNormal
+from tensorcontainer.tensor_dataclass import TensorDataClass
 
 
 class ClampedTanhTransform(torch.distributions.transforms.Transform):

@@ -3,8 +3,8 @@ requires = ["setuptools>=61", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "rtd"
-version = "0.3"
+name = "tensorcontainer"
+version = "0.3.1"
 description = "TensorDict-like functionality for PyTorch with PyTree compatibility and torch.compile support"
 authors = [{name="Tim Joseph", email="tim@mctigger.com"}]
 license = {text = "MIT"}
@@ -14,7 +14,7 @@ dependencies = [
 readme = "README.md"
 requires-python = ">=3.8"
 keywords = ["deep learning", "tensordict", "pytorch"]
-urls = {Homepage = "https://github.com/mctigger/research-tensordict"}
+urls = {Homepage = "https://github.com/mctigger/tensor-container"}
 classifiers = [
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",

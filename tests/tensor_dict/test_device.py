@@ -1,6 +1,6 @@
 import pytest
 import torch
-from rtd.tensor_dict import TensorDict  # Adjust as needed
+from tensorcontainer.tensor_dict import TensorDict  # Adjust as needed
 
 
 def are_devices_equal(device1, device2):
