@@ -91,6 +91,21 @@ def run_and_compare_compiled(
     return eager_result, compiled_result
 
 
+def run_and_count_graph_breaks(fn, *args, expected_graph_breaks: int, fullgraph=True):
+    """
+    Runs a function and asserts the number of graph breaks.
+    """
+    torch._dynamo.reset()
+    with GraphBreakCounter() as gb_counter:
+        compiled_fn = torch.compile(fn, fullgraph=fullgraph)
+        compiled_fn(*args)
+
+    assert gb_counter.graph_breaks == expected_graph_breaks, (
+        f"Expected {expected_graph_breaks} graph breaks, "
+        f"got {gb_counter.graph_breaks} graph breaks"
+    )
+
+
 def run_and_count_recompiles(fn, *args, expected_recompiles: int):
     """
     Runs a function multiple times with different inputs and asserts the number of
@@ -131,3 +146,44 @@ def run_and_count_recompiles(fn, *args, expected_recompiles: int):
         f"Expected {expected_recompiles} recompiles, but got {actual_recompiles} "
         f"({num_compiles} total compilations)."
     )
+
+
+def get_graph_breaks_and_recompiles(fn, *args, fullgraph=True):
+    """
+    Runs a function and returns the number of graph breaks and recompiles.
+    This function compiles the given function `fn` and then runs it with each set
+    of arguments provided in `args`. It tracks and returns the total number of
+    graph breaks encountered and the number of recompilations (compilations
+    after the first one).
+    Args:
+        fn: The function to be compiled and tested.
+        *args: A variable number of argument tuples. Each tuple represents a
+            separate call to the function `fn`.
+        fullgraph (bool): A flag to indicate if `torch.compile` should use
+            fullgraph mode.
+    Returns:
+        A tuple containing:
+            - The total number of graph breaks.
+            - The number of recompilations.
+    """
+    torch._dynamo.reset()
+    if not args:
+        return 0, 0
+
+    counter = torch._dynamo.testing.CompileCounter()
+    compiled_fn = torch.compile(fn, backend=counter, fullgraph=fullgraph)
+
+    # First call
+    torch._dynamo.utils.counters.clear()
+    compiled_fn(*args[0])
+    total_breaks = sum(torch._dynamo.utils.counters["graph_break"].values())
+    compiles_after_first_call = counter.frame_count
+
+    # Subsequent calls
+    for arg_set in args[1:]:
+        torch._dynamo.utils.counters["graph_break"].clear()
+        compiled_fn(*arg_set)
+        total_breaks += sum(torch._dynamo.utils.counters["graph_break"].values())
+
+    recompiles = counter.frame_count - compiles_after_first_call
+    return total_breaks, recompiles

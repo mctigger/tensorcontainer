@@ -2,7 +2,12 @@ import torch
 import pytest
 import torch._dynamo
 
-from tests.compile_utils import run_and_compare_compiled, run_and_count_recompiles
+from tests.compile_utils import (
+    get_graph_breaks_and_recompiles,
+    run_and_compare_compiled,
+    run_and_count_recompiles,
+    run_and_count_graph_breaks,
+)
 
 
 def no_break(x):
@@ -33,30 +38,6 @@ def three_breaks(x):
     return tensor[0] + 1
 
 
-def test_run_and_compare_compiled_no_break():
-    # A single frame is counted for the initial compilation, so no additional breaks should occur.
-    x = torch.randn(3, 4)
-    run_and_compare_compiled(no_break, (x,), expected_graph_breaks=0)
-
-
-def test_run_and_compare_compiled_with_break():
-    # Accounting for the additional break from the print statement.
-    x = torch.randn(3, 4)
-    run_and_compare_compiled(one_break, (x,), expected_graph_breaks=1, fullgraph=False)
-
-
-def test_run_and_compare_compiled_with_two_breaks():
-    x = torch.randn(3, 4)
-    run_and_compare_compiled(two_breaks, (x,), expected_graph_breaks=2, fullgraph=False)
-
-
-def test_run_and_compare_compiled_with_three_breaks():
-    x = torch.randn(3, 4)
-    run_and_compare_compiled(
-        three_breaks, (x,), expected_graph_breaks=3, fullgraph=False
-    )
-
-
 def test_run_and_compare_compiled_fails():
     # Assert that this raises an AssertionError.
     x = torch.randn(3, 4)
@@ -76,17 +57,77 @@ def recursive_recompile(i):
         return torch.tensor([1])
 
 
-class TestRunAndCountRecompiles:
-    def test_one_recompile(self):
-        """Tests that a stateful functor recompiles once on the second call."""
-        run_and_count_recompiles(recursive_recompile, (1,), expected_recompiles=0)
+def one_break_one_recompile_func(i):
+    if i == 1:
+        torch._dynamo.graph_break()
+    return torch.tensor([i])
 
-    def test_two_recompile(self):
-        """Tests that a stateful functor recompiles once on the second call."""
-        run_and_count_recompiles(recursive_recompile, (1,), (3,), expected_recompiles=1)
 
-    def test_three_recompile(self):
-        """Tests that a stateful functor recompiles once on the second call."""
-        run_and_count_recompiles(
-            recursive_recompile, (1,), (2,), (3,), expected_recompiles=2
-        )
+@pytest.mark.parametrize(
+    "func, expected_graph_breaks, fullgraph",
+    [
+        (no_break, 0, True),
+        (one_break, 1, False),
+        (two_breaks, 2, False),
+        (three_breaks, 3, False),
+    ],
+)
+def test_run_and_compare_compiled_parameterized(func, expected_graph_breaks, fullgraph):
+    """Tests that a function has the expected number of graph breaks."""
+    x = torch.randn(3, 4)
+    run_and_compare_compiled(
+        func, (x,), expected_graph_breaks=expected_graph_breaks, fullgraph=fullgraph
+    )
+
+
+@pytest.mark.parametrize(
+    "func, expected_graph_breaks, fullgraph",
+    [
+        (no_break, 0, True),
+        (one_break, 1, False),
+        (two_breaks, 2, False),
+        (three_breaks, 3, False),
+    ],
+)
+def test_run_and_count_graph_breaks_parameterized(
+    func, expected_graph_breaks, fullgraph
+):
+    """Tests that a function has the expected number of graph breaks."""
+    x = torch.randn(3, 4)
+    run_and_count_graph_breaks(
+        func, x, expected_graph_breaks=expected_graph_breaks, fullgraph=fullgraph
+    )
+
+
+@pytest.mark.parametrize(
+    "func, args, expected_recompiles",
+    [
+        (recursive_recompile, ((1,),), 0),
+        (recursive_recompile, ((1,), (3,)), 1),
+    ],
+)
+def test_run_and_count_recompiles_parameterized(func, args, expected_recompiles):
+    """Tests that a stateful functor recompiles as expected."""
+    run_and_count_recompiles(func, *args, expected_recompiles=expected_recompiles)
+
+
+@pytest.mark.parametrize(
+    "func, args, expected_breaks, expected_recompiles, fullgraph",
+    [
+        (no_break, ((torch.randn(2),),), 0, 0, True),
+        (one_break, ((torch.randn(2),),), 1, 0, False),
+        (two_breaks, ((torch.randn(2, 2),),), 2, 0, False),
+        (recursive_recompile, ((1,), (2,)), 0, 1, True),
+        (recursive_recompile, ((1,), (2,), (3,)), 0, 2, True),
+        (one_break_one_recompile_func, ((1,), (2,)), 1, 1, False),
+    ],
+)
+def test_get_graph_breaks_and_recompiles_parameterized(
+    func, args, expected_breaks, expected_recompiles, fullgraph
+):
+    """Tests that a function has the expected number of graph breaks and recompiles."""
+    breaks, recompiles = get_graph_breaks_and_recompiles(
+        func, *args, fullgraph=fullgraph
+    )
+    assert breaks == expected_breaks
+    assert recompiles == expected_recompiles
