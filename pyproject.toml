@@ -4,9 +4,9 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "rtd"
-version = "0.2.16"
-description = "Short description here"
-authors = [{name="Your Name", email="you@example.com"}]
+version = "0.3"
+description = "TensorDict-like functionality for PyTorch with PyTree compatibility and torch.compile support"
+authors = [{name="Tim Joseph", email="tim@mctigger.com"}]
 license = {text = "MIT"}
 dependencies = [
     "torch"
