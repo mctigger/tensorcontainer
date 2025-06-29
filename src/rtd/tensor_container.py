@@ -26,25 +26,173 @@ def implements(torch_function):
 
 
 class TensorContainer:
-    """A generic container for nested tensors.
+    """A foundational base class for PyTree-compatible tensor containers with batch semantics.
 
-    This class is a base class for more specific tensor containers like
-    :class:`TensorDict` and :class:`TensorDataclass`. It provides common
-    functionality for manipulating nested tensors, such as reshaping,
-    casting, and cloning.
+    TensorContainer provides a structured way to organize tensors that share common batch dimensions
+    while allowing flexible event dimensions. It serves as the foundation for concrete implementations
+    like TensorDict (dictionary-style) and TensorDataClass (dataclass-style).
 
-    The main idea behind this class is to provide a container that can be
-    used with `torch.utils._pytree` to apply functions to all tensors
-    in the container. This allows us to write code that is agnostic to the
-    specific container type.
+    ## Core Concepts
 
-    Important: All methods do only apply to torch.Tensor or subclasses of TensorContainer.
-    If a subclass defines non-tensor data (e.g. meta data), no transformations happens to this data.
-    For example .clone() will only clone the meta data, but not the meta-data!
+    ### Batch vs Event Dimensions
+    TensorContainer enforces a clear distinction between batch and event dimensions:
+
+    - **Batch Dimensions**: The leading dimensions defined by the `shape` parameter that must be
+      consistent across all tensors in the container. These represent the batching structure
+      (e.g., batch size, sequence length).
+    
+    - **Event Dimensions**: The trailing dimensions beyond the batch shape that can vary between
+      different tensors in the container. These represent the actual data structure
+      (e.g., feature dimensions, action spaces).
+
+    Example:
+        >>> # Container with batch shape (4, 3) - 4 samples, 3 time steps
+        >>> container.shape == (4, 3)
+        >>> 
+        >>> # Valid tensors within this container:
+        >>> observations = torch.randn(4, 3, 128)    # Event dims: (128,)
+        >>> actions = torch.randn(4, 3, 6)           # Event dims: (6,)
+        >>> rewards = torch.randn(4, 3)              # Event dims: ()
+        >>> 
+        >>> # All share batch dims (4, 3), different event dims allowed
+
+    ### Shape Management
+    The container validates that all contained tensors have compatible shapes:
+    - Tensors must have at least `len(shape)` dimensions
+    - The first `len(shape)` dimensions must exactly match the container's shape
+    - Additional dimensions (event dims) can be arbitrary and different per tensor
+
+    ### Device Management  
+    Device consistency is enforced with flexible compatibility rules:
+    - If container device is None, any tensor device is accepted
+    - String device specs ("cuda") are compatible with indexed variants ("cuda:0")
+    - All operations preserve device consistency across transformations
+
+    ## PyTree Integration
+
+    TensorContainer is designed for seamless PyTree integration, enabling:
+    - Automatic registration via PytreeRegistered mixin in subclasses
+    - Efficient tree transformations using `torch.utils._pytree`
+    - Compatibility with `torch.compile` and `fullgraph=True`
+    - Support for operations like `torch.stack`, `torch.cat` across containers
+
+    ## Torch Function Override System
+
+    Uses `__torch_function__` protocol to intercept torch operations:
+    - Register custom implementations via `@implements(torch.function)` decorator
+    - Maintains compatibility with PyTorch's dispatch system
+    - Enables container-aware versions of functions like `torch.stack`, `torch.cat`
+
+    ## Usage Patterns
+
+    ### Basic Operations
+    All tensor-like operations work at the batch dimension level:
+    ```python
+    # Shape transformations (batch dims only)
+    reshaped = container.reshape(8, -1)      # Batch (4,3) -> (8,-1), events preserved
+    expanded = container.expand(4, 3, -1)    # Expand batch dims, events unchanged
+    permuted = container.permute(1, 0)       # Permute batch dims only
+    
+    # Device/type conversions (all tensors)
+    gpu_container = container.cuda()         # Move all tensors to GPU
+    float_container = container.float()      # Cast all tensors to float
+    
+    # Indexing (batch-aware)
+    sample = container[0]                    # Select first batch element
+    subset = container[1:3]                  # Slice batch dimension
+    ```
+
+    ### Advanced Indexing
+    Supports full PyTorch indexing semantics:
+    - Integer, slice, and ellipsis indexing
+    - Boolean mask indexing  
+    - Advanced indexing with tensor indices
+    - Automatic ellipsis transformation for complex indexing
+
+    ### Cloning and Mutation
+    ```python
+    # Deep clone with memory format control
+    cloned = container.clone(memory_format=torch.contiguous_format)
+    
+    # In-place assignment (batch-aware)
+    container[mask] = new_values            # Boolean mask assignment
+    container[:, 0] = initial_values        # Slice assignment
+    ```
+
+    ## Implementation Notes
+
+    ### Memory and Performance
+    - Operations use PyTree transformations for efficiency
+    - Lazy evaluation where possible (view operations)
+    - Memory format preservation in clone operations
+    - Reference sharing vs deep copying strategies
+
+    ### Compilation Compatibility
+    - Designed for `torch.compile` with `fullgraph=True`
+    - Avoids Python constructs that cause graph breaks
+    - Uses static shape information where possible
+    - Minimal dynamic behavior in hot paths
+
+    ### Error Handling
+    - Comprehensive shape/device validation with detailed error messages
+    - Path-based error reporting for nested structures using PyTree KeyPath
+    - Early validation to catch incompatibilities during construction
+
+    ## Subclassing Guide
+
+    When creating TensorContainer subclasses:
+
+    1. **Inherit from TensorContainer and PytreeRegistered**:
+       ```python
+       class MyContainer(TensorContainer, PytreeRegistered):
+       ```
+
+    2. **Implement PyTree methods**:
+       - `_pytree_flatten()` - Convert to (leaves, context)
+       - `_pytree_unflatten()` - Reconstruct from leaves and context  
+       - `_pytree_flatten_with_keys_fn()` - Provide key paths
+
+    3. **Call super().__init__(shape, device)** in constructor
+
+    4. **Override validation** if needed via `_is_shape_compatible()`, `_is_device_compatible()`
+
+    5. **Register torch functions** using `@implements(torch_function)` decorator
+
+    ## Limitations and Constraints
+
+    - Only tensor data participates in transformations; metadata is shallow-copied
+    - Batch dimensions must be consistent across all tensors (no ragged batching)
+    - Device changes affect all tensors (no mixed-device containers)
+    - Shape transformations apply uniformly (no per-tensor custom reshaping)
 
     Args:
-        shape (torch.Size): The shape of the container.
-        device (torch.device): The device of the container.
+        shape (Tuple[int, ...]): The batch shape that all contained tensors must share
+            as their leading dimensions. Defines the batching structure.
+        device (Optional[Union[str, torch.device]]): The device all tensors should reside on.
+            If None, no device consistency is enforced.
+
+    Raises:
+        ValueError: If tensor shapes are incompatible with the specified batch shape
+        ValueError: If tensor devices are incompatible with the specified device
+        IndexError: For invalid indexing operations (e.g., too many indices)
+        RuntimeError: For invalid shape transformations or other tensor operations
+
+    Example:
+        >>> # Create a simple subclass for demonstration
+        >>> class SimpleContainer(TensorContainer):
+        ...     def __init__(self, data, shape, device=None):
+        ...         super().__init__(shape, device)
+        ...         self.data = data
+        >>> 
+        >>> # Usage with batch shape (2, 3)
+        >>> container = SimpleContainer({
+        ...     'obs': torch.randn(2, 3, 64),  # Event dims: (64,)
+        ...     'action': torch.randn(2, 3, 4) # Event dims: (4,)
+        ... }, shape=(2, 3))
+        >>> 
+        >>> # Batch operations preserve event structure
+        >>> flattened = container.reshape(6)     # Shape becomes (6,), events preserved
+        >>> first_batch = container[0]           # Shape becomes (3,), events preserved
     """
 
     def __init__(self, shape, device):
