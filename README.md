@@ -175,7 +175,6 @@ pytest tests/tensor_dataclass/
 - All new features must maintain `torch.compile` compatibility
 - Comprehensive tests required, including compile compatibility verification
 - Follow existing code patterns and typing conventions
-- See `CLAUDE.md` for detailed architecture documentation
 
 ### Contribution Process
 
