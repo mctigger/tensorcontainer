@@ -12,7 +12,7 @@ from typing import (
     Tuple,
     TypeAlias,
     Union,
-    overload,
+    overload,  # Added cast for explicit type hinting
     cast,  # Added cast for explicit type hinting
 )
 
@@ -38,8 +38,9 @@ NestedTDCompatible: TypeAlias = Union[TDCompatible, Dict[str, TDCompatible]]
 
 # Define a NamedTuple for the pytree context to provide explicit typing
 class TensorDictPytreeContext(NamedTuple):
-    children_spec: pytree.TreeSpec
+    keys: Tuple[str, ...]
     event_ndims: Tuple[int, ...]
+    metadata: Dict[str, Any]
     shape_context: Tuple[int, ...]
     device_context: Optional[Union[str, torch.device]]
 
@@ -87,11 +88,11 @@ class TensorDict(TensorContainer, PytreeRegistered):
         """
         super().__init__(shape, device)
 
-        self.data = TensorDict.data_from_dict(data, shape, device)
-
         if validate_args:
             self._tree_validate_shape(data)
             self._tree_validate_device(data)
+
+        self.data = TensorDict.data_from_dict(data, shape, device)
 
     @classmethod
     def data_from_dict(cls, data, shape, device=None) -> Dict[str, TDCompatible]:
@@ -154,86 +155,95 @@ class TensorDict(TensorContainer, PytreeRegistered):
                 )
 
     def _get_pytree_context(
-        self, flat_leaves: List[TDCompatible], children_spec: pytree.TreeSpec
+        self,
+        keys: List[str],
+        flat_leaves: List[TDCompatible],
+        metadata: Dict[str, Any],
     ) -> TensorDictPytreeContext:
         """
         Private helper to compute the pytree context for this TensorDict.
         The context captures metadata to reconstruct the TensorDict:
-        children_spec, event_ndims, original shape, and original device.
+        keys, event_ndims, original shape, device, and non-tensor metadata.
         """
         batch_ndim = len(self.shape)
         event_ndims = tuple(leaf.ndim - batch_ndim for leaf in flat_leaves)
         return TensorDictPytreeContext(
-            children_spec, event_ndims, self.shape, self.device
-        )  # Instantiated NamedTuple
+            tuple(keys), event_ndims, metadata, self.shape, self.device
+        )
 
     def _pytree_flatten(
         self,
     ) -> Tuple[List[TDCompatible], TensorDictPytreeContext]:
         """
-        Flattens the TensorDict into its tensor leaves and static metadata.
+        Flattens the TensorDict into its tensor leaves and static metadata
+        by performing a shallow, one-level separation of tensor-like values
+        from other metadata.
         """
-        flat_leaves, children_spec = pytree.tree_flatten(self.data)
-        context = self._get_pytree_context(flat_leaves, children_spec)
-        return flat_leaves, context
+        leaves: List[TDCompatible] = []
+        keys: List[str] = []
+        metadata: Dict[str, Any] = {}
+        for key, value in self.data.items():
+            if isinstance(value, (Tensor, TensorContainer)):
+                leaves.append(value)
+                keys.append(key)
+            else:
+                metadata[key] = value
+
+        context = self._get_pytree_context(keys, leaves, metadata)
+        return leaves, context
 
     def _pytree_flatten_with_keys_fn(
         self,
     ) -> tuple[list[tuple[KeyEntry, Any]], Any]:
         """
-        Flattens the TensorDict into key/child pairs and static metadata.
-
-        This function performs a shallow, one-level flattening of the TensorDict's
-        data. It is used by PyTree utilities like `tree_map_with_path` to correctly
-        generate key paths for the children of this node.
+        Flattens the TensorDict into key-path/leaf pairs and a context, aligning
+        with the shallow-flattening logic.
         """
-        keys = list(self.data.keys())
-        values = list(self.data.values())
-        return [
-            (cast(KeyEntry, MappingKey(k)), cast(Any, v)) for k, v in zip(keys, values)
-        ], keys
+        leaves, context = self._pytree_flatten()
+        # Create (key, value) pairs for pytree compatibility.
+        key_value_pairs = [
+            (cast(KeyEntry, MappingKey(k)), cast(Any, v))
+            for k, v in zip(context.keys, leaves)
+        ]
+        return key_value_pairs, context
 
     @classmethod
     def _pytree_unflatten(
         cls, leaves: Iterable[TDCompatible], context: TensorDictPytreeContext
     ) -> PyTree:
         """
-        Reconstructs a TensorDict by creating a new instance and manually
-        populating its attributes. This approach is more robust for torch.compile's
-        code generation phase.
+        Reconstructs a TensorDict from leaves and a context, using a shallow
+        unflattening approach that leverages keys and metadata for reconstruction.
         """
-        # Unpack context using named fields for clarity and type safety
-        children_spec = context.children_spec
-        event_ndims = context.event_ndims
-        shape_context = context.shape_context
-        device_context = context.device_context
+        # Unpack context using positional correspondence for clarity
+        keys, event_ndims, metadata, shape_context, device_context = context
 
         obj = cls.__new__(cls)
-        if not leaves:
+        leaves_list = list(leaves)
+        if not leaves_list:
             # Handle the empty case
-            obj.data = {}
-            obj.shape = shape_context  # Use shape from context
-            obj.device = device_context  # For empty TD, use context device
+            obj.data = dict(metadata)
+            obj.shape = shape_context
+            obj.device = device_context
             return obj
 
-        first_leaf = next(iter(leaves))
-        first_leaf_device = first_leaf.device
-        obj.device = first_leaf_device
+        first_leaf = leaves_list[0]
+        obj.device = first_leaf.device
 
-        # Reconstruct the nested dictionary structure using the unflattened leaves
-        data = pytree.tree_unflatten(leaves, children_spec)
+        # Reconstruct the data dictionary from leaves and metadata
+        data = dict(zip(keys, leaves_list))
+        data.update(metadata)
         obj.data = data
 
-        # Calculate new_shape based on the (potentially transformed) leaves and event_ndims from context.
-        # This correctly determines the batch shape of the TensorDict after operations like stack/cat.
-        # For copy(), where leaves are original, this also correctly yields the original shape.
-        # event_ndims[0] is the event_ndim for the first leaf, relative to original batch shape.
+        # Calculate new_shape based on transformed leaves and event_ndims
         if (
-            event_ndims[0] == 0
+            event_ndims and event_ndims[0] == 0
         ):  # Leaf was a scalar or had only batch dimensions originally
             reconstructed_shape = first_leaf.shape
-        else:  # Leaf had event dimensions originally
+        elif event_ndims:  # Leaf had event dimensions originally
             reconstructed_shape = first_leaf.shape[: -event_ndims[0]]
+        else:  # No leaves with event_ndims, use context
+            reconstructed_shape = shape_context
 
         obj.shape = reconstructed_shape
 
