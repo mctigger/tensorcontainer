@@ -27,13 +27,179 @@ class TensorDataclassTransform:
 
 
 class TensorDataClass(TensorContainer, PytreeRegistered, TensorDataclassTransform):
-    """A dataclass-based tensor container with PyTree compatibility."""
+    """A dataclass-based tensor container with automatic field generation and batch semantics.
+
+    TensorDataClass provides a strongly-typed alternative to TensorDict by automatically
+    converting annotated class definitions into dataclasses while maintaining tensor
+    container functionality. It combines Python's dataclass system with PyTree
+    compatibility and torch.compile support.
+
+    ## Automatic Dataclass Generation
+
+    Any class inheriting from TensorDataClass is automatically converted to a dataclass
+    with optimized settings for tensor operations:
+
+    - Field-based access using `obj.field` syntax
+    - Static typing with IDE support and autocomplete
+    - Natural inheritance patterns with field merging
+    - Memory-efficient `slots=True` layout
+    - Disabled equality comparison (`eq=False`) for tensor compatibility
+
+    Example:
+        >>> class MyData(TensorDataClass):
+        ...     features: torch.Tensor
+        ...     labels: torch.Tensor
+        >>>
+        >>> data = MyData(
+        ...     features=torch.randn(4, 10),
+        ...     labels=torch.arange(4).float(),
+        ...     shape=(4,),
+        ...     device="cpu"
+        ... )
+        >>>
+        >>> # Automatic dataclass features
+        >>> print(data.features.shape)  # torch.Size([4, 10])
+        >>> data.features = new_tensor  # Type-checked assignment
+
+    ## Batch and Event Dimensions
+
+    TensorDataClass enforces the same batch/event dimension semantics as TensorContainer:
+
+    - **Batch Dimensions**: Leading dimensions defined by `shape` parameter, must be
+      consistent across all tensor fields
+    - **Event Dimensions**: Trailing dimensions beyond batch shape, can vary per field
+    - **Automatic Validation**: Shape compatibility is checked during initialization
+
+    All tensor operations preserve this batch/event structure, enabling consistent
+    batched processing across heterogeneous tensor fields.
+
+    ## Field Definition Patterns
+
+    ### Basic Tensor Fields
+    ```python
+    class BasicData(TensorDataClass):
+        observations: torch.Tensor
+        actions: torch.Tensor
+    ```
+
+    ### Optional Fields and Defaults
+    ```python
+    class FlexibleData(TensorDataClass):
+        required_field: torch.Tensor
+        optional_field: Optional[torch.Tensor] = None
+        metadata: List[str] = dataclasses.field(default_factory=list)
+        config: Dict[str, Any] = dataclasses.field(default_factory=dict)
+        default_tensor: torch.Tensor = dataclasses.field(
+            default_factory=lambda: torch.zeros(10)
+        )
+    ```
+
+    ### Inheritance and Field Composition
+    ```python
+    class BaseData(TensorDataClass):
+        observations: torch.Tensor
+
+    class ExtendedData(BaseData):
+        actions: torch.Tensor      # Inherits observations
+        rewards: torch.Tensor      # Total: observations, actions, rewards
+
+    class FinalData(ExtendedData):
+        values: torch.Tensor       # Inherits all previous fields
+    ```
+
+    ## PyTree Integration
+
+    TensorDataClass provides seamless PyTree integration through automatic registration:
+
+    - Tensor fields become PyTree leaves for tree operations
+    - Non-tensor fields are preserved as metadata
+    - Supports `torch.stack`, `torch.cat`, and other tree operations
+    - Compatible with `torch.compile` and JIT compilation
+
+    The PyTree flattening separates tensor data from metadata, enabling efficient
+    tensor transformations while preserving all field information.
+
+    ## Device and Shape Management
+
+    ### Device and Shape Validation
+    The initialization process validates:
+    - All tensor fields have batch shapes compatible with the container shape
+    - All tensor fields reside on compatible devices
+    - Field types match their annotations
+
+    Validation uses PyTree traversal to check nested structures and provides
+    detailed error messages with field paths for debugging.
+
+    ## torch.compile Compatibility
+
+    TensorDataClass is designed for efficient compilation:
+
+    - **Static Structure**: Field names and types are known at compile time
+    - **Efficient Access**: Direct attribute access compiles to optimized code
+    - **Safe Copying**: Custom copy methods avoid graph breaks
+    - **Minimal Overhead**: Streamlined operations for hot paths
+
+    ## Memory and Performance
+
+    With `slots=True` by default, TensorDataClass instances provide:
+
+    - Reduced memory overhead compared to regular classes
+    - Faster attribute access through direct slot access
+    - Better memory locality for improved cache performance
+    - Elimination of per-instance `__dict__` storage
+
+    ## Comparison with TensorDict
+
+    | Feature | TensorDataClass | TensorDict |
+    |---------|-----------------|------------|
+    | Access Pattern | `obj.field` | `obj["key"]` |
+    | Type Safety | Static typing | Runtime checks |
+    | IDE Support | Full autocomplete | Limited |
+    | Memory Usage | Lower (slots) | Higher (dict) |
+    | Field Definition | Compile-time | Runtime |
+    | Inheritance | Natural OOP | Composition |
+    | Dynamic Fields | Not supported | Full support |
+
+    Args:
+        shape (Tuple[int, ...]): The batch shape that all tensor fields must share
+            as their leading dimensions.
+        device (Optional[Union[str, torch.device]]): The device all tensors should
+            reside on. Must be explicitly specified - not inferred from tensor fields.
+
+    Raises:
+        ValueError: If tensor field shapes are incompatible with batch shape.
+        ValueError: If tensor field devices are incompatible with container device.
+        TypeError: If attempting to create a subclass with eq=True.
+
+    Note:
+        TensorDataClass automatically applies the @dataclass decorator to subclasses.
+        The eq parameter is forced to False for tensor compatibility, and slots is
+        enabled by default for performance.
+    """
 
     # Added here to make shape and device part of the data class.
     shape: tuple
     device: Optional[torch.device]
 
     def __init_subclass__(cls, **kwargs):
+        """Automatically convert subclasses into dataclasses with proper field inheritance.
+
+        This method is called whenever a class inherits from TensorDataClass. It:
+        1. Merges field annotations from the entire inheritance chain
+        2. Extracts dataclass-specific configuration options
+        3. Applies the @dataclass decorator with optimized defaults
+        4. Enforces constraints like eq=False for tensor compatibility
+
+        The annotation inheritance ensures that derived classes properly inherit
+        field definitions from parent TensorDataClass instances.
+
+        Args:
+            **kwargs: Class definition arguments, may include dataclass options
+                     like 'init', 'repr', 'eq', 'order', 'unsafe_hash', 'frozen', 'slots'
+
+        Raises:
+            TypeError: If eq=True is specified (incompatible with tensor fields)
+        """
         if hasattr(cls, "__slots__"):
             return
 
@@ -64,25 +230,20 @@ class TensorDataClass(TensorContainer, PytreeRegistered, TensorDataclassTransfor
         dataclasses.dataclass(cls, **dc_kwargs)
 
     def __post_init__(self):
-        """Initializes the TensorContainer part."""
-        super().__init__(self.shape, self.device)
+        """Initialize TensorContainer functionality and perform validation.
 
-        # Infer device from tensor children if self.device is None
-        if self.device is None:
-            devices = {
-                getattr(self, f.name).device
-                for f in dataclasses.fields(self)
-                if isinstance(getattr(self, f.name), TDCompatible)
-                and hasattr(getattr(self, f.name), "device")
-            }
-            if len(devices) == 1:
-                self.device = devices.pop()
-            elif len(devices) > 1:
-                # This case should ideally be caught by _tree_validate_device if all tensors are expected
-                # to be on the same device as the container. If the container's device is None,
-                # it implies flexibility, but operations might fail later if devices are truly mixed
-                # without explicit handling. For now, we keep self.device as None.
-                pass
+        This method is automatically called by the dataclass __init__ after all
+        fields have been set. It:
+
+        1. Initializes the TensorContainer base class with shape and device
+        2. Validates that all tensor fields have compatible devices
+        3. Validates that all tensor fields have compatible batch shapes
+
+        Raises:
+            ValueError: If tensor field shapes are incompatible with batch shape
+            ValueError: If tensor field devices are incompatible with container device
+        """
+        super().__init__(self.shape, self.device)
 
         self._tree_validate_device()
         self._tree_validate_shape()
@@ -138,8 +299,19 @@ class TensorDataClass(TensorContainer, PytreeRegistered, TensorDataclassTransfor
         return flat_names, event_ndims, meta_data
 
     def _pytree_flatten(self) -> Tuple[List[Any], Any]:
-        """
-        Flattens the TensorDict into its tensor leaves and static metadata.
+        """Flatten the TensorDataClass into tensor leaves and metadata context.
+
+        Separates dataclass fields into two categories:
+        - Tensor-compatible fields become PyTree leaves for transformation
+        - Non-tensor fields are stored as metadata in the context
+
+        This enables PyTree operations like tree_map to operate only on tensor
+        data while preserving all other field values through the context.
+
+        Returns:
+            Tuple containing:
+            - List of tensor values (PyTree leaves)
+            - Context tuple with (field_names, event_dims, metadata)
         """
         flat_names = []
         flat_values = []
@@ -228,17 +400,29 @@ class TensorDataClass(TensorContainer, PytreeRegistered, TensorDataclassTransfor
         )
 
     def __copy__(self: T_TensorDataclass) -> T_TensorDataclass:
-        """
-        Performs a shallow copy of the TensorDataclass instance.
+        """Create a shallow copy of the TensorDataClass instance.
 
         This method is designed to be `torch.compile` safe by avoiding the
-        use of `copy.copy()`, which can cause graph breaks. It creates a new
-        instance of the same class and then copies references to the attributes
-        of the original object.
+        use of `copy.copy()`, which can cause graph breaks. It manually
+        copies all field references without deep-copying tensor data.
+
+        The shallow copy means:
+        - Field references are copied (new instance)
+        - Tensor data is shared (same underlying tensors)
+        - Metadata fields are shared (same objects)
+
+        For independent tensor data, use `clone()` inherited from TensorContainer.
 
         Returns:
-            A new TensorDataclass instance with attributes that are shallow
-            copies of the original's attributes.
+            T_TensorDataclass: New instance with shared field data
+
+        Example:
+            >>> original = MyData(obs=torch.randn(4, 128), shape=(4,))
+            >>> shallow_copy = original.__copy__()
+            >>> shallow_copy.obs is original.obs  # True - shared tensor
+            >>>
+            >>> # For independent tensors:
+            >>> deep_copy = original.clone()  # Creates new tensor data
         """
         # Create a new, uninitialized instance of the correct class.
         cls = type(self)

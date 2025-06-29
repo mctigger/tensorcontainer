@@ -40,7 +40,7 @@ class TensorContainer:
     - **Batch Dimensions**: The leading dimensions defined by the `shape` parameter that must be
       consistent across all tensors in the container. These represent the batching structure
       (e.g., batch size, sequence length).
-    
+
     - **Event Dimensions**: The trailing dimensions beyond the batch shape that can vary between
       different tensors in the container. These represent the actual data structure
       (e.g., feature dimensions, action spaces).
@@ -48,12 +48,12 @@ class TensorContainer:
     Example:
         >>> # Container with batch shape (4, 3) - 4 samples, 3 time steps
         >>> container.shape == (4, 3)
-        >>> 
+        >>>
         >>> # Valid tensors within this container:
         >>> observations = torch.randn(4, 3, 128)    # Event dims: (128,)
         >>> actions = torch.randn(4, 3, 6)           # Event dims: (6,)
         >>> rewards = torch.randn(4, 3)              # Event dims: ()
-        >>> 
+        >>>
         >>> # All share batch dims (4, 3), different event dims allowed
 
     ### Shape Management
@@ -62,7 +62,7 @@ class TensorContainer:
     - The first `len(shape)` dimensions must exactly match the container's shape
     - Additional dimensions (event dims) can be arbitrary and different per tensor
 
-    ### Device Management  
+    ### Device Management
     Device consistency is enforced with flexible compatibility rules:
     - If container device is None, any tensor device is accepted
     - String device specs ("cuda") are compatible with indexed variants ("cuda:0")
@@ -92,11 +92,11 @@ class TensorContainer:
     reshaped = container.reshape(8, -1)      # Batch (4,3) -> (8,-1), events preserved
     expanded = container.expand(4, 3, -1)    # Expand batch dims, events unchanged
     permuted = container.permute(1, 0)       # Permute batch dims only
-    
+
     # Device/type conversions (all tensors)
     gpu_container = container.cuda()         # Move all tensors to GPU
     float_container = container.float()      # Cast all tensors to float
-    
+
     # Indexing (batch-aware)
     sample = container[0]                    # Select first batch element
     subset = container[1:3]                  # Slice batch dimension
@@ -105,7 +105,7 @@ class TensorContainer:
     ### Advanced Indexing
     Supports full PyTorch indexing semantics:
     - Integer, slice, and ellipsis indexing
-    - Boolean mask indexing  
+    - Boolean mask indexing
     - Advanced indexing with tensor indices
     - Automatic ellipsis transformation for complex indexing
 
@@ -113,7 +113,7 @@ class TensorContainer:
     ```python
     # Deep clone with memory format control
     cloned = container.clone(memory_format=torch.contiguous_format)
-    
+
     # In-place assignment (batch-aware)
     container[mask] = new_values            # Boolean mask assignment
     container[:, 0] = initial_values        # Slice assignment
@@ -149,7 +149,7 @@ class TensorContainer:
 
     2. **Implement PyTree methods**:
        - `_pytree_flatten()` - Convert to (leaves, context)
-       - `_pytree_unflatten()` - Reconstruct from leaves and context  
+       - `_pytree_unflatten()` - Reconstruct from leaves and context
        - `_pytree_flatten_with_keys_fn()` - Provide key paths
 
     3. **Call super().__init__(shape, device)** in constructor
@@ -183,13 +183,13 @@ class TensorContainer:
         ...     def __init__(self, data, shape, device=None):
         ...         super().__init__(shape, device)
         ...         self.data = data
-        >>> 
+        >>>
         >>> # Usage with batch shape (2, 3)
         >>> container = SimpleContainer({
         ...     'obs': torch.randn(2, 3, 64),  # Event dims: (64,)
         ...     'action': torch.randn(2, 3, 4) # Event dims: (4,)
         ... }, shape=(2, 3))
-        >>> 
+        >>>
         >>> # Batch operations preserve event structure
         >>> flattened = container.reshape(6)     # Shape becomes (6,), events preserved
         >>> first_batch = container[0]           # Shape becomes (3,), events preserved
@@ -212,13 +212,59 @@ class TensorContainer:
         return HANDLED_FUNCTIONS[func](*args, **kwargs)
 
     def _is_shape_compatible(self, shape):
+        """Check if a tensor shape is compatible with this container's batch shape.
+
+        A tensor shape is compatible if:
+        - It has at least as many dimensions as the container's batch shape
+        - Its leading dimensions exactly match the container's batch shape
+        - Additional trailing dimensions (event dims) are allowed
+
+        Args:
+            shape (torch.Size or tuple): The tensor shape to validate
+
+        Returns:
+            bool: True if shape is compatible, False otherwise
+
+        Example:
+            >>> container.shape == (4, 3)
+            >>> container._is_shape_compatible((4, 3, 128))  # True - valid event dims
+            >>> container._is_shape_compatible((4, 3))       # True - exact match
+            >>> container._is_shape_compatible((4, 2, 128))  # False - batch dim mismatch
+            >>> container._is_shape_compatible((4,))         # False - too few dims
+        """
         batch_ndim = len(self.shape)
         leaf_ndim = len(shape)
 
         return leaf_ndim >= batch_ndim and shape[:batch_ndim] == self.shape
 
     def _is_device_compatible(self, leaf_device: torch.device):
-        """Checks if the leaf_device is compatible with the TensorDict's device."""
+        """Check if a tensor device is compatible with this container's device.
+
+        Device compatibility uses flexible rules to handle common PyTorch device patterns:
+
+        - If container device is None, any tensor device is compatible
+        - String device specs are parsed and compared as torch.device objects
+        - Device type must match exactly (e.g., 'cpu' vs 'cuda')
+        - Device indices use flexible matching:
+          * Explicit indices must match exactly ('cuda:0' vs 'cuda:0')
+          * Unspecified index (0) is compatible with explicit index 0
+          * 'cuda' is compatible with 'cuda:0' (default device)
+
+        Args:
+            leaf_device (torch.device): The tensor device to validate
+
+        Returns:
+            bool: True if device is compatible, False otherwise
+
+        Example:
+            >>> container.device = torch.device('cuda')
+            >>> container._is_device_compatible(torch.device('cuda:0'))  # True
+            >>> container._is_device_compatible(torch.device('cuda:1'))  # False
+            >>> container._is_device_compatible(torch.device('cpu'))     # False
+            >>>
+            >>> container.device = None
+            >>> container._is_device_compatible(torch.device('cuda'))    # True (any device)
+        """
         if self.device is None:
             # If TensorDict's device is not specified, any leaf device is considered compatible.
             return True
@@ -326,6 +372,44 @@ class TensorContainer:
         return formatted_path
 
     def __getitem__(self: Self, key: Any) -> Self:
+        """Index into the container along batch dimensions.
+
+        Indexing operations are applied to the batch dimensions of all contained tensors.
+        Event dimensions are preserved unchanged. Supports all PyTorch indexing patterns:
+
+        - Integer indexing: reduces batch dimensions
+        - Slice indexing: preserves batch structure
+        - Boolean mask indexing: filters batch elements
+        - Advanced indexing: tensor-based selection
+        - Ellipsis (...): automatic dimension expansion
+
+        Args:
+            key: Index specification (int, slice, tensor, tuple, etc.)
+
+        Returns:
+            TensorContainer: New container with indexed tensors
+
+        Raises:
+            IndexError: If indexing a 0-dimensional container with non-tuple index
+            IndexError: If ellipsis appears multiple times in index tuple
+
+        Example:
+            >>> container.shape == (4, 3)
+            >>> # Integer indexing - reduces batch dimensions
+            >>> sample = container[0]           # shape becomes (3,)
+            >>> timestep = container[:, 0]      # shape becomes (4,)
+            >>>
+            >>> # Slice indexing - preserves structure
+            >>> subset = container[1:3]         # shape becomes (2, 3)
+            >>>
+            >>> # Boolean mask - filters elements
+            >>> mask = torch.tensor([True, False, True, False])
+            >>> filtered = container[mask]      # shape becomes (2, 3)
+            >>>
+            >>> # Advanced indexing - tensor indices
+            >>> indices = torch.tensor([0, 2, 1])
+            >>> reordered = container[indices]  # shape becomes (3, 3)
+        """
         if isinstance(key, tuple):
             key = self.transform_ellipsis_index(self.shape, key)
         elif self.ndim == 0:
@@ -388,13 +472,56 @@ class TensorContainer:
                 self_leaf[processed_key] = value
 
     def view(self: Self, *shape: int) -> Self:
+        """Return a view with modified batch dimensions, preserving event dimensions.
+
+        Creates a view of the container with new batch shape while preserving all
+        event dimensions. The total number of elements in batch dimensions must remain
+        the same (view constraint).
+
+        Args:
+            *shape: New batch shape dimensions
+
+        Returns:
+            TensorContainer: View with new batch shape
+
+        Example:
+            >>> container.shape == (4, 3)  # 12 batch elements
+            >>> # Reshape batch dimensions while preserving event dims
+            >>> viewed = container.view(2, 6)    # batch becomes (2, 6)
+            >>> viewed = container.view(12)      # batch becomes (12,)
+            >>> viewed = container.view(-1, 3)   # batch becomes (4, 3) - inferred
+            >>>
+            >>> # If tensors have event dims, they are preserved:
+            >>> # Original: tensor.shape == (4, 3, 128)  # event dims (128,)
+            >>> # After view(2, 6): tensor.shape == (2, 6, 128)
+        """
         return pytree.tree_map(lambda x: x.view(*shape, *x.shape[self.ndim :]), self)
 
     def reshape(self: Self, *shape: int) -> Self:
+        """Return a reshaped container with modified batch dimensions.
+
+        Reshapes the batch dimensions while preserving event dimensions. Unlike view(),
+        reshape() can change the memory layout if needed and doesn't require the
+        tensor to be contiguous.
+
+        Args:
+            *shape: New batch shape dimensions
+
+        Returns:
+            TensorContainer: Reshaped container
+
+        Example:
+            >>> container.shape == (4, 3)  # 12 batch elements
+            >>> reshaped = container.reshape(2, 6)   # batch becomes (2, 6)
+            >>> reshaped = container.reshape(-1)     # batch becomes (12,)
+            >>>
+            >>> # Handles non-contiguous tensors unlike view()
+            >>> transposed = container.transpose(0, 1)  # Non-contiguous
+            >>> reshaped = transposed.reshape(6, 2)     # Works (reshape can copy)
+        """
         return pytree.tree_map(lambda x: x.reshape(*shape, *x.shape[self.ndim :]), self)
 
     def to(self: Self, *args, **kwargs) -> Self:
-        # Move tensors and ensure they are contiguous
         return pytree.tree_map(lambda x: x.to(*args, **kwargs), self)
 
     def detach(self: Self) -> Self:
@@ -403,9 +530,28 @@ class TensorContainer:
     def clone(
         self: Self, *, memory_format: Optional[torch.memory_format] = None
     ) -> Self:
-        # If memory_format is not specified, use torch.preserve_format as default
-        if memory_format is None:
-            memory_format = torch.preserve_format
+        """Create a deep copy of the container with optional memory format control.
+
+        Creates a new container with cloned tensors. All tensor data is copied,
+        but metadata (shape, device) is shallow-copied. Supports memory format
+        specification for performance optimization.
+
+        Args:
+            memory_format: Memory layout for cloned tensors. Defaults to preserve_format.
+                          Options: torch.contiguous_format, torch.channels_last, etc.
+
+        Returns:
+            TensorContainer: Deep copy of the container
+
+        Example:
+            >>> cloned = container.clone()  # Deep copy with preserved layout
+            >>>
+            >>> # Force contiguous memory layout for performance
+            >>> contiguous = container.clone(memory_format=torch.contiguous_format)
+            >>>
+            >>> # Clone preserves independence
+            >>> cloned[0] = new_data  # Original container unchanged
+        """
 
         cloned_td = pytree.tree_map(
             lambda x: x.clone(memory_format=memory_format), self
