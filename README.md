@@ -1,4 +1,4 @@
-# Research TensorDict (RTD)
+# Tensor Container
 
 *Modern tensor containers for PyTorch with PyTree compatibility and torch.compile optimization*
 
@@ -8,7 +8,7 @@
 
 > **⚠️ Academic Research Project**: This project exists solely for academic purposes to explore and learn PyTorch internals. For production use, please use the official, well-maintained [**torch/tensordict**](https://github.com/pytorch/tensordict) library.
 
-RTD provides efficient, type-safe tensor container implementations designed for modern PyTorch workflows. Built from the ground up with PyTree integration and torch.compile optimization, RTD enables seamless batched tensor operations with minimal overhead and maximum performance.
+Tensor Container provides efficient, type-safe tensor container implementations designed for modern PyTorch workflows. Built from the ground up with PyTree integration and torch.compile optimization, it enables seamless batched tensor operations with minimal overhead and maximum performance.
 
 ## Table of Contents
 
@@ -133,7 +133,7 @@ combined = pytree.tree_map(lambda x, y: x + y, data1, data2)
 
 ## torch.compile Compatibility
 
-RTD is designed from the ground up for `torch.compile` compatibility:
+Tensor Container is designed from the ground up for `torch.compile` compatibility:
 
 ```python
 @torch.compile
@@ -148,7 +148,7 @@ Our testing framework includes comprehensive compile compatibility verification 
 
 ## Contributing
 
-We welcome contributions! RTD is a research project focused on advancing PyTorch tensor container patterns.
+We welcome contributions! Tensor Container is a learning project for exploring PyTorch internals and tensor container implementations.
 
 ### Development Setup
 
@@ -201,4 +201,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ---
 
-*RTD is an academic research project for learning PyTorch internals and tensor container patterns. For production applications, we strongly recommend using the official [torch/tensordict](https://github.com/pytorch/tensordict) library, which is actively maintained by the PyTorch team.*
+*Tensor Container is an academic research project for learning PyTorch internals and tensor container patterns. For production applications, we strongly recommend using the official [torch/tensordict](https://github.com/pytorch/tensordict) library, which is actively maintained by the PyTorch team.*
