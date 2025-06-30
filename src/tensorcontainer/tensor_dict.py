@@ -291,6 +291,7 @@ class TensorDict(TensorContainer, PytreeRegistered):
                 value = torch.tensor(
                     value, device=self.device, dtype=torch.float32
                 )  # Assuming float for scalar assignment
+
             super().__setitem__(key, value)
 
     def __delitem__(self, key: str):

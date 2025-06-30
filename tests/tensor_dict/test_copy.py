@@ -95,6 +95,36 @@ def test_mutating_nested_copy_does_not_affect_original(nested_dict):
     assert "a" in td["x"]
 
 
+def test_copy_tensor_vs_container_identity(nested_dict):
+    """
+    Checks that after a .copy() call, torch.Tensor items are the same
+    reference, while TensorContainer items are new objects.
+    """
+    data = nested_dict((2, 2))
+    td = TensorDict(data, shape=(2, 2))
+    td_copy = td.copy()
+
+    # The top-level TensorDict is a TensorContainer, so it should be a new object.
+    assert td is not td_copy
+
+    # Check items within the TensorDict
+    for key, value in td.items():
+        copied_value = td_copy[key]
+        if isinstance(value, TensorDict):
+            assert copied_value is not value, (
+                f"TensorContainer at key '{key}' should be a new object"
+            )
+            # For nested containers, check that their leaf tensors are shared
+            for leaf_key, leaf_value in value.items():
+                assert copied_value[leaf_key] is leaf_value, (
+                    f"Leaf tensor at '{key}.{leaf_key}' should be shared"
+                )
+        elif isinstance(value, torch.Tensor):
+            assert copied_value is value, (
+                f"Tensor at key '{key}' should be the same object"
+            )
+
+
 @skipif_no_compile
 def test_mutating_nested_copy_does_not_affect_original_compiled(nested_dict):
     """Test that copy works correctly with torch.compile."""
@@ -212,7 +242,7 @@ def test_copy_inside_compile():
     """Test that creating and copying a TensorDict inside torch.compile works."""
 
     def compiled_fn(x):
-        td = TensorDict({"a": x, "b": x + 1}, shape=[1])
+        td = TensorDict({"a": x, "b": x + 1}, shape=(1,))
         td_copy = td.copy()
         return td_copy
 

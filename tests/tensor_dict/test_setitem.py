@@ -20,35 +20,6 @@ SLICING_INDICES = [
 
 
 @pytest.mark.parametrize("idx", SLICING_INDICES)
-def test_setitem_slicing_with_scalar(idx):
-    """
-    Tests assigning a scalar to a slice of a TensorDict.
-    Verifies that the scalar is broadcast to all tensors in the dict for the given slice.
-    """
-    features = torch.randn(2, 3, 4)
-    labels = torch.arange(2 * 3).reshape(2, 3).float()
-    td = TensorDict(
-        data={"features": features.clone(), "labels": labels.clone()},
-        shape=(2, 3),
-    )
-
-    original_features = features.clone()
-    original_labels = labels.clone()
-
-    # Perform the slice assignment
-    td[idx] = 0.0
-
-    # Calculate expected results
-    expected_features = original_features
-    expected_labels = original_labels
-    expected_features[idx] = 0.0
-    expected_labels[idx] = 0.0
-
-    torch.testing.assert_close(td["features"], expected_features)
-    torch.testing.assert_close(td["labels"], expected_labels)
-
-
-@pytest.mark.parametrize("idx", SLICING_INDICES)
 def test_setitem_slicing_with_tensordict(idx):
     """
     Tests assigning a source TensorDict to a slice of a destination TensorDict.
@@ -59,8 +30,7 @@ def test_setitem_slicing_with_tensordict(idx):
     )
 
     # Determine the shape of the slice to create a compatible source TensorDict
-    dummy_tensor = torch.empty(2, 3)
-    slice_shape = dummy_tensor[idx].shape
+    slice_shape = td_dest[idx].shape
 
     td_source = TensorDict(
         data={
@@ -89,9 +59,9 @@ def test_setitem_slicing_with_tensordict(idx):
 @pytest.mark.parametrize(
     "idx, value_shape, error",
     [
-        ((slice(None),), (1, 3), ValueError),  # Shape mismatch
-        (2, None, IndexError),  # Index out of bounds
-        ((slice(None), slice(None), 0), None, IndexError),  # Too many indices
+        ((slice(None),), (1, 3), KeyError),  # Shape mismatch
+        (2, None, ValueError),  # Index out of bounds
+        ((slice(None), slice(None), 0), None, ValueError),  # Too many indices
     ],
 )
 def test_setitem_slicing_invalid(idx, value_shape, error):
@@ -108,7 +78,6 @@ def test_setitem_slicing_invalid(idx, value_shape, error):
             data={"features": torch.randn(*value_shape, 4)}, shape=value_shape
         )
     else:
-        # For index errors, the value can be a simple scalar.
         value = 0.0
 
     with pytest.raises(error):

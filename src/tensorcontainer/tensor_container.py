@@ -1,13 +1,16 @@
 from __future__ import annotations
+from abc import abstractmethod
 import functools
-from typing import Any, List, Optional, Tuple, TypeAlias, Union
+from typing import Any, Iterable, List, Optional, Tuple, Type, TypeAlias, Union
 from typing_extensions import Self
 
 import torch
 
 # Use the official PyTree utility from torch
 import torch.utils._pytree as pytree
+from torch.utils._pytree import Context, KeyEntry, PyTree
 from torch import Tensor
+
 
 HANDLED_FUNCTIONS = {}
 
@@ -200,6 +203,23 @@ class TensorContainer:
 
         self.shape = shape
         self.device = device
+
+    @abstractmethod
+    def _pytree_flatten(self) -> tuple[list[Any], Context]:
+        pass
+
+    @abstractmethod
+    def _pytree_flatten_with_keys_fn(
+        self,
+    ) -> tuple[list[tuple[KeyEntry, Any]], Any]:
+        pass
+
+    @classmethod
+    @abstractmethod
+    def _pytree_unflatten(
+        cls: Type[Self], leaves: Iterable[Any], context: Context
+    ) -> PyTree:
+        pass
 
     @classmethod
     def __torch_function__(cls, func, types, args=(), kwargs=None):
@@ -428,58 +448,39 @@ class TensorContainer:
             )
         return pytree.tree_map(lambda x: x[key], self)
 
-    def __setitem__(self: Self, key: Any, value: TCCompatible) -> None:
+    def __setitem__(self: Self, index: Any, value: Self) -> None:
         """
         Sets the value of a slice of the container in-place.
 
         This method mimics the behavior of `torch.Tensor.__setitem__`. It requires
-        that the `value` be broadcastable to the shape of the slice `self[key]`.
+        that the `value` be broadcastable to the shape of the slice `self[index]`.
 
         This approach correctly handles advanced indexing (e.g., boolean masks) by
         relying on PyTorch's underlying shape-checking for the leaf-level assignments.
 
         Args:
-            key: The index or slice to set. Supports basic and advanced
+            index: The index or slice to set. Supports basic and advanced
                  indexing, including Ellipsis (`...`).
             value: The value to set. If it's a `TensorContainer`, its leaves must be
                    broadcastable to the corresponding sliced leaves of `self`. If it's
                    a scalar or `torch.Tensor`, it must be broadcastable to all sliced
                    leaves of `self`.
         """
-        processed_key = key
-        if isinstance(key, tuple):
-            processed_key = self.transform_ellipsis_index(self.shape, key)
 
-        if isinstance(value, TensorContainer):
-            self_leaves_with_path = pytree.tree_leaves_with_path(self)
-            value_leaves_with_path = pytree.tree_leaves_with_path(value)
+        if not isinstance(value, type(self)):
+            raise ValueError(f"Invalid value. Expected value of type {type(self)}")
 
-            if len(self_leaves_with_path) != len(value_leaves_with_path):
-                raise ValueError(
-                    f"Expected a container with {len(self_leaves_with_path)} leaves, but got one with {len(value_leaves_with_path)}."
-                )
+        processed_index = index
+        if isinstance(processed_index, tuple):
+            processed_index = self.transform_ellipsis_index(self.shape, index)
 
-            # Assign leaf by leaf. This requires that `value_leaf` is broadcastable
-            # to the shape of `self_leaf[processed_key]`, mimicking torch.Tensor behavior.
-            for (self_path, self_leaf), (value_path, value_leaf) in zip(
-                self_leaves_with_path, value_leaves_with_path
-            ):
+            for k, v in self._pytree_flatten_with_keys_fn()[0]:
                 try:
-                    self_leaf[processed_key] = value_leaf
-                except (RuntimeError, ValueError) as e:
-                    path_info = self._format_path(self_path)
-
-                    raise ValueError(
-                        f"Assignment failed for leaf at path '{path_info}'. "
-                        f"There might be a shape mismatch between the corresponding leaves of the source "
-                        f"and destination containers. Original error: {e}"
+                    v[processed_index] = k.get(value)
+                except Exception as e:
+                    raise type(e)(
+                        f"Issue with key {str(k)} and index {processed_index} for value of shape {v.shape} and type {type(v)} and assignment of shape {value.shape}"
                     ) from e
-        else:
-            # For a scalar or single tensor, iterate through leaves and assign.
-            # PyTorch will raise a RuntimeError if `value` cannot be broadcast
-            # to the shape of `self_leaf[processed_key]`.
-            for self_leaf in pytree.tree_leaves(self):
-                self_leaf[processed_key] = value
 
     def view(self: Self, *shape: int) -> Self:
         """Return a view with modified batch dimensions, preserving event dimensions.
