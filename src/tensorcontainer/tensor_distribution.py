@@ -117,15 +117,6 @@ class TensorNormal(TensorDistribution):
             self.reinterpreted_batch_ndims,
         )
 
-    def copy(self):
-        return TensorNormal(
-            loc=self.loc,
-            scale=self.scale,
-            reinterpreted_batch_ndims=self.reinterpreted_batch_ndims,
-            shape=self.shape,
-            device=self.device,
-        )
-
 
 class TensorTruncatedNormal(TensorDistribution):
     loc: Tensor
@@ -146,17 +137,6 @@ class TensorTruncatedNormal(TensorDistribution):
                 self.high.float(),  # type: ignore
             ),
             self.reinterpreted_batch_ndims,
-        )
-
-    def copy(self):
-        return TensorTruncatedNormal(
-            loc=self.loc,
-            scale=self.scale,
-            low=self.low,
-            high=self.high,
-            reinterpreted_batch_ndims=self.reinterpreted_batch_ndims,
-            shape=self.shape,
-            device=self.device,
         )
 
 
@@ -214,22 +194,6 @@ class TensorBernoulli(TensorDistribution):
                 self.reinterpreted_batch_ndims,
             )
 
-    def copy(self):
-        if self._probs is not None:
-            return TensorBernoulli(
-                _probs=self._probs,
-                reinterpreted_batch_ndims=self.reinterpreted_batch_ndims,
-                shape=self.shape,
-                device=self.device,
-            )
-        else:
-            return TensorBernoulli(
-                _logits=self._logits,
-                reinterpreted_batch_ndims=self.reinterpreted_batch_ndims,
-                shape=self.shape,
-                device=self.device,
-            )
-
 
 class TensorSoftBernoulli(TensorDistribution):
     _probs: Optional[Tensor] = field(default=None)
@@ -285,22 +249,6 @@ class TensorSoftBernoulli(TensorDistribution):
                 self.reinterpreted_batch_ndims,
             )
 
-    def copy(self):
-        if self._probs is not None:
-            return TensorSoftBernoulli(
-                _probs=self._probs,
-                reinterpreted_batch_ndims=self.reinterpreted_batch_ndims,
-                shape=self.shape,
-                device=self.device,
-            )
-        else:
-            return TensorSoftBernoulli(
-                _logits=self._logits,
-                reinterpreted_batch_ndims=self.reinterpreted_batch_ndims,
-                shape=self.shape,
-                device=self.device,
-            )
-
 
 class TensorCategorical(TensorDistribution):
     logits: Tensor
@@ -324,14 +272,6 @@ class TensorCategorical(TensorDistribution):
 
     def log_prob(self, value: Tensor) -> Tensor:
         return self.dist().log_prob(value)
-
-    def copy(self):
-        return TensorCategorical(
-            logits=self.logits,
-            reinterpreted_batch_ndims=self.reinterpreted_batch_ndims,
-            shape=self.shape,
-            device=self.device,
-        )
 
 
 @register_kl(TensorDistribution, TensorDistribution)
