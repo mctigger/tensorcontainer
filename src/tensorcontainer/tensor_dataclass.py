@@ -253,7 +253,7 @@ class TensorDataClass(TensorContainer, PytreeRegistered, TensorDataclassTransfor
                 if isinstance(val, Tensor):
                     self.device = val.device
                     break
-        
+
         super().__init__(self.shape, self.device)
 
         self._tree_validate_device()

@@ -323,18 +323,6 @@ class TensorDict(TensorContainer, PytreeRegistered):
         for key, value in other.items():
             self[key] = value
 
-    def copy(self) -> TensorDict:
-        """
-        Creates a new TensorDict where all children anywhere in the data tree are also
-        copied, but the leaves are the same. Implemented using _pytree_flatten and
-        _pytree_unflatten for torch.compile compatibility.
-        """
-        flat_leaves, context = self._pytree_flatten()
-        new_td = TensorDict._pytree_unflatten(flat_leaves, context)
-        # Ensure device is preserved from the original TensorDict
-        new_td.device = self.device
-        return new_td
-
     def flatten_keys(self, separator: str = ".") -> TensorDict:
         """
         Returns a TensorDict with flattened keys.
