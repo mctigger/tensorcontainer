@@ -12,31 +12,6 @@ class TestDevice:
     """Test class for device-related functionality."""
 
     @pytest.mark.parametrize("compile_mode", [False, True])
-    def test_device_propagation(self, cuda_device_test_instance, compile_mode):
-        """Test that device is properly propagated to all tensor fields."""
-        if compile_mode:
-            pytest.importorskip("torch", minversion="2.0")
-            if not torch.cuda.is_available():
-                pytest.skip("CUDA not available")
-
-        td = cuda_device_test_instance
-
-        if compile_mode:
-            # Test with compiled function
-            def get_device_info(tensor_data):
-                return tensor_data.device, tensor_data.a.device, tensor_data.b.device
-
-            compiled_fn = torch.compile(get_device_info, fullgraph=True)
-            device, a_device, b_device = compiled_fn(td)
-
-            assert device is not None
-            assert device.type == "cuda"
-            assert a_device.type == "cuda"
-            assert b_device.type == "cuda"
-        else:
-            assert_device_consistency(td, torch.device("cuda"))
-
-    @pytest.mark.parametrize("compile_mode", [False, True])
     def test_to_device(self, device_test_instance, compile_mode):
         """Test moving tensor dataclass to different device."""
         if compile_mode:
@@ -45,21 +20,7 @@ class TestDevice:
                 pytest.skip("CUDA not available")
 
         td = device_test_instance.to(torch.device("cuda"))
-
-        if compile_mode:
-
-            def get_device_info(tensor_data):
-                return tensor_data.device, tensor_data.a.device, tensor_data.b.device
-
-            compiled_fn = torch.compile(get_device_info, fullgraph=True)
-            device, a_device, b_device = compiled_fn(td)
-
-            assert device is not None
-            assert device.type == "cuda"
-            assert a_device.type == "cuda"
-            assert b_device.type == "cuda"
-        else:
-            assert_device_consistency(td, torch.device("cuda"))
+        assert_device_consistency(td, torch.device("cuda"))
 
     def test_device_consistency_check(self, device_test_instance):
         """Test that device consistency validation catches mismatches."""

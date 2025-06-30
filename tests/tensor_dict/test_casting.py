@@ -6,6 +6,8 @@ from tensorcontainer.tensor_dict import TensorDict
 
 from tests.compile_utils import run_and_compare_compiled
 
+from .test_device import are_devices_equal
+
 
 @pytest.mark.skipif_no_compile
 class TestCasting:
@@ -40,7 +42,7 @@ class TestCasting:
         assert isinstance(new_td, TensorDict)
         assert new_td is not td
         assert new_td.shape == td.shape
-        assert new_td.device == torch.device(device)
+        assert are_devices_equal(new_td.device, device)
 
         for leaf in pytree.tree_leaves(new_td):
             assert leaf.dtype == target_dtype

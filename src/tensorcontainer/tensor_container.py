@@ -327,14 +327,7 @@ class TensorContainer:
     # --- Overloaded methods leveraging PyTrees ---
 
     def copy(self) -> Self:
-        new_tc = pytree.tree_map(lambda x: x, self)
-
-        # The flatten / unflatten logic from TensorContainer automatically
-        # infers the device from leaves. However, for copy we want to actually
-        # keep the device.
-        new_tc.device = self.device
-
-        return new_tc
+        return pytree.tree_map(lambda x: x, self)
 
     def get_number_of_consuming_dims(self, item) -> int:
         if item is Ellipsis or item is None:
@@ -533,7 +526,19 @@ class TensorContainer:
         return pytree.tree_map(lambda x: x.reshape(*shape, *x.shape[self.ndim :]), self)
 
     def to(self: Self, *args, **kwargs) -> Self:
-        return pytree.tree_map(lambda x: x.to(*args, **kwargs), self)
+        tc = pytree.tree_map(lambda x: x.to(*args, **kwargs), self)
+
+        device = self.device
+
+        if len(args) > 0:
+            if isinstance(args[0], (str, torch.device)):
+                device = pytree.tree_leaves(tc)[0].device
+        if len(kwargs) > 0 and "device" in kwargs:
+            device = pytree.tree_leaves(tc)[0].device
+
+        tc.device = device
+
+        return tc
 
     def detach(self: Self) -> Self:
         return pytree.tree_map(lambda x: x.detach(), self)

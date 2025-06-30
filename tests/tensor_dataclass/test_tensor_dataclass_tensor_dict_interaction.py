@@ -34,6 +34,7 @@ def _make_tdc_with_td(
             ),
         },
         shape=batch_size,
+        device=device,
     )
     other_tensor = torch.randn(
         *batch_size, 5, device=device, requires_grad=requires_grad
@@ -234,7 +235,7 @@ class TestView:
         TensorDataClass.
         """
         tdc = _make_tdc_with_td(batch_size, device)
-
+        print(self._perform_view_operation(tdc, new_shape).device)
         _run_and_verify_tdc_operation(
             self._perform_view_operation,
             tdc,

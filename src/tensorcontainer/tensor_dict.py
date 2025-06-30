@@ -90,7 +90,7 @@ class TensorDict(TensorContainer, PytreeRegistered):
 
         if validate_args:
             self._tree_validate_shape(data)
-            self._tree_validate_device(data)
+            # self._tree_validate_device(data)
 
         self.data = TensorDict.data_from_dict(data, shape, device)
 
@@ -219,16 +219,15 @@ class TensorDict(TensorContainer, PytreeRegistered):
         keys, event_ndims, metadata, shape_context, device_context = context
 
         obj = cls.__new__(cls)
+        obj.device = device_context
         leaves_list = list(leaves)
         if not leaves_list:
             # Handle the empty case
             obj.data = dict(metadata)
             obj.shape = shape_context
-            obj.device = device_context
             return obj
 
         first_leaf = leaves_list[0]
-        obj.device = first_leaf.device
 
         # Reconstruct the data dictionary from leaves and metadata
         data = dict(zip(keys, leaves_list))

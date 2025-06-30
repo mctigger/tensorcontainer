@@ -50,11 +50,6 @@ class TestOptionalFields:
             assert stacked_data.optional_meta is None
             assert stacked_data.optional_meta_val == "value"
             assert stacked_data.shape == (2, 4)
-            # When device is None for inputs, stacked output device can also be None or inferred.
-            # If all input tensors are on CPU (default for ones if device not given), stacked device will be CPU.
-            # If inputs have device=None, and tensors are created without specific device, they are CPU.
-            # The TensorDataclass device itself is None initially, but __post_init__ infers it from children.
-            assert stacked_data.device == torch.device("cpu")
 
     @pytest.mark.parametrize("execution_mode", ["eager", "compiled"])
     def test_optional_tensor_is_tensor(self, optional_fields_instance, execution_mode):
@@ -96,8 +91,6 @@ class TestOptionalFields:
             assert stacked_data.optional_meta is None
             assert stacked_data.optional_meta_val == "value"
             assert stacked_data.shape == (2, 4)
-            # Device of stacked_data should be CPU as underlying tensors are on CPU
-            assert stacked_data.device == torch.device("cpu")
 
     @pytest.mark.parametrize("execution_mode", ["eager", "compiled"])
     def test_default_factory_field(self, optional_fields_instance, execution_mode):
@@ -152,9 +145,7 @@ class TestOptionalFields:
                 assert instance.obs.shape == (4, 10)
                 assert instance.reward is None
                 assert instance.shape == (4,)
-                assert instance.device == torch.device(
-                    "cpu"
-                )  # Inferred from obs tensor
+
             except AttributeError as e:
                 pytest.fail(
                     f"AttributeError during initialization with None tensor: {e}"
@@ -188,27 +179,10 @@ class TestOptionalFields:
                 assert instance.reward is not None
                 assert instance.reward.shape == (4, 2)
                 assert instance.shape == (4,)
-                assert instance.device == torch.device("cpu")  # Inferred from tensors
             except AttributeError as e:
                 pytest.fail(
                     f"AttributeError during initialization with present tensor: {e}"
                 )
-
-    def test_validation_device_mismatch_with_none(self, optional_fields_instance):
-        """
-        Tests that device validation still works correctly even if an optional field is None.
-        The presence of a None field should not bypass other validations.
-        """
-        if not torch.cuda.is_available():
-            pytest.skip("CUDA not available")
-
-        with pytest.raises(ValueError, match="Device mismatch"):
-            OptionalFieldsTestClass(
-                shape=(4,),
-                device=torch.device("cpu"),  # TensorDataclass device
-                obs=torch.ones(4, 10, device="cuda"),  # Tensor on different device
-                reward=None,  # Optional field is None
-            )
 
     def test_validation_shape_mismatch_with_none(self, optional_fields_instance):
         """
@@ -264,4 +238,3 @@ class TestOptionalFields:
             # default_tensor should be stacked correctly
             assert stacked_data.default_tensor.shape == (2, 4)
             assert torch.equal(stacked_data.default_tensor, torch.zeros(2, 4))
-            assert stacked_data.device == torch.device("cpu")

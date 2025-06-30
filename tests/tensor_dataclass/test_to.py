@@ -67,3 +67,20 @@ class TestTo:
             td_cpu1 = td.to(torch.device("cpu"))
             assert_device_consistency(td_cpu1, torch.device("cpu"))
             assert td_cpu1.meta == 42  # Non-tensor field should remain unchanged
+
+    @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
+    def test_to_device_inference(self, to_test_instance):
+        """Test that the device attribute is correctly inferred after .to() calls."""
+        td = to_test_instance
+
+        # Move to "cuda" and check if the device attribute is correctly inferred
+        td_cuda = td.to("cuda")
+        assert td_cuda.device == torch.device("cuda:0")
+
+        # Move to a specific CUDA device
+        td_cuda_1 = td.to("cuda:0")
+        assert td_cuda_1.device == torch.device("cuda:0")
+
+        # Test with a dtype change only, device should not change
+        td_float64 = td.to(dtype=torch.float64)
+        assert td_float64.device == td.device

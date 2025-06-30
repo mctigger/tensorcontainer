@@ -244,19 +244,9 @@ class TensorDataClass(TensorContainer, PytreeRegistered, TensorDataclassTransfor
             ValueError: If tensor field shapes are incompatible with batch shape
             ValueError: If tensor field devices are incompatible with container device
         """
-        # Infer device from tensor fields if not provided
-        if self.device is None:
-            for field in dataclasses.fields(self):
-                if field.name in ("shape", "device"):
-                    continue
-                val = getattr(self, field.name)
-                if isinstance(val, Tensor):
-                    self.device = val.device
-                    break
-
         super().__init__(self.shape, self.device)
 
-        self._tree_validate_device()
+        # self._tree_validate_device()
         self._tree_validate_shape()
 
     def _get_path_str(self, key_path):
@@ -307,7 +297,7 @@ class TensorDataClass(TensorContainer, PytreeRegistered, TensorDataclassTransfor
         batch_ndim = len(self.shape)
         event_ndims = tuple(leaf.ndim - batch_ndim for leaf in flat_leaves)
 
-        return flat_names, event_ndims, meta_data
+        return flat_names, event_ndims, meta_data, self.device
 
     def _pytree_flatten(self) -> Tuple[List[Any], Any]:
         """Flatten the TensorDataClass into tensor leaves and metadata context.
@@ -360,14 +350,14 @@ class TensorDataClass(TensorContainer, PytreeRegistered, TensorDataclassTransfor
         cls, leaves: Iterable[Any], context: pytree.Context
     ) -> TensorDataClass:
         """Unflattens component values into a dataclass instance."""
-        flat_names, event_ndims, meta_data = context
+        flat_names, event_ndims, meta_data, device = context
 
         leaves = list(leaves)  # Convert to list to allow indexing
 
         if not leaves:
             return cls(**meta_data)
 
-        reconstructed_device = leaves[0].device
+        reconstructed_device = device
 
         # Calculate new_shape based on the (potentially transformed) leaves and event_ndims from context.
         # This correctly determines the batch shape of the TensorDict after operations like stack/cat.

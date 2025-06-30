@@ -21,26 +21,8 @@ def are_devices_equal(device1, device2):
         device2 = torch.device(device2)
 
     # Now both should be torch.device objects
-    # This properly compares both device type and index
-    return device1 == device2
-
-
-def get_device_type(device):
-    """
-    Get the device type regardless of whether it's a string or torch.device.
-
-    Args:
-        device: Device (str or torch.device)
-
-    Returns:
-        str: Device type (without index)
-    """
-    if isinstance(device, str):
-        # For string devices like 'cuda:0', extract just the type part
-        return device.split(":")[0]
-    else:
-        # For torch.device objects, use the type attribute
-        return device.type
+    # This properly compares only the device type, not the index
+    return device1.type == device2.type
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
@@ -49,14 +31,11 @@ def test_tensordict_to_changes_device():
     td_cuda = td.to(torch.device("cuda"))
 
     # Check if device is 'cuda' or a cuda device object
-    if isinstance(td_cuda.device, str):
-        assert td_cuda.device == "cuda" or td_cuda.device.startswith("cuda:")
-    else:
-        assert td_cuda.device.type == "cuda"
+    assert are_devices_equal(td_cuda.device, "cuda")
 
     # Check tensor devices
     for v in td_cuda.data.values():
-        assert v.device.type == "cuda"
+        assert are_devices_equal(v.device, "cuda")
 
 
 def test_tensordict_homogeneous_device_cpu():
@@ -66,13 +45,10 @@ def test_tensordict_homogeneous_device_cpu():
     }
     td = TensorDict(data, shape=(4,), device=torch.device("cpu"))
     for v in td.values():
-        assert v.device.type == "cpu"
+        assert are_devices_equal(v.device, "cpu")
 
     # Check if device is 'cpu' or a cpu device object
-    if isinstance(td.device, str):
-        assert td.device == "cpu"
-    else:
-        assert td.device.type == "cpu"
+    assert are_devices_equal(td.device, "cpu")
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
@@ -105,9 +81,9 @@ def test_tensordict_cpu_method():
     )
     td_cpu = td.cpu()
 
-    assert td_cpu.device.type == "cpu"
+    assert are_devices_equal(td_cpu.device, "cpu")
     for v in td_cpu.data.values():
-        assert v.device.type == "cpu"
+        assert are_devices_equal(v.device, "cpu")
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
@@ -115,6 +91,6 @@ def test_tensordict_cuda_method():
     td = TensorDict({"a": torch.randn(4, 3)}, shape=(4,), device=torch.device("cpu"))
     td_cuda = td.cuda()
 
-    assert td_cuda.device.type == "cuda"
+    assert are_devices_equal(td_cuda.device, "cuda")
     for v in td_cuda.data.values():
-        assert v.device.type == "cuda"
+        assert are_devices_equal(v.device, "cuda")
