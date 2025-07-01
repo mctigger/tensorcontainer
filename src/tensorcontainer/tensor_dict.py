@@ -325,19 +325,23 @@ class TensorDict(TensorContainer, PytreeRegistered):
 
     def flatten_keys(self, separator: str = ".") -> TensorDict:
         """
-        Returns a TensorDict with flattened keys.
+        Returns a TensorDict with flattened keys using an iterative approach
+        to avoid recursion and temporary reference cycles.
         """
         out = {}
+        # Stack for iterative traversal: (data, prefix)
+        stack: List[Tuple[TDCompatible, str]] = [(self, "")]
 
-        def _flatten(data, prefix=""):
+        while stack:
+            data, prefix = stack.pop()
+
             if isinstance(data, TensorDict):
                 for key, value in data.items():
                     new_prefix = prefix + key + separator
-                    _flatten(value, new_prefix)
+                    stack.append((value, new_prefix))
             else:
+                # Store the flattened value with its full key
                 out[prefix[:-1]] = data
-
-        _flatten(self)
 
         return TensorDict(out, self.shape, self.device)
 
