@@ -203,7 +203,7 @@ class TensorDataClass(TensorContainer, PytreeRegistered, TensorDataclassTransfor
         if hasattr(cls, "__slots__"):
             return
 
-        # --- NEW: Automatically inherit annotations from parent classes ---
+        # Automatically inherit annotations from parent classes
         # Build a complete dictionary of annotations from the MRO.
         # Iterate backwards through the MRO to ensure correct override order (child overrides parent).
         all_annotations = {}
@@ -211,7 +211,6 @@ class TensorDataClass(TensorContainer, PytreeRegistered, TensorDataclassTransfor
             if hasattr(base, "__annotations__"):
                 all_annotations.update(base.__annotations__)
         cls.__annotations__ = all_annotations
-        # --- End new logic ---
 
         dc_kwargs = {}
         for k in list(kwargs.keys()):
