@@ -1,20 +1,42 @@
 from __future__ import annotations
-from abc import abstractmethod
+
 import functools
-from typing import Any, Iterable, List, Optional, Tuple, Type, TypeAlias, Union
-from typing_extensions import Self
+from abc import abstractmethod
+from typing import (
+    Any,
+    Callable,
+    Iterable,
+    List,
+    Optional,
+    Tuple,
+    Type,
+    TypeAlias,
+    Union,
+)
 
 import torch
 
 # Use the official PyTree utility from torch
 import torch.utils._pytree as pytree
-from torch.utils._pytree import Context, KeyEntry, PyTree
 from torch import Tensor
-
+from torch.utils._pytree import Context, KeyEntry, PyTree
+from typing_extensions import Self
 
 HANDLED_FUNCTIONS = {}
 
 TCCompatible: TypeAlias = Union[torch.Tensor, "TensorContainer"]
+
+
+class PathWrappedException(Exception):
+    """An exception that wraps an existing exception to add path context."""
+
+    def __init__(self, path: str, original_exception: Exception):
+        self.path = path
+        self.original_exception = original_exception
+        # Create a clear message incorporating the original error
+        super().__init__(
+            f"Error at path {path}: ({type(original_exception).__name__}) {original_exception}"
+        )
 
 
 def implements(torch_function):
@@ -230,6 +252,19 @@ class TensorContainer:
         ):
             return NotImplemented
         return HANDLED_FUNCTIONS[func](*args, **kwargs)
+
+    def _tree_map(
+        self,
+        func: Callable[..., Any],
+        is_leaf: Optional[Callable[[PyTree], bool]] = None,
+    ) -> PyTree:
+        def wrapped_func(keypath, x, *xs):
+            try:
+                return func(x, *xs)
+            except Exception as e:
+                raise PathWrappedException(self._format_path(keypath), e) from e
+
+        return pytree.tree_map_with_path(wrapped_func, self, is_leaf=is_leaf)
 
     def _is_shape_compatible(self, shape):
         """Check if a tensor shape is compatible with this container's batch shape.
