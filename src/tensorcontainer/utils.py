@@ -1,8 +1,8 @@
 from abc import abstractmethod
-from typing import Iterable, TypeVar, Type, Any
+from typing import Any, Iterable, Type, TypeVar
 
 import torch.utils._pytree as pytree
-from torch.utils._pytree import Context, PyTree, KeyEntry
+from torch.utils._pytree import Context, KeyEntry, PyTree
 
 _PytreeRegistered = TypeVar("_PytreeRegistered", bound="PytreeRegistered")
 

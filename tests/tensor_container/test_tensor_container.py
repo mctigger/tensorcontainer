@@ -4,6 +4,7 @@ import torch.utils._pytree as pytree
 from torch.utils._pytree import tree_map
 
 from src.tensorcontainer.tensor_dict import TensorDict
+from tensorcontainer.tensor_container import TensorContainer
 
 
 def _make_nested_tensordict(shape=(2,)):
@@ -31,7 +32,7 @@ class TestTreeMap:
             return x * 2
 
         # Apply using _tree_map from TensorDict (which inherits from TensorContainer)
-        result_td = td._tree_map(func)
+        result_td = TensorContainer._tree_map(func, td)
 
         # Apply using direct pytree.tree_map on the internal data
         expected_data = tree_map(func, td.data)
@@ -54,6 +55,6 @@ class TestTreeMap:
             return x  # Ensure a return for non-error paths
 
         with pytest.raises(Exception) as excinfo:
-            td._tree_map(func_with_error)
+            TensorContainer._tree_map(func_with_error, td)
 
         assert "Error at path ['b']['c']" in str(excinfo.value)
