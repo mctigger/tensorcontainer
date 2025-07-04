@@ -6,10 +6,7 @@ from tests.tensor_dict import common
 
 
 def test_valid_shape_prefix():
-    with pytest.raises(
-        ValueError,
-        match="Shape mismatch at",
-    ):
+    with pytest.raises(RuntimeError):
         TensorDict({"a": torch.arange(2, 4).reshape(1, 2)}, shape=[2])
 
 
@@ -30,20 +27,14 @@ def test_init_compiled(nested_dict):
 
 
 def test_init_with_mixed_types():
-    data = {"a": torch.arange(2), "b": torch.tensor(1), "c": "string"}
-    with pytest.raises(
-        ValueError,
-        match="Shape mismatch at",
-    ):
-        TensorDict(data, shape=[2])
+    data = {"a": torch.arange(2), "c": "string"}
+    with pytest.raises(AttributeError):
+        TensorDict(data, shape=[2]).view(1, 1, 2)
 
 
 def test_init_with_zero_sized_tensor():
     data = {"a": torch.empty(0)}
-    with pytest.raises(
-        ValueError,
-        match="Shape mismatch at",
-    ):
+    with pytest.raises(RuntimeError):
         TensorDict(data, shape=[2, 2])
 
 

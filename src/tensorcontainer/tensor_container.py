@@ -13,31 +13,21 @@ from typing import (
     TypeAlias,
     Union,
 )
-
 import torch
+import textwrap
 
 # Use the official PyTree utility from torch
 import torch.utils._pytree as pytree
 from torch import Tensor
-from torch._prims_common import DeviceLikeType
+from torch._prims_common import DeviceLikeType, ShapeType
 from torch.utils._pytree import Context, KeyEntry, PyTree
 from typing_extensions import Self
+
+from tensorcontainer.utils import resolve_device
 
 HANDLED_FUNCTIONS = {}
 
 TCCompatible: TypeAlias = Union[torch.Tensor, "TensorContainer"]
-
-
-class PathWrappedException(Exception):
-    """An exception that wraps an existing exception to add path context."""
-
-    def __init__(self, path: str, original_exception: Exception):
-        self.path = path
-        self.original_exception = original_exception
-        # Create a clear message incorporating the original error
-        super().__init__(
-            f"Error at path {path}: ({type(original_exception).__name__}) {original_exception}"
-        )
 
 
 def implements(torch_function):
@@ -221,11 +211,22 @@ class TensorContainer:
         >>> first_batch = container[0]           # Shape becomes (3,), events preserved
     """
 
-    def __init__(self, shape, device: Union[None, DeviceLikeType]):
+    device: Optional[torch.device]
+    shape: torch.Size
+
+    def __init__(
+        self,
+        shape: ShapeType,
+        device: Union[None, DeviceLikeType],
+        validate_args: bool = True,
+    ):
         super().__init__()
 
-        self.shape = shape
-        self.device = None if device is None else torch.device(device)
+        self.shape = torch.Size(shape)
+        self.device = None if device is None else torch.device(resolve_device(device))
+
+        if validate_args:
+            self._validate()
 
     @abstractmethod
     def _pytree_flatten(self) -> tuple[list[Any], Context]:
@@ -266,79 +267,45 @@ class TensorContainer:
             try:
                 return func(x, *xs)
             except Exception as e:
-                raise PathWrappedException(cls._format_path(keypath), e) from e
+                path = cls._format_path(keypath)
+                message = f"Error at path {path}: {type(e).__name__}: {e}"
+                raise type(e)(message) from e
 
         return pytree.tree_map_with_path(wrapped_func, tree, *rests, is_leaf=is_leaf)
 
     @classmethod
     def _is_shape_compatible(cls, parent: TensorContainer, child: TCCompatible):
-        parent_ndim = len(parent.shape)
-        child_ndim = len(child.shape)
+        return child.shape[: parent.ndim] == parent.shape
 
-        return child_ndim >= parent_ndim and child.shape[:parent_ndim] == parent.shape
-
-    def _is_device_compatible(self, leaf_device: torch.device):
-        """Check if a tensor device is compatible with this container's device.
-
-        Device compatibility uses flexible rules to handle common PyTorch device patterns:
-
-        - If container device is None, any tensor device is compatible
-        - String device specs are parsed and compared as torch.device objects
-        - Device type must match exactly (e.g., 'cpu' vs 'cuda')
-        - Device indices use flexible matching:
-          * Explicit indices must match exactly ('cuda:0' vs 'cuda:0')
-          * Unspecified index (0) is compatible with explicit index 0
-          * 'cuda' is compatible with 'cuda:0' (default device)
-
-        Args:
-            leaf_device (torch.device): The tensor device to validate
-
-        Returns:
-            bool: True if device is compatible, False otherwise
-
-        Example:
-            >>> container.device = torch.device('cuda')
-            >>> container._is_device_compatible(torch.device('cuda:0'))  # True
-            >>> container._is_device_compatible(torch.device('cuda:1'))  # False
-            >>> container._is_device_compatible(torch.device('cpu'))     # False
-            >>>
-            >>> container.device = None
-            >>> container._is_device_compatible(torch.device('cuda'))    # True (any device)
-        """
-        if self.device is None:
-            # If TensorDict's device is not specified, any leaf device is considered compatible.
+    @classmethod
+    def _is_device_compatible(cls, parent: TensorContainer, child: TCCompatible):
+        if parent.device is None:
             return True
 
-        td_device_obj = self.device
-        if isinstance(self.device, str):
+        return parent.device == child.device
+
+    def _validate_shape(self, value):
+        if not self._is_shape_compatible(self, value):
+            raise RuntimeError(
+                f"Invalid shape {value.shape}. Expected shape that is compatible to {self.shape}"
+            )
+
+    def _validate_device(self, value):
+        if not self._is_device_compatible(self, value):
+            print(type(value.device), type(self.device))
+            raise RuntimeError(
+                f"Invalid device {value.device}. Expected device that is compatible to {self.device}"
+            )
+
+    def _validate(self):
+        key_value, _ = self._pytree_flatten_with_keys_fn()
+
+        for k, v in key_value:
             try:
-                td_device_obj = torch.device(self.device)
-            except RuntimeError:
-                return False
-
-        if not isinstance(td_device_obj, torch.device):
-            return False
-
-        # Compare device types
-        if td_device_obj.type != leaf_device.type:
-            return False
-
-        # Compare device indices
-        # If both have an index, they must match
-        if td_device_obj.index is not None and leaf_device.index is not None:
-            return td_device_obj.index == leaf_device.index
-        # If td_device_obj has no index (e.g., "cuda") and leaf_device has index 0 (e.g., "cuda:0"), they are compatible
-        elif td_device_obj.index is None and leaf_device.index == 0:
-            return True
-        # If leaf_device has no index (e.g., "cuda") and td_device_obj has index 0 (e.g., "cuda:0"), they are compatible
-        elif td_device_obj.index == 0 and leaf_device.index is None:
-            return True
-        # If neither has an index (e.g., both "cpu"), they are compatible
-        elif td_device_obj.index is None and leaf_device.index is None:
-            return True
-        # Otherwise, they are not compatible (e.g., "cuda" vs "cuda:1")
-        else:
-            return False
+                self._validate_shape(v)
+                self._validate_device(v)
+            except RuntimeError as e:
+                raise RuntimeError(f"Validation error at key {k}: {e.args}")
 
     @property
     def ndim(self):
@@ -414,6 +381,55 @@ class TensorContainer:
         if formatted_path.startswith("."):
             formatted_path = formatted_path[1:]
         return formatted_path
+
+    def __repr__(self) -> str:
+        # Infer device for representation if not set (this part is unchanged)
+        device_repr = self.device
+        if device_repr is None:
+            try:
+                # Ensure there are leaves before trying to access device
+                # pytree.tree_leaves can return an empty list
+                leaves = pytree.tree_leaves(self)
+                if leaves:
+                    device_repr = leaves[0].device
+            except IndexError:  # Should not happen if leaves is checked
+                pass
+            except Exception:  # Catch any other pytree or attribute errors
+                pass
+
+        # Use a consistent indent of 4 spaces, which is standard
+        indent = "    "
+
+        def _format_item(key, value):
+            """Formats a key-value pair for representation."""
+            key_repr = f"{str(key)}: "
+            if isinstance(value, Tensor):
+                # Custom, more informative representation for Tensors
+                content = f"Tensor(shape={value.shape}, device={value.device}, dtype={value.dtype})"
+            else:
+                # For nested TensorDicts, repr() is called recursively.
+                # The subsequent textwrap.indent handles the indentation of the nested structure.
+                content = repr(value)
+
+            return key_repr + content
+
+        # Flatten the structure to get key-value pairs
+        key_value_pairs, _ = self._pytree_flatten_with_keys_fn()
+
+        # Create a string for all items, separated by newlines
+        items_str = "\n".join(_format_item(k, v) for k, v in key_value_pairs)
+
+        # Indent the entire block of items
+        indented_items = textwrap.indent(items_str, indent)
+
+        # Assemble the final, properly formatted representation string
+        return (
+            f"{self.__class__.__name__}(\n"
+            f"{indent}shape={str(self.shape)},\n"
+            f"{indent}device={device_repr},\n"
+            f"{indent}items=\n{textwrap.indent(indented_items, indent)}\n{indent}\n"
+            f")"
+        )
 
     def __getitem__(self: Self, key: Any) -> Self:
         """Index into the container along batch dimensions.

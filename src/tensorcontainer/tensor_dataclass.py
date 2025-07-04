@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import copy
-import dataclasses
+from dataclasses import dataclass, fields, InitVar, field
 from typing import Any, Iterable, List, Optional, Tuple, TypeVar, Union
 
 import torch
@@ -178,8 +178,9 @@ class TensorDataClass(TensorContainer, PytreeRegistered, TensorDataclassTransfor
     """
 
     # Added here to make shape and device part of the data class.
-    shape: tuple
+    shape: torch.Size
     device: Optional[torch.device]
+    validate_args: InitVar[bool] = field(default=True, kw_only=True)
 
     def __init_subclass__(cls, **kwargs):
         """Automatically convert subclasses into dataclasses with proper field inheritance.
@@ -225,10 +226,11 @@ class TensorDataClass(TensorContainer, PytreeRegistered, TensorDataclassTransfor
             )
         dc_kwargs.setdefault("eq", False)
         dc_kwargs.setdefault("slots", True)
+        dc_kwargs.setdefault("repr", False)
 
-        dataclasses.dataclass(cls, **dc_kwargs)
+        dataclass(cls, **dc_kwargs)
 
-    def __post_init__(self):
+    def __post_init__(self, validate_args: bool):
         """Initialize TensorContainer functionality and perform validation.
 
         This method is automatically called by the dataclass __init__ after all
@@ -243,10 +245,7 @@ class TensorDataClass(TensorContainer, PytreeRegistered, TensorDataclassTransfor
             ValueError: If tensor field shapes are incompatible with batch shape
             ValueError: If tensor field devices are incompatible with container device
         """
-        super().__init__(self.shape, self.device)
-
-        # self._tree_validate_device()
-        self._tree_validate_shape()
+        super().__init__(self.shape, self.device, validate_args)
 
     def _get_path_str(self, key_path):
         """Helper to construct path string from key_path, robust to torch.compile."""
@@ -259,31 +258,6 @@ class TensorDataClass(TensorContainer, PytreeRegistered, TensorDataclassTransfor
             else:  # Fallback for unexpected elements
                 path_parts.append(str(k))
         return ".".join(path_parts)
-
-    def _tree_validate_shape(self):
-        keypath_leaf_pairs = pytree.tree_leaves_with_path(self)
-        batch_shape = self.shape
-
-        for key_path, leaf in keypath_leaf_pairs:
-            path_str = self._get_path_str(key_path)
-
-            if leaf.ndim > 0 and not self._is_shape_compatible(leaf.shape):
-                raise ValueError(
-                    f"Shape mismatch at '{path_str}': The tensor shape {leaf.shape} "
-                    f"is not compatible with the TensorDataclass's batch shape {batch_shape}."
-                )
-
-    def _tree_validate_device(self):
-        keypath_leaf_pairs = pytree.tree_leaves_with_path(self)
-
-        for key_path, leaf in keypath_leaf_pairs:
-            path_str = self._get_path_str(key_path)
-
-            if not self._is_device_compatible(leaf.device):
-                raise ValueError(
-                    f"Device mismatch at '{path_str}': The tensor device {leaf.device} "
-                    f"is not compatible with the TensorDataclass's device {self.device}."
-                )
 
     def _get_pytree_context(
         self, flat_names: List[str], flat_leaves: List[TDCompatible], meta_data
@@ -318,7 +292,7 @@ class TensorDataClass(TensorContainer, PytreeRegistered, TensorDataclassTransfor
 
         meta_data = {}
 
-        for f in dataclasses.fields(self):
+        for f in fields(self):
             name, val = f.name, getattr(self, f.name)
             if isinstance(val, TDCompatible):
                 flat_values.append(val)
@@ -375,28 +349,7 @@ class TensorDataClass(TensorContainer, PytreeRegistered, TensorDataclassTransfor
             **{k: v for k, v in meta_data.items() if k not in ["device", "shape"]},
             device=reconstructed_device,
             shape=reconstructed_shape,
-        )
-
-    def __repr__(self) -> str:
-        """Provides a developer-friendly representation of the TensorDataclass."""
-        items = []
-        for f in dataclasses.fields(self):
-            value = getattr(self, f.name)
-            if isinstance(value, Tensor):
-                item_repr = (
-                    f"Tensor(shape={value.shape}, dtype={value.dtype}, "
-                    f"device={value.device})"
-                )
-            else:
-                item_repr = repr(value)
-            items.append(f"{f.name}={item_repr}")
-
-        items_str = ",\n    ".join(items)
-        return (
-            f"{self.__class__.__name__}(\n"
-            f"    shape={self.shape},\n"
-            f"    device={self.device},\n"
-            f"    fields=(\n        {items_str}\n    )\n)"
+            validate_args=False,
         )
 
     def __copy__(self: T_TensorDataclass) -> T_TensorDataclass:
@@ -429,7 +382,7 @@ class TensorDataClass(TensorContainer, PytreeRegistered, TensorDataclassTransfor
         new_obj = cls.__new__(cls)
 
         # Manually copy all dataclass fields.
-        for field in dataclasses.fields(self):
+        for field in fields(self):
             value = getattr(self, field.name)
             setattr(new_obj, field.name, value)
 
@@ -470,7 +423,7 @@ class TensorDataClass(TensorContainer, PytreeRegistered, TensorDataclassTransfor
         new_obj = cls.__new__(cls)
         memo[id(self)] = new_obj
 
-        for field in dataclasses.fields(self):
+        for field in fields(self):
             value = getattr(self, field.name)
             # The `shape` and `device` fields are part of the dataclass fields
             # due to their annotations in TensorDataclass.

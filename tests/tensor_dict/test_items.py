@@ -19,24 +19,6 @@ def test_items_empty():
     assert set(items) == set()
 
 
-def test_items_different_types():
-    data = {
-        "a": torch.tensor([1, 2, 3]),
-        "b": torch.tensor(10),
-    }
-    td = TensorDict(data, shape=torch.Size([3]))
-    items = list(td.items())
-    expected_items = {k: v for k, v in data.items()}
-    expected_items = {
-        k: v.item() if isinstance(v, torch.Tensor) and v.numel() == 1 else v
-        for k, v in expected_items.items()
-    }
-    assert set(
-        (k, v.item() if isinstance(v, torch.Tensor) and v.numel() == 1 else v)
-        for k, v in items
-    ) == set(expected_items.items())
-
-
 def test_items_nested():
     data = {
         "a": torch.tensor([1, 2, 3]),

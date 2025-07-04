@@ -53,10 +53,8 @@ def test_tensordict_homogeneous_device_cpu():
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
 def test_tensordict_update_with_mismatched_device_raises():
-    td = TensorDict(
-        {"a": torch.randn(4, 3, device="cuda")}, shape=(4,), device=torch.device("cuda")
-    )
-    with pytest.raises(Exception):  # Replace with your specific device error
+    td = TensorDict({"a": torch.randn(4, 3, device="cuda")}, shape=(4,), device="cuda")
+    with pytest.raises(RuntimeError):
         td.update({"b": torch.randn(4, 3, device="cpu")})
 
 
@@ -77,7 +75,7 @@ def test_tensordict_cpu_method():
     td = TensorDict(
         {"a": torch.randn(4, 3, device="cuda")},
         shape=(4,),
-        device=torch.device("cuda"),
+        device="cuda",
     )
     td_cpu = td.cpu()
 

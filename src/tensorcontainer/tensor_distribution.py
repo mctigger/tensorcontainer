@@ -56,7 +56,7 @@ class ClampedTanhTransform(torch.distributions.transforms.Transform):
 
 
 class TensorDistribution(TensorDataClass):
-    def __post_init__(self):
+    def __post_init__(self, validate_args: bool):
         # infer shape and device if not provided
         for f in dataclasses.fields(self):
             if f.name in ("shape", "device"):
@@ -64,12 +64,12 @@ class TensorDistribution(TensorDataClass):
             val = getattr(self, f.name)
             if isinstance(val, Tensor):
                 if self.shape is None:
-                    self.shape = tuple(val.shape)
+                    self.shape = torch.Size(val.shape)
                 if self.device is None:
                     self.device = val.device
                 break
 
-        super().__post_init__()
+        super().__post_init__(validate_args)
 
     @abstractmethod
     def dist(self) -> Distribution:
@@ -104,9 +104,6 @@ class TensorNormal(TensorDistribution):
     loc: Tensor
     scale: Tensor
     reinterpreted_batch_ndims: int = 1
-
-    def __post_init__(self):
-        super().__post_init__()
 
     def dist(self) -> Distribution:
         return Independent(
