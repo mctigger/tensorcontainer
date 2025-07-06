@@ -1,12 +1,11 @@
 import pytest
 import torch
-
-from tensorcontainer.tensor_dict import TensorDict
-from tests.conftest import skipif_no_compile
 import torch._dynamo
 import torch._dynamo.utils
 from torch._dynamo.testing import CompileCounter  # New import
 
+from tensorcontainer.tensor_dict import TensorDict
+from tests.conftest import skipif_no_compile
 
 keys = ["a", "b", "c", "d", "e", "f", "g"]
 
@@ -26,12 +25,10 @@ def test_getitem_recompilation(key):
     torch._dynamo.utils.counters.clear()
 
     # --- Sanity check with a simple lambda using CompileCounter ---
-    simple_lambda = lambda x: x + 1
-
     lambda_compile_counter = CompileCounter()
     # Using fullgraph=True as it was in the original attempts
     compiled_lambda = torch.compile(
-        simple_lambda, backend=lambda_compile_counter, fullgraph=True
+        lambda x: x + 1, backend=lambda_compile_counter, fullgraph=True
     )
 
     _ = compiled_lambda(torch.randn(1))

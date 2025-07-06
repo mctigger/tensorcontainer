@@ -138,7 +138,7 @@ def test_unsafe_construction_nested_contexts(sample_tensors):
     """Test that nested unsafe construction contexts work correctly."""
     with TensorContainer.unsafe_construction():
         # Should work in outer context
-        container1 = SampleTensorDataClass(
+        SampleTensorDataClass(
             features=sample_tensors["incompatible_features"],
             labels=sample_tensors["labels"],
             shape=(4,),
@@ -210,7 +210,7 @@ def test_unsafe_construction_thread_safety(sample_tensors):
                 with TensorContainer.unsafe_construction():
                     # Add small delay to test concurrency
                     time.sleep(0.01)
-                    container = SampleTensorDataClass(
+                    SampleTensorDataClass(
                         features=sample_tensors["incompatible_features"],
                         labels=sample_tensors["incompatible_labels"],
                         shape=(4,),
@@ -219,7 +219,7 @@ def test_unsafe_construction_thread_safety(sample_tensors):
                     results[thread_id] = "success"
             else:
                 try:
-                    container = SampleTensorDataClass(
+                    SampleTensorDataClass(
                         features=sample_tensors["incompatible_features"],
                         labels=sample_tensors["incompatible_labels"],
                         shape=(4,),
