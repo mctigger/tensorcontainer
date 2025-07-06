@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import functools
+import textwrap
+import threading
 from abc import abstractmethod
+from contextlib import contextmanager
 from typing import (
     Any,
     Callable,
@@ -13,8 +16,8 @@ from typing import (
     TypeAlias,
     Union,
 )
+
 import torch
-import textwrap
 
 # Use the official PyTree utility from torch
 import torch.utils._pytree as pytree
@@ -135,6 +138,22 @@ class TensorContainer:
     container[:, 0] = initial_values        # Slice assignment
     ```
 
+    ## Unsafe Construction
+
+    For performance-critical scenarios where validation overhead is unacceptable,
+    TensorContainer provides an unsafe construction context manager:
+
+    ```python
+    # Skip validation during construction
+    with TensorContainer.unsafe_construction():
+        container = MyContainer(data, shape=(4, 3), device="cuda")
+        # No shape/device validation performed
+    # Normal validation resumes after context
+    ```
+
+    Use this feature carefully - invalid tensor configurations can lead to runtime
+    errors in subsequent operations.
+
     ## Implementation Notes
 
     ### Memory and Performance
@@ -211,22 +230,55 @@ class TensorContainer:
         >>> first_batch = container[0]           # Shape becomes (3,), events preserved
     """
 
+    shape: ShapeType
     device: Optional[torch.device]
-    shape: torch.Size
+
+    # Thread-local storage for unsafe construction flag
+    _validation_disabled = threading.local()
 
     def __init__(
         self,
         shape: ShapeType,
-        device: Union[None, DeviceLikeType],
+        device: Optional[DeviceLikeType],
         validate_args: bool = True,
     ):
         super().__init__()
 
-        self.shape = torch.Size(shape)
+        self.shape = shape
         self.device = None if device is None else torch.device(resolve_device(device))
 
         if validate_args:
             self._validate()
+
+    @classmethod
+    @contextmanager
+    def unsafe_construction(cls):
+        """Context manager to disable validation during construction.
+
+        This context manager temporarily disables the validation that normally
+        occurs during TensorContainer construction. Use this for performance-critical
+        scenarios where you are certain that the tensor shapes and devices are
+        compatible, and validation overhead is unacceptable.
+
+        Warning:
+            Using unsafe construction can lead to runtime errors if tensors
+            have incompatible shapes or devices. Use with caution.
+
+        Example:
+            >>> with TensorContainer.unsafe_construction():
+            ...     container = MyContainer(data, shape=(4, 3), device="cuda")
+            ...     # No validation performed during construction
+            >>> # Normal validation resumes after context
+
+        Yields:
+            None: Context manager yields nothing
+        """
+        old_value = getattr(cls._validation_disabled, "value", False)
+        cls._validation_disabled.value = True
+        try:
+            yield
+        finally:
+            cls._validation_disabled.value = old_value
 
     @abstractmethod
     def _pytree_flatten(self) -> tuple[list[Any], Context]:
@@ -292,12 +344,15 @@ class TensorContainer:
 
     def _validate_device(self, value):
         if not self._is_device_compatible(self, value):
-            print(type(value.device), type(self.device))
             raise RuntimeError(
                 f"Invalid device {value.device}. Expected device that is compatible to {self.device}"
             )
 
     def _validate(self):
+        # Check if validation is disabled via context manager
+        if getattr(self._validation_disabled, "value", False):
+            return
+
         key_value, _ = self._pytree_flatten_with_keys_fn()
 
         for k, v in key_value:
@@ -567,7 +622,8 @@ class TensorContainer:
         )
 
     def to(self: Self, *args, **kwargs) -> Self:
-        tc = TensorContainer._tree_map(lambda x: x.to(*args, **kwargs), self)
+        with TensorContainer.unsafe_construction():
+            tc = TensorContainer._tree_map(lambda x: x.to(*args, **kwargs), self)
 
         device = self.device
 
@@ -613,7 +669,6 @@ class TensorContainer:
         cloned_td = TensorContainer._tree_map(
             lambda x: x.clone(memory_format=memory_format), self
         )
-        cloned_td.device = self.device
         return cloned_td
 
     def expand(self: Self, *shape: int) -> Self:

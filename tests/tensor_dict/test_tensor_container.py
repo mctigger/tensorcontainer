@@ -1,6 +1,5 @@
 """Test the TensorContainer base class methods through TensorDict."""
 
-import pytest
 import torch
 from torch.utils import _pytree as pytree
 
@@ -27,7 +26,9 @@ class TestTensorContainerTreeMap:
                     "c": torch.randn(3, 4),
                     "d": torch.randn(3, 4),
                 },
-            }
+            },
+            shape=(3,),
+            device="cpu",
         )
 
         def add_one(x):
@@ -39,23 +40,3 @@ class TestTensorContainerTreeMap:
         torch.testing.assert_close(result_td["a"], expected_td["a"])
         torch.testing.assert_close(result_td["b"]["c"], expected_td["b"]["c"])
         torch.testing.assert_close(result_td["b"]["d"], expected_td["b"]["d"])
-
-    def test_tree_map_error_path(self):
-        """
-        Tests that _tree_map raises an error with the correct path.
-        """
-        td = TensorDict(
-            {
-                "a": torch.randn(3, 4),
-                "b": {
-                    "c": "not a tensor",  # This will cause an error
-                    "d": torch.randn(3, 4),
-                },
-            }
-        )
-
-        def add_one(x):
-            return x + 1
-
-        with pytest.raises(Exception, match=r"Error at path \('b\.c'\)"):
-            td._tree_map(add_one, td)

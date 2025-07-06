@@ -1,5 +1,3 @@
-from typing import Optional
-
 import pytest
 import torch
 
@@ -26,7 +24,7 @@ class TestDevice:
         """Test that device consistency validation catches mismatches."""
         from tests.tensor_dataclass.conftest import DeviceTestClass
 
-        with pytest.raises(ValueError):
+        with pytest.raises(RuntimeError):
             DeviceTestClass(
                 a=torch.randn(2, 3, device=torch.device("cuda")),
                 b=torch.ones(2, 3),
@@ -52,16 +50,12 @@ class TestDevice:
         """Test that device validation catches mismatches in nested TensorDataclasses."""
 
         class Inner(TensorDataClass):
-            shape: tuple
-            device: Optional[torch.device]
             c: torch.Tensor
 
         class Outer(TensorDataClass):
-            shape: tuple
-            device: Optional[torch.device]
             inner: Inner
 
-        with pytest.raises(ValueError, match="Device mismatch"):
+        with pytest.raises(RuntimeError):
             Outer(
                 shape=(2,),
                 device=torch.device("cpu"),

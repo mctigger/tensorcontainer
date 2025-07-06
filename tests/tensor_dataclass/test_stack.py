@@ -178,8 +178,6 @@ class TestStackOptionalFields:
         """Tests that stacking mixed None and Tensor for an optional field raises."""
 
         class OptionalStack(TensorDataClass):
-            shape: tuple
-            device: Optional[torch.device]
             a: torch.Tensor
             b: Optional[torch.Tensor] = None
 

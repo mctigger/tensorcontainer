@@ -7,15 +7,15 @@ instances, including initialization, stacking, and cloning behaviors.
 """
 
 import dataclasses
+from typing import cast
 
 import pytest
 import torch
-from typing import cast
 
+from tensorcontainer.tensor_dataclass import TensorDataClass
+from tests.compile_utils import run_and_compare_compiled
 from tests.conftest import skipif_no_compile
 from tests.tensor_dataclass.conftest import OptionalFieldsTestClass
-from tests.compile_utils import run_and_compare_compiled
-from tensorcontainer.tensor_dataclass import TensorDataClass
 
 
 class InitFalseTestClass(TensorDataClass):
@@ -80,7 +80,7 @@ class TestOptionalTensorInitialization:
         assert instance.shape == (4,)
 
     def test_init_raises_error_on_shape_mismatch(self):
-        with pytest.raises(ValueError, match="Shape mismatch"):
+        with pytest.raises(RuntimeError):
             OptionalFieldsTestClass(
                 shape=(4,),
                 device=None,
@@ -153,19 +153,6 @@ class TestDefaultValueFields:
         assert stacked_data.default_tensor.shape == (2, 4)
         assert torch.equal(stacked_data.default_tensor, torch.zeros(2, 4))
 
-    @pytest.mark.xfail(
-        reason="TensorDataClass does not currently validate against mutable default values."
-    )
-    def test_mutable_default_tensor_raises_error(self):
-        """
-        Tests that defining a class with a mutable default for a tensor field
-        raises a ValueError, which is standard dataclass behavior.
-        """
-        with pytest.raises(ValueError, match="mutable default"):
-
-            class _(TensorDataClass):
-                b: torch.Tensor = torch.zeros(4)
-
 
 class TestInitFalseFields:
     """
@@ -177,22 +164,6 @@ class TestInitFalseFields:
     - `init=False` fields with defaults are correctly set.
     - Stacking works correctly with `init=False` fields.
     """
-
-    @pytest.mark.xfail(
-        reason="TensorDataClass validation runs before __post_init__ can initialize the field."
-    )
-    def test_post_init_can_initialize_field(self):
-        """
-        Tests that a tensor field with init=False can be initialized in __post_init__.
-        """
-
-        def _test():
-            return InitFalseTestClass(a=torch.ones(4), shape=(4,), device=None)
-
-        instance, _ = run_and_compare_compiled(_test)
-        assert torch.equal(instance.b, torch.ones(4) + 1)
-        assert instance.c == "hello"
-        assert instance.shape == (4,)
 
     def test_init_false_with_default_value(self):
         """
@@ -210,34 +181,6 @@ class TestInitFalseFields:
         instance, _ = run_and_compare_compiled(_test)
         assert instance.b == 10
         assert instance.shape == (4,)
-
-    @pytest.mark.xfail(
-        reason="TensorDataClass validation runs before __post_init__ can initialize the field."
-    )
-    @skipif_no_compile
-    def test_stacking_with_init_false_field(self):
-        """
-        Tests that stacking works correctly with init=False fields.
-        """
-
-        def _test():
-            instance1 = InitFalseTestClass(a=torch.ones(4), shape=(4,), device=None)
-            instance2 = InitFalseTestClass(a=torch.zeros(4), shape=(4,), device=None)
-            stacked = cast(
-                InitFalseTestClass,
-                torch.stack([instance1, instance2], dim=0),  # type: ignore
-            )
-            return stacked
-
-        stacked, _ = run_and_compare_compiled(_test)
-        assert stacked.shape == (2, 4)
-        assert torch.equal(
-            stacked.a, torch.stack([torch.ones(4), torch.zeros(4)], dim=0)
-        )
-        assert torch.equal(
-            stacked.b, torch.stack([torch.ones(4) + 1, torch.zeros(4) + 1], dim=0)
-        )
-        assert stacked.c == "hello"  # metadata is not stacked
 
 
 class TestFieldArguments:

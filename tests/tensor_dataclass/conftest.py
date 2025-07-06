@@ -17,52 +17,20 @@ class SimpleTensorData(TensorDataClass):
     b: torch.Tensor
 
 
-class DeviceTestClass(TensorDataClass):
-    """TensorDataclass for device-related testing."""
-
-    device: Optional[torch.device]
-    shape: tuple
-    a: torch.Tensor
-    b: torch.Tensor
-    meta: int = 42
-
-
-class CloneTestClass(TensorDataClass):
-    """TensorDataclass for clone-related testing."""
+class StandardTestClass(TensorDataClass):
+    """Standard TensorDataclass for general testing with two tensors and metadata."""
 
     a: torch.Tensor
     b: torch.Tensor
     meta: int = 42
 
 
-class StackTestClass(TensorDataClass):
-    """TensorDataclass for stack-related testing."""
-
-    shape: tuple
-    device: Optional[torch.device]
-    a: torch.Tensor
-    b: torch.Tensor
-    meta: int = 42
-
-
-class ToTestClass(TensorDataClass):
-    """TensorDataclass for to() method testing."""
-
-    device: Optional[torch.device]
-    shape: tuple
-    a: torch.Tensor
-    b: torch.Tensor
-    meta: int = 42
-
-
-class ShapeTestClass(TensorDataClass):
-    """TensorDataclass for shape-related testing."""
-
-    shape: tuple
-    device: Optional[torch.device]
-    a: torch.Tensor
-    b: torch.Tensor
-    meta: int = 42
+# Aliases for backward compatibility and semantic clarity
+DeviceTestClass = StandardTestClass
+CloneTestClass = StandardTestClass
+StackTestClass = StandardTestClass
+ToTestClass = StandardTestClass
+ShapeTestClass = StandardTestClass
 
 
 class OptionalFieldsTestClass(TensorDataClass):
@@ -81,8 +49,6 @@ class OptionalFieldsTestClass(TensorDataClass):
 class ViewReshapeTestClass(TensorDataClass):
     """TensorDataclass for view/reshape method testing."""
 
-    shape: tuple
-    device: Optional[torch.device]
     a: torch.Tensor
     b: torch.Tensor
 
@@ -406,24 +372,20 @@ def create_nested_tensor_dataclass():
     """Helper to create nested TensorDataclass instances for testing."""
 
     class Inner(TensorDataClass):
-        shape: tuple
-        device: Optional[torch.device]
         c: torch.Tensor
 
     class Outer(TensorDataClass):
-        shape: tuple
-        device: Optional[torch.device]
         inner: Inner
 
     inner = Inner(
         c=torch.randn(2, 3, requires_grad=True),
-        shape=(2, 3),
+        shape=torch.Size((2, 3)),
         device=torch.device("cpu"),
     )
 
     outer = Outer(
         inner=inner,
-        shape=(2, 3),
+        shape=torch.Size((2, 3)),
         device=torch.device("cpu"),
     )
 

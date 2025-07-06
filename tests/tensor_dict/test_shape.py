@@ -24,7 +24,7 @@ def test_constructor_raises_on_incompatible_leaf_shape(data, shape):
     def constructor_fn(data, shape):
         return TensorDict(data, shape=shape)
 
-    with pytest.raises(ValueError):
+    with pytest.raises(RuntimeError):
         run_and_compare_compiled(constructor_fn, data, shape)
 
 
@@ -46,7 +46,7 @@ def test_constructor_raises_in_nested_mapping(data, shape):
     def constructor_fn(data, shape):
         return TensorDict(data, shape=shape)
 
-    with pytest.raises(ValueError):
+    with pytest.raises(RuntimeError):
         run_and_compare_compiled(constructor_fn, data, shape)
 
 
@@ -228,5 +228,5 @@ def test_constructor_raises_on_shape_too_long(data, shape):
     def constructor_fn(data, shape):
         return TensorDict(data, shape=shape)
 
-    with pytest.raises(ValueError):
+    with pytest.raises(RuntimeError):
         run_and_compare_compiled(constructor_fn, data, shape)

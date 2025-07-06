@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import copy
-from dataclasses import dataclass, fields, InitVar, field
+from dataclasses import dataclass, fields
 from typing import Any, Iterable, List, Optional, Tuple, TypeVar, Union
 
 import torch
@@ -9,7 +9,7 @@ from torch import Tensor
 from torch.utils import _pytree as pytree
 from typing_extensions import dataclass_transform
 
-from tensorcontainer.tensor_container import TensorContainer
+from tensorcontainer.tensor_container import ShapeType, TensorContainer
 from tensorcontainer.utils import PytreeRegistered
 
 TDCompatible = Union[Tensor, TensorContainer]
@@ -84,12 +84,15 @@ class TensorDataClass(TensorContainer, PytreeRegistered, TensorDataclassTransfor
 
     ### Optional Fields and Defaults
     ```python
+    from dataclasses import field
+    from typing import Dict, List, Optional, Any
+
     class FlexibleData(TensorDataClass):
         required_field: torch.Tensor
         optional_field: Optional[torch.Tensor] = None
-        metadata: List[str] = dataclasses.field(default_factory=list)
-        config: Dict[str, Any] = dataclasses.field(default_factory=dict)
-        default_tensor: torch.Tensor = dataclasses.field(
+        metadata: List[str] = field(default_factory=list)
+        config: Dict[str, Any] = field(default_factory=dict)
+        default_tensor: torch.Tensor = field(
             default_factory=lambda: torch.zeros(10)
         )
     ```
@@ -161,7 +164,7 @@ class TensorDataClass(TensorContainer, PytreeRegistered, TensorDataclassTransfor
     | Dynamic Fields | Not supported | Full support |
 
     Args:
-        shape (Tuple[int, ...]): The batch shape that all tensor fields must share
+        shape (torch.Size): The batch shape that all tensor fields must share
             as their leading dimensions.
         device (Optional[Union[str, torch.device]]): The device all tensors should
             reside on. If None, device is inferred from the first tensor field.
@@ -177,10 +180,12 @@ class TensorDataClass(TensorContainer, PytreeRegistered, TensorDataclassTransfor
         enabled by default for performance.
     """
 
-    # Added here to make shape and device part of the data class.
-    shape: torch.Size
+    # The only reason we define shape and device here is such that @dataclass_transform
+    # can enable static analyzers to provide type hints in IDEs. Both are programmatically
+    # added in __init_subclass__ so removing the following two lines will only remove the
+    # type hints, but the class will stay functional.
+    shape: ShapeType
     device: Optional[torch.device]
-    validate_args: InitVar[bool] = field(default=True, kw_only=True)
 
     def __init_subclass__(cls, **kwargs):
         """Automatically convert subclasses into dataclasses with proper field inheritance.
@@ -204,6 +209,23 @@ class TensorDataClass(TensorContainer, PytreeRegistered, TensorDataclassTransfor
         if hasattr(cls, "__slots__"):
             return
 
+        # Programmatically prepend `shape` and `device` to the class annotations.
+        # Dataclasses use the order of `__annotations__` to generate the `__init__`
+        # method signature. We place `shape` and `device` first because they are
+        # non-default arguments required by `__post_init__`. This prevents errors
+        # if subclasses define fields with default values.
+        if "shape" in cls.__annotations__ or "device" in cls.__annotations__:
+            raise TypeError(
+                f"Cannot define reserved fields in {cls.__name__}. "
+                f"'shape' and 'device' are automatically provided by TensorDataClass."
+            )
+
+        cls.__annotations__ = {
+            "shape": torch.Size,
+            "device": Optional[torch.device],
+            **cls.__annotations__,
+        }
+
         dc_kwargs = {}
         for k in list(kwargs.keys()):
             if k in DATACLASS_ARGS:
@@ -213,15 +235,14 @@ class TensorDataClass(TensorContainer, PytreeRegistered, TensorDataclassTransfor
 
         if dc_kwargs.get("eq") is True:
             raise TypeError(
-                f"Cannot create {cls.__name__} with eq=True. TensorDataclass requires eq=False."
+                f"Cannot create {cls.__name__} with eq=True. TensorDataClass requires eq=False."
             )
         dc_kwargs.setdefault("eq", False)
         dc_kwargs.setdefault("slots", True)
-        dc_kwargs.setdefault("repr", False)
 
         dataclass(cls, **dc_kwargs)
 
-    def __post_init__(self, validate_args: bool):
+    def __post_init__(self):
         """Initialize TensorContainer functionality and perform validation.
 
         This method is automatically called by the dataclass __init__ after all
@@ -236,7 +257,7 @@ class TensorDataClass(TensorContainer, PytreeRegistered, TensorDataclassTransfor
             ValueError: If tensor field shapes are incompatible with batch shape
             ValueError: If tensor field devices are incompatible with container device
         """
-        super().__init__(self.shape, self.device, validate_args)
+        super().__init__(self.shape, self.device, True)
 
     def _get_path_str(self, key_path):
         """Helper to construct path string from key_path, robust to torch.compile."""
@@ -254,8 +275,8 @@ class TensorDataClass(TensorContainer, PytreeRegistered, TensorDataclassTransfor
         self, flat_names: List[str], flat_leaves: List[TDCompatible], meta_data
     ) -> Tuple:
         """
-        Private helper to compute the pytree context for this TensorDict.
-        The context captures metadata to reconstruct the TensorDict:
+        Private helper to compute the pytree context for this TensorDataClass.
+        The context captures metadata to reconstruct the TensorDataClass:
         children_spec, event_ndims, original shape, and original device.
         """
         batch_ndim = len(self.shape)
@@ -340,7 +361,6 @@ class TensorDataClass(TensorContainer, PytreeRegistered, TensorDataclassTransfor
             **{k: v for k, v in meta_data.items() if k not in ["device", "shape"]},
             device=reconstructed_device,
             shape=reconstructed_shape,
-            validate_args=False,
         )
 
     def __copy__(self: T_TensorDataclass) -> T_TensorDataclass:

@@ -58,7 +58,7 @@ def test_update_nested_mapping(nested_dict):
 def test_update_incompatible_shape_raises(nested_dict):
     td = TensorDict(nested_dict((2, 2)), shape=(2, 2))
     bad = torch.ones(1, 3)
-    with pytest.raises(ValueError):
+    with pytest.raises(RuntimeError):
         td.update({"z": bad})
 
 

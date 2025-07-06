@@ -1,5 +1,3 @@
-from typing import Optional
-
 import pytest
 import torch
 
@@ -142,8 +140,6 @@ class TestExpand:
         from tests.compile_utils import run_and_compare_compiled
 
         class MyData(TensorDataClass):
-            shape: tuple
-            device: Optional[torch.device]
             x: torch.Tensor
             y: torch.Tensor
 

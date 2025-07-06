@@ -1,5 +1,3 @@
-from typing import Optional
-
 import pytest
 import torch
 
@@ -54,7 +52,7 @@ class TestDetach:
             a=torch.tensor([1.0, 2.0, 3.0], requires_grad=True),
             b=torch.tensor([4.0, 5.0, 6.0], requires_grad=True),
             shape=(3,),
-            device=torch.device("cpu"),
+            device="cpu",
         )
 
         if compile_mode:
@@ -82,13 +80,9 @@ class TestDetach:
             pytest.importorskip("torch._dynamo", reason="Compilation not available")
 
         class NestedClass(TensorDataClass):
-            shape: tuple
-            device: Optional[torch.device]
             c: torch.Tensor
 
         class TestClass(TensorDataClass):
-            shape: tuple
-            device: Optional[torch.device]
             a: torch.Tensor
             b: NestedClass
 
@@ -130,8 +124,6 @@ class TestDetach:
             pytest.importorskip("torch._dynamo", reason="Compilation not available")
 
         class TestClass(TensorDataClass):
-            shape: tuple
-            device: Optional[torch.device]
             a: torch.Tensor
             b: int
             c: str

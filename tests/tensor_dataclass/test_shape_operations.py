@@ -1,5 +1,3 @@
-from typing import Optional
-
 import pytest
 import torch
 
@@ -92,8 +90,6 @@ class TestShapeOperations:
         """Test a TensorDataclass with no tensor fields."""
 
         class NoTensorData(TensorDataClass):
-            shape: tuple
-            device: Optional[torch.device]
             meta: str
 
         # Initialization

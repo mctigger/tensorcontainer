@@ -18,9 +18,7 @@ class TestSubclassing:
 
         # Test instantiation of B
         x_tensor = torch.randn(2, 3)
-        b_instance = B(
-            x=x_tensor, new_attribute="hello", shape=(2, 3), device=torch.device("cpu")
-        )
+        b_instance = B(x=x_tensor, new_attribute="hello", shape=(2, 3), device="cpu")
 
         assert isinstance(b_instance, B)
         assert isinstance(b_instance, A)
