@@ -1,5 +1,6 @@
-import torch
 import pytest
+import torch
+
 from tensorcontainer.tensor_dict import TensorDict
 
 
@@ -55,7 +56,9 @@ def test_view_single_element_tensordict():
     assert td.shape == (1,)
     assert torch.equal(td["a"], torch.tensor([1.0]))
 
+
 # New Tests for Edge Cases
+
 
 def test_view_with_minus_one():
     """Tests if view can infer a dimension when -1 is used."""
@@ -74,8 +77,12 @@ def test_view_on_non_contiguous():
     non_contiguous_tensor = torch.randn(4, 4).t()
     td = TensorDict({"a": non_contiguous_tensor}, shape=(4, 4))
     assert not td["a"].is_contiguous()
-    with pytest.raises(RuntimeError, match="view size is not compatible with input tensor's size and stride"):
+    with pytest.raises(
+        RuntimeError,
+        match="view size is not compatible with input tensor's size and stride",
+    ):
         td.view(16)
+
 
 def test_view_with_different_dtypes():
     """Tests that view works with tensors of different dtypes."""
@@ -112,5 +119,3 @@ def test_view_mixed_nested_and_tensor():
     assert torch.equal(td_view["a"], td["a"].reshape(4))
     assert td_view["nested"].shape == (4,)
     assert torch.equal(td_view["nested"]["b"], td["nested"]["b"].reshape(4))
-
-

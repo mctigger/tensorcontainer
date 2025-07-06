@@ -1,7 +1,10 @@
 import pytest
 import torch
 
-from tensorcontainer.tensor_distribution import TensorDistribution, TensorTruncatedNormal
+from tensorcontainer.tensor_distribution import (
+    TensorDistribution,
+    TensorTruncatedNormal,
+)
 
 from .conftest import normalize_device
 
