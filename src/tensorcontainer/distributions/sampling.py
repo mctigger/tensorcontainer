@@ -1,5 +1,3 @@
-from typing import Dict
-
 import torch
 from torch.distributions import Distribution
 
@@ -47,7 +45,6 @@ class SamplingDistribution(Distribution):
         samples = self.base_dist.rsample((self.n,))
         logprob = self.base_dist.log_prob(samples)
         return -logprob.mean(0)
-        
+
     def log_prob(self, value):
         return self.base_dist.log_prob(value)
-

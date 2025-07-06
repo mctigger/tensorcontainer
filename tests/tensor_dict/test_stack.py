@@ -3,10 +3,10 @@ import torch
 from torch._dynamo import exc as dynamo_exc
 
 from tensorcontainer.tensor_dict import TensorDict
+from tests.compile_utils import run_and_compare_compiled
 from tests.conftest import skipif_no_compile
 from tests.tensor_dict import common
 from tests.tensor_dict.common import compare_nested_dict, compute_stack_shape
-from tests.compile_utils import run_and_compare_compiled
 
 
 @pytest.fixture(autouse=True)
@@ -143,7 +143,7 @@ def test_stack_invalid_dim_raises_compile(shape, dim, nested_dict):
         )
 
     compiled_stack_op = torch.compile(stack_operation, fullgraph=True)
-    with pytest.raises(dynamo_exc.Unsupported) as excinfo:
+    with pytest.raises(dynamo_exc.Unsupported):
         compiled_stack_op(td, dim)
 
 

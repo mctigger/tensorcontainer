@@ -34,8 +34,8 @@ class TestDetach:
         assert not detached_instance.b.requires_grad
 
         # Check that original tensors still have gradients (should be False for fixture)
-        assert test_instance.a.requires_grad == False
-        assert test_instance.b.requires_grad == False
+        assert not test_instance.a.requires_grad
+        assert not test_instance.b.requires_grad
 
         # Check that data is preserved
         assert torch.equal(detached_instance.a, test_instance.a)
