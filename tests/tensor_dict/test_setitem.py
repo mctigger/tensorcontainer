@@ -9,6 +9,7 @@ import pytest
 import torch
 
 from src.tensorcontainer.tensor_dict import TensorDict
+from tests.conftest import skipif_no_cuda
 
 # Define a common set of indices for slicing tests
 SLICING_INDICES = [
@@ -172,14 +173,12 @@ class TestTensorDictKeyBasedSetitem:
         ):
             td["bad_type"] = [1, 2, 3]  # Invalid type
 
+    @skipif_no_cuda
     def test_invalid_device_assignment(self):
         """
         Tests that assigning a tensor with a different device raises RuntimeError
         when device validation is enabled.
         """
-        if not torch.cuda.is_available():
-            pytest.skip("CUDA not available for device mismatch test")
-
         td_cpu = TensorDict(
             data={"features": torch.randn(2, 3, device="cpu")},
             shape=(2,),

@@ -1,7 +1,7 @@
-import pytest
 import torch
 
 from tensorcontainer.tensor_distribution import TensorBernoulli, TensorDistribution
+from tests.conftest import skipif_no_cuda
 
 
 def test_stack_tensordistribution_returns_tensordistribution():
@@ -36,7 +36,7 @@ def test_stack_tensordistribution_returns_tensordistribution():
     assert torch.allclose(stacked.probs[1], tb2.probs)  # type: ignore
 
 
-@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
+@skipif_no_cuda
 def test_stack_tensordistribution_on_cuda():
     # Prepare two distributions on GPU
     probs1 = torch.tensor([0.4, 0.6], device="cuda")

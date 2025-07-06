@@ -1,6 +1,8 @@
 import pytest
 import torch
+
 from tensorcontainer.tensor_dict import TensorDict  # Adjust as needed
+from tests.conftest import skipif_no_cuda
 
 
 def are_devices_equal(device1, device2):
@@ -25,7 +27,7 @@ def are_devices_equal(device1, device2):
     return device1.type == device2.type
 
 
-@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
+@skipif_no_cuda
 def test_tensordict_to_changes_device():
     td = TensorDict({"a": torch.randn(4, 3)}, shape=(4,), device=torch.device("cpu"))
     td_cuda = td.to(torch.device("cuda"))
@@ -51,7 +53,7 @@ def test_tensordict_homogeneous_device_cpu():
     assert are_devices_equal(td.device, "cpu")
 
 
-@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
+@skipif_no_cuda
 def test_tensordict_update_with_mismatched_device_raises():
     td = TensorDict({"a": torch.randn(4, 3, device="cuda")}, shape=(4,), device="cuda")
     with pytest.raises(RuntimeError):
@@ -70,7 +72,7 @@ def test_device_persistence_across_operations():
     assert are_devices_equal(td4.device, td.device)
 
 
-@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
+@skipif_no_cuda
 def test_tensordict_cpu_method():
     td = TensorDict(
         {"a": torch.randn(4, 3, device="cuda")},
@@ -84,7 +86,7 @@ def test_tensordict_cpu_method():
         assert are_devices_equal(v.device, "cpu")
 
 
-@pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
+@skipif_no_cuda
 def test_tensordict_cuda_method():
     td = TensorDict({"a": torch.randn(4, 3)}, shape=(4,), device=torch.device("cpu"))
     td_cuda = td.cuda()

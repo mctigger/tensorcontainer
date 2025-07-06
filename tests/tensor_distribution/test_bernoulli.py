@@ -2,6 +2,7 @@ import pytest
 import torch
 
 from tensorcontainer.tensor_distribution import TensorBernoulli
+from tests.conftest import skipif_no_cuda
 
 from .conftest import normalize_device
 
@@ -64,6 +65,7 @@ def test_log_prob_reinterpreted_batch_ndims(rbn_dims, expected_shape):
     assert torch.allclose(lp, ref)
 
 
+@skipif_no_cuda
 def test_device_normalization_helper():
     # internal devices cuda vs cuda:0
     a = torch.device("cuda")

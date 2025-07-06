@@ -49,6 +49,12 @@ skipif_no_compile = pytest.mark.skipif(
 )
 
 
+skipif_no_cuda = pytest.mark.skipif(
+    not torch.cuda.is_available(),
+    reason="CUDA not available",
+)
+
+
 def pytest_configure(config):
     """
     Pytest hook to dynamically register markers.
@@ -56,6 +62,10 @@ def pytest_configure(config):
     config.addinivalue_line(
         "markers",
         "skipif_no_compile: skip test if C++ compiler is not available",
+    )
+    config.addinivalue_line(
+        "markers",
+        "skipif_no_cuda: skip test if CUDA is not available",
     )
 
 

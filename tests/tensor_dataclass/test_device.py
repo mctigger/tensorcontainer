@@ -2,7 +2,7 @@ import pytest
 import torch
 
 from tensorcontainer.tensor_dataclass import TensorDataClass
-from tests.conftest import skipif_no_compile
+from tests.conftest import skipif_no_compile, skipif_no_cuda
 from tests.tensor_dataclass.conftest import assert_device_consistency
 
 
@@ -10,12 +10,13 @@ class TestDevice:
     """Test class for device-related functionality."""
 
     @pytest.mark.parametrize("compile_mode", [False, True])
-    def test_to_device(self, device_test_instance, compile_mode):
+    @skipif_no_cuda
+    def test_device_consistency_with_torch_compile(
+        self, device_test_instance, compile_mode
+    ):
         """Test moving tensor dataclass to different device."""
         if compile_mode:
             pytest.importorskip("torch", minversion="2.0")
-            if not torch.cuda.is_available():
-                pytest.skip("CUDA not available")
 
         td = device_test_instance.to(torch.device("cuda"))
         assert_device_consistency(td, torch.device("cuda"))
@@ -24,16 +25,19 @@ class TestDevice:
         """Test that device consistency validation catches mismatches."""
         from tests.tensor_dataclass.conftest import DeviceTestClass
 
+        # Test with CPU tensors to avoid CUDA dependency
         with pytest.raises(RuntimeError):
             DeviceTestClass(
-                a=torch.randn(2, 3, device=torch.device("cuda")),
-                b=torch.ones(2, 3),
+                a=torch.randn(2, 3, device=torch.device("cpu")),
+                b=torch.ones(2, 3, device=torch.device("cpu")),
                 shape=(2, 3),
-                device=torch.device("cpu"),
+                device=torch.device("cuda")
+                if torch.cuda.is_available()
+                else torch.device("cpu:1"),
             )
 
     @skipif_no_compile
-    @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
+    @skipif_no_cuda
     def test_device_compile(self, device_test_instance):
         """Test device operations work with torch.compile."""
 
@@ -45,7 +49,7 @@ class TestDevice:
 
         assert_device_consistency(result, torch.device("cuda"))
 
-    @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
+    @skipif_no_cuda
     def test_nested_device_mismatch_raises(self):
         """Test that device validation catches mismatches in nested TensorDataclasses."""
 
