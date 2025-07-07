@@ -1,5 +1,5 @@
 from abc import abstractmethod
-from typing import Any, Iterable, Type, TypeVar, Union
+from typing import Any, Iterable, List, Tuple, Type, TypeVar, Union
 
 import torch
 import torch.utils._pytree as pytree
@@ -28,13 +28,13 @@ class PytreeRegistered:
         )
 
     @abstractmethod
-    def _pytree_flatten(self) -> tuple[list[Any], Context]:
+    def _pytree_flatten(self) -> Tuple[List[Any], Context]:
         pass
 
     @abstractmethod
     def _pytree_flatten_with_keys_fn(
         self,
-    ) -> tuple[list[tuple[KeyEntry, Any]], Any]:
+    ) -> Tuple[List[Tuple[KeyEntry, Any]], Any]:
         pass
 
     @classmethod

@@ -13,9 +13,9 @@ from typing import (
     Optional,
     Tuple,
     Type,
-    TypeAlias,
     Union,
 )
+from typing_extensions import TypeAlias
 
 import torch
 
