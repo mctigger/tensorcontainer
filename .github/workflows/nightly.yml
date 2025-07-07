@@ -27,7 +27,10 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.x"
-
+      - name: Dynamically set package name for nightly build
+        run: |
+          # This command finds 'name = "tensor-container"' and replaces it
+          sed -i 's/^name = "tensor-container"$/name = "tensor-container-nightly"/' pyproject.toml
       - name: Build release distributions
         run: |
           # NOTE: put your own distribution build steps here.
