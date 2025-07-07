@@ -1,9 +1,9 @@
 name: Publish to PyPI on Release
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "test-nightly" ]
   pull_request:
-    branches: [ "main" ]
+    branches: [ "test-nightly" ]
 
 jobs:
   # Call the reusable workflow first
