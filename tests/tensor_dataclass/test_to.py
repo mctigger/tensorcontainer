@@ -1,5 +1,6 @@
-import pytest
 import torch
+
+from tests.conftest import skipif_no_cuda
 
 from .conftest import assert_device_consistency
 
@@ -7,18 +8,14 @@ from .conftest import assert_device_consistency
 class TestTo:
     """Test .to() method functionality of TensorDataclass."""
 
-    def test_to_different_device(self, to_test_instance):
+    @skipif_no_cuda
+    def test_to_device(self, to_test_instance):
         """Test moving TensorDataclass to a different device."""
         td = to_test_instance
 
-        # Move to CUDA if available
-        if torch.cuda.is_available():
-            td_cuda = td.to(torch.device("cuda"))
-            assert_device_consistency(td_cuda, torch.device("cuda"))
-        else:
-            # Move to a different CPU device
-            td_cpu1 = td.to(torch.device("cpu"))
-            assert_device_consistency(td_cpu1, torch.device("cpu"))
+        # Move to CUDA
+        td_cuda = td.to(torch.device("cuda"))
+        assert_device_consistency(td_cuda, torch.device("cuda"))
 
     def test_to_same_device(self, to_test_instance):
         """Test moving TensorDataclass to the same device."""
@@ -38,7 +35,7 @@ class TestTo:
         assert td_double.a.dtype == torch.float64
         assert td_double.b.dtype == torch.float64
 
-    @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
+    @skipif_no_cuda
     def test_to_with_non_blocking_and_memory_format(self, to_test_4d_instance):
         """Test moving TensorDataclass with non_blocking and memory_format arguments."""
         td = to_test_4d_instance
@@ -53,22 +50,17 @@ class TestTo:
         assert td_non_blocking.a.is_contiguous(memory_format=torch.channels_last)
         assert td_non_blocking.b.is_contiguous(memory_format=torch.channels_last)
 
-    def test_to_mixed_fields(self, to_test_instance):
+    @skipif_no_cuda
+    def test_to_device_with_non_tensor_fields(self, to_test_instance):
         """Test moving a TensorDataclass with mixed tensor and non-tensor fields."""
         td = to_test_instance
 
-        # Move to CUDA if available
-        if torch.cuda.is_available():
-            td_cuda = td.to(torch.device("cuda"))
-            assert_device_consistency(td_cuda, torch.device("cuda"))
-            assert td_cuda.meta == 42  # Non-tensor field should remain unchanged
-        else:
-            # Move to a different CPU device
-            td_cpu1 = td.to(torch.device("cpu"))
-            assert_device_consistency(td_cpu1, torch.device("cpu"))
-            assert td_cpu1.meta == 42  # Non-tensor field should remain unchanged
+        # Move to CUDA
+        td_cuda = td.to(torch.device("cuda"))
+        assert_device_consistency(td_cuda, torch.device("cuda"))
+        assert td_cuda.meta == 42  # Non-tensor field should remain unchanged
 
-    @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
+    @skipif_no_cuda
     def test_to_device_inference(self, to_test_instance):
         """Test that the device attribute is correctly inferred after .to() calls."""
         td = to_test_instance

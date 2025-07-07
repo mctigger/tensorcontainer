@@ -10,11 +10,11 @@ from typing import (
     NamedTuple,  # Added for specialized context type
     Optional,
     Tuple,
-    TypeAlias,
     Union,
     overload,  # Added cast for explicit type hinting
     cast,  # Added cast for explicit type hinting
 )
+from typing_extensions import TypeAlias
 
 
 import torch

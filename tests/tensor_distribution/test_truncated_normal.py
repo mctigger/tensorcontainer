@@ -1,7 +1,11 @@
 import pytest
 import torch
 
-from tensorcontainer.tensor_distribution import TensorDistribution, TensorTruncatedNormal
+from tensorcontainer.tensor_distribution import (
+    TensorDistribution,
+    TensorTruncatedNormal,
+)
+from tests.conftest import skipif_no_cuda
 
 from .conftest import normalize_device
 
@@ -84,6 +88,7 @@ def test_log_prob_reinterpreted_batch_ndims(rbn_dims, expected_shape):
     assert lp.shape == expected_shape
 
 
+@skipif_no_cuda
 def test_device_normalization_helper():
     """
     Tests the internal device normalization helper to ensure "cuda" and

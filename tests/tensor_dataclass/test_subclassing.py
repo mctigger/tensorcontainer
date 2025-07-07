@@ -1,7 +1,7 @@
-import pytest
 import torch
 
 from tensorcontainer.tensor_dataclass import TensorDataClass
+from tests.conftest import skipif_no_cuda
 
 
 class TestSubclassing:
@@ -76,7 +76,7 @@ class TestSubclassing:
         assert torch.equal(detached_b.x, b_instance.x)
         assert torch.equal(detached_b.y, b_instance.y)
 
-    @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
+    @skipif_no_cuda
     def test_subclass_cuda_operations(self):
         """Test CUDA operations on subclassed TensorDataclass."""
 

@@ -2,6 +2,7 @@ import pytest
 import torch
 
 from tensorcontainer.tensor_distribution import TensorDistribution, TensorTanhNormal
+from tests.conftest import skipif_no_cuda
 
 from .conftest import normalize_device
 
@@ -129,6 +130,7 @@ def test_copy():
     assert str(dist.device) == str(dist_copy.device)
 
 
+@skipif_no_cuda
 def test_device_normalization_helper():
     """
     Tests the internal device normalization helper to ensure "cuda" and

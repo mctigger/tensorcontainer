@@ -6,6 +6,7 @@ import torch
 from tensorcontainer.tensor_container import TensorContainer
 from tensorcontainer.tensor_dataclass import TensorDataClass
 from tensorcontainer.tensor_dict import TensorDict
+from tests.conftest import skipif_no_cuda
 
 
 @pytest.fixture
@@ -75,6 +76,7 @@ def test_unsafe_construction_skips_validation(sample_tensors):
         assert container.labels.shape == (5, 1)
 
 
+@skipif_no_cuda
 def test_unsafe_construction_with_device_mismatch(sample_tensors):
     """Test unsafe construction with device mismatch."""
     # This should fail with normal construction due to device mismatch

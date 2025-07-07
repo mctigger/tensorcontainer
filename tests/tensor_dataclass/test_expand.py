@@ -2,7 +2,7 @@ import pytest
 import torch
 
 from tensorcontainer.tensor_dataclass import TensorDataClass
-from tests.conftest import skipif_no_compile
+from tests.conftest import skipif_no_compile, skipif_no_cuda
 from tests.tensor_dataclass.conftest import DeviceTestClass
 
 
@@ -107,7 +107,7 @@ class TestExpand:
             expand_func(td)
 
     @pytest.mark.parametrize("execution_mode", ["eager", "compiled"])
-    @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
+    @skipif_no_cuda
     def test_expand_on_cuda(self, execution_mode):
         """Test expanding a TensorDataclass on CUDA."""
         if execution_mode == "compiled":

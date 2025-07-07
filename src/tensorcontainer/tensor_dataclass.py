@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import copy
+import sys
 from dataclasses import dataclass, fields
-from typing import Any, Iterable, List, Optional, Tuple, TypeVar, Union
+from typing import Any, Iterable, List, Optional, Tuple, TypeVar, Union, get_args
 
 import torch
 from torch import Tensor
@@ -206,15 +207,24 @@ class TensorDataClass(TensorContainer, PytreeRegistered, TensorDataclassTransfor
         Raises:
             TypeError: If eq=True is specified (incompatible with tensor fields)
         """
+        # This check is needed as slots=True will result in dataclass(cls) creating a new class
+        # and thus triggering __init__subclass again. However, we already have ran __init__subclass__
+        # already for this class. To avoid infinte recursion, we have the following check.
         if hasattr(cls, "__slots__"):
             return
+
+        # In Python 3.9 __annotations__ also includes parent class
+        # annotations, which is regarded a bug and changed from Python 3.10+
+        # We use the following line to be backwards compatible for 3.9
+        # In Python 3.10+ we could simply use cls.__annotations__.
+        annotations = cls.__dict__.get("__annotations__", {})
 
         # Programmatically prepend `shape` and `device` to the class annotations.
         # Dataclasses use the order of `__annotations__` to generate the `__init__`
         # method signature. We place `shape` and `device` first because they are
         # non-default arguments required by `__post_init__`. This prevents errors
         # if subclasses define fields with default values.
-        if "shape" in cls.__annotations__ or "device" in cls.__annotations__:
+        if "shape" in annotations or "device" in annotations:
             raise TypeError(
                 f"Cannot define reserved fields in {cls.__name__}. "
                 f"'shape' and 'device' are automatically provided by TensorDataClass."
@@ -223,7 +233,7 @@ class TensorDataClass(TensorContainer, PytreeRegistered, TensorDataclassTransfor
         cls.__annotations__ = {
             "shape": torch.Size,
             "device": Optional[torch.device],
-            **cls.__annotations__,
+            **annotations,
         }
 
         dc_kwargs = {}
@@ -238,7 +248,8 @@ class TensorDataClass(TensorContainer, PytreeRegistered, TensorDataclassTransfor
                 f"Cannot create {cls.__name__} with eq=True. TensorDataClass requires eq=False."
             )
         dc_kwargs.setdefault("eq", False)
-        dc_kwargs.setdefault("slots", True)
+        if sys.version_info >= (3, 10):
+            dc_kwargs.setdefault("slots", True)
 
         dataclass(cls, **dc_kwargs)
 
@@ -306,7 +317,9 @@ class TensorDataClass(TensorContainer, PytreeRegistered, TensorDataclassTransfor
 
         for f in fields(self):
             name, val = f.name, getattr(self, f.name)
-            if isinstance(val, TDCompatible):
+            if isinstance(
+                val, get_args(TDCompatible)
+            ):  # Python 3.9 compatibility: expanded TDCompatible
                 flat_values.append(val)
                 flat_names.append(name)
             else:

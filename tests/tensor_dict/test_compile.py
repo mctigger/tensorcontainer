@@ -3,6 +3,7 @@ import torch
 
 from tensorcontainer.tensor_dict import TensorDict
 from tests.compile_utils import assert_tc_equal, run_and_compare_compiled
+from tests.conftest import skipif_no_cuda
 
 
 @pytest.fixture
@@ -184,10 +185,8 @@ class TestTensorDictCompilation:
         assert eager_result["nested"].shape == (3,)
         assert_tc_equal(eager_result, compiled_result)
 
-    @pytest.mark.skipif(
-        not torch.cuda.is_available(), reason="This test requires a CUDA device"
-    )
-    def test_device_move_in_compiled_function(self, simple_td):
+    @skipif_no_cuda
+    def test_compile_to_device(self, simple_td):
         """
         Tests moving a TensorDict to a CUDA device within a compiled function.
         """

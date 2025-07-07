@@ -10,7 +10,7 @@ import pytest
 import torch
 
 from tensorcontainer.tensor_dataclass import TensorDataClass
-from tests.conftest import skipif_no_compile
+from tests.conftest import skipif_no_compile, skipif_no_cuda
 from tests.tensor_dataclass.conftest import (
     CloneTestClass,
     assert_tensor_equal_and_different_objects,
@@ -134,7 +134,7 @@ class TestClone:
         assert cloned_td.shape == td.shape
         assert cloned_td.device == td.device
 
-    @pytest.mark.skipif(not torch.cuda.is_available(), reason="CUDA not available")
+    @skipif_no_cuda
     def test_clone_preserves_cuda_device(self):
         """
         Clone should preserve CUDA device placement for all tensors.
