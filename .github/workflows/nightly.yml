@@ -45,7 +45,6 @@ jobs:
 
     environment:
       name: testpypi
-      url: https://test.pypi.org/p/tensor-container-nightly
 
     permissions:
       id-token: write  # IMPORTANT: mandatory for trusted publishing
