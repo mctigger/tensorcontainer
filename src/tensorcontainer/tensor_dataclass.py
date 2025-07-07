@@ -207,6 +207,9 @@ class TensorDataClass(TensorContainer, PytreeRegistered, TensorDataclassTransfor
         Raises:
             TypeError: If eq=True is specified (incompatible with tensor fields)
         """
+        # This check is needed as slots=True will result in dataclass(cls) creating a new class
+        # and thus triggering __init__subclass again. However, we already have ran __init__subclass__
+        # already for this class. To avoid infinte recursion, we have the following check.
         if hasattr(cls, "__slots__"):
             return
 
