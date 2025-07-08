@@ -1,6 +1,7 @@
 import torch
 
-from tensorcontainer.tensor_distribution import TensorBernoulli, TensorDistribution
+from tensorcontainer.tensor_distribution.bernoulli import TensorBernoulli
+from tensorcontainer.tensor_distribution.base import TensorDistribution
 from tests.conftest import skipif_no_cuda
 
 

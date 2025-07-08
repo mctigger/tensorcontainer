@@ -1,11 +1,9 @@
 import pytest
 import torch
 
-from src.tensorcontainer.tensor_distribution import (
-    TensorBernoulli,
-    TensorCategorical,
-    TensorNormal,
-)
+from src.tensorcontainer.tensor_distribution.bernoulli import TensorBernoulli
+from src.tensorcontainer.tensor_distribution.categorical import TensorCategorical
+from src.tensorcontainer.tensor_distribution.normal import TensorNormal
 from tests.compile_utils import run_and_compare_compiled
 
 

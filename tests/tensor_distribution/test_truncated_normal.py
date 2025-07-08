@@ -1,10 +1,8 @@
 import pytest
 import torch
 
-from tensorcontainer.tensor_distribution import (
-    TensorDistribution,
-    TensorTruncatedNormal,
-)
+from tensorcontainer.tensor_distribution.base import TensorDistribution
+from tensorcontainer.tensor_distribution.truncated_normal import TensorTruncatedNormal
 from tests.conftest import skipif_no_cuda
 
 from .conftest import normalize_device

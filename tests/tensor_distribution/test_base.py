@@ -1,7 +1,7 @@
 import torch
 from torch.distributions import Independent, Normal
 
-from tensorcontainer.tensor_distribution import TensorNormal
+from tensorcontainer.tensor_distribution.normal import TensorNormal
 
 
 def test_rsample_returns_differentiable_tensor_and_correct_shape():

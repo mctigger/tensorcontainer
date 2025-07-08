@@ -2,7 +2,7 @@ import pytest
 import torch
 
 from tensorcontainer.tensor_dict import TensorDict
-from tensorcontainer.tensor_distribution import TensorNormal
+from tensorcontainer.tensor_distribution.normal import TensorNormal
 from tests.compile_utils import run_and_compare_compiled
 
 

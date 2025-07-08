@@ -1,7 +1,7 @@
 import pytest
 import torch
 
-from tensorcontainer.tensor_distribution import TensorBernoulli
+from tensorcontainer.tensor_distribution.bernoulli import TensorBernoulli
 from tests.conftest import skipif_no_cuda
 
 from .conftest import normalize_device

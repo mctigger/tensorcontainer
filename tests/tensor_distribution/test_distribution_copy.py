@@ -1,11 +1,9 @@
 import pytest
 import torch
 
-from tensorcontainer.tensor_distribution import (
-    TensorBernoulli,
-    TensorDistribution,
-    TensorNormal,
-)
+from tensorcontainer.tensor_distribution.bernoulli import TensorBernoulli
+from tensorcontainer.tensor_distribution.base import TensorDistribution
+from tensorcontainer.tensor_distribution.normal import TensorNormal
 
 
 @pytest.mark.parametrize(

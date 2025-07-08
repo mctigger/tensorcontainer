@@ -3,7 +3,7 @@ import torch
 import torch.testing
 from torch.distributions import Independent, OneHotCategorical
 
-from tensorcontainer.tensor_distribution import TensorCategorical
+from tensorcontainer.tensor_distribution.categorical import TensorCategorical
 from tests.compile_utils import run_and_compare_compiled
 
 

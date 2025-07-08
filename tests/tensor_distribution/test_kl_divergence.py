@@ -2,7 +2,7 @@ import pytest
 import torch
 from torch.distributions import kl_divergence, Normal, Distribution
 
-from tensorcontainer.tensor_distribution import TensorDistribution
+from tensorcontainer.tensor_distribution.base import TensorDistribution
 
 
 # -----------------------------------------------------------------------------
