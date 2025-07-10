@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import torch
 from torch import Tensor
 from torch.distributions import LKJCholesky as TorchLKJCholesky
 from torch.distributions.distribution import Distribution
@@ -24,11 +23,6 @@ class LKJCholesky(TensorDistribution):
 
     dimension: int
     concentration: Tensor
-
-    def __post_init__(self):
-        super().__post_init__()
-        if torch.any(self.concentration <= 0):
-            raise ValueError("concentration must be positive")
 
     def dist(self) -> Distribution:
         """

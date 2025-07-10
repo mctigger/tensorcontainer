@@ -26,12 +26,21 @@ class TensorMultinomial(TensorDistribution):
             raise ValueError("Only one of probs or logits can be specified")
 
     def dist(self) -> Distribution:
-        return Independent(
-            Multinomial(
-                total_count=self.total_count, probs=self.probs, logits=self.logits
-            ),
-            self.reinterpreted_batch_ndims,
+        base_dist = Multinomial(
+            total_count=self.total_count,
+            probs=self.probs,
+            logits=self.logits,
+            validate_args=False,
         )
+
+        # Only use Independent if reinterpreted_batch_ndims > 0 and we have batch dimensions
+        if (
+            self.reinterpreted_batch_ndims > 0
+            and len(base_dist.batch_shape) >= self.reinterpreted_batch_ndims
+        ):
+            return Independent(base_dist, self.reinterpreted_batch_ndims)
+        else:
+            return base_dist
 
     @property
     def variance(self) -> Tensor:

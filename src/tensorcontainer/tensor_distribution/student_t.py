@@ -13,19 +13,6 @@ class TensorStudentT(TensorDistribution):
     scale: Tensor
     reinterpreted_batch_ndims: int = 1
 
-    def __post_init__(self):
-        super().__post_init__()
-
-        if torch.any(self.df <= 0):
-            raise ValueError("df must be positive")
-        if torch.any(self.scale <= 0):
-            raise ValueError("scale must be positive")
-
-        try:
-            torch.broadcast_tensors(self.df, self.loc, self.scale)
-        except RuntimeError as e:
-            raise ValueError(f"df, loc, and scale must have compatible shapes: {e}")
-
     def dist(self) -> Distribution:
         return Independent(
             StudentT(df=self.df, loc=self.loc, scale=self.scale),

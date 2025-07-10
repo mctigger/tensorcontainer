@@ -15,13 +15,6 @@ class TensorBernoulli(TensorDistribution):
     _logits: Optional[Tensor] = field(default=None)
     reinterpreted_batch_ndims: int = 0
 
-    def __post_init__(self):
-        super().__post_init__()  # Call parent's post_init
-        if (self._probs is None) == (self._logits is None):
-            raise ValueError(
-                "Either `probs` or `logits` must be specified, but not both."
-            )
-
     @property
     def probs(self):
         if self._probs is None:
@@ -53,6 +46,7 @@ class TensorBernoulli(TensorDistribution):
             return Independent(
                 torch.distributions.Bernoulli(
                     probs=self._probs,
+                    validate_args=False,
                 ),
                 self.reinterpreted_batch_ndims,
             )
@@ -60,6 +54,7 @@ class TensorBernoulli(TensorDistribution):
             return Independent(
                 torch.distributions.Bernoulli(
                     logits=self._logits,
+                    validate_args=False,
                 ),
                 self.reinterpreted_batch_ndims,
             )

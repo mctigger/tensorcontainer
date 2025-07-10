@@ -11,12 +11,6 @@ class TensorHalfNormal(TensorDistribution):
     scale: Tensor
     reinterpreted_batch_ndims: int = 1
 
-    def __post_init__(self):
-        super().__post_init__()
-
-        if torch.any(self.scale <= 0):
-            raise ValueError("scale must be positive")
-
     def dist(self) -> Distribution:
         return Independent(
             HalfNormal(scale=self.scale),

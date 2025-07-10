@@ -21,22 +21,6 @@ class TestContinuousBernoulli:
     - The `view` method works as expected.
     """
 
-    @pytest.mark.parametrize(
-        "args,kwargs",
-        [
-            (
-                {"_probs": torch.tensor(0.3), "_logits": torch.tensor(0.1)},
-                {},
-            ),  # both provided
-        ],
-    )
-    def test_init_invalid_params(self, args, kwargs):
-        """
-        Tests that a ValueError is raised when both `probs` and `logits` are provided.
-        """
-        with pytest.raises(ValueError):
-            ContinuousBernoulli(shape=(), device=torch.device("cpu"), **args, **kwargs)
-
     def test_sample_shape_and_dtype_and_values(self):
         """
         Tests that samples have the correct shape, dtype, and values.

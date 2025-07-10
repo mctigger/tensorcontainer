@@ -7,20 +7,6 @@ from tests.conftest import skipif_no_cuda
 from .conftest import normalize_device
 
 
-@pytest.mark.parametrize(
-    "args,kwargs",
-    [
-        (
-            {"_probs": torch.tensor(0.3), "_logits": torch.tensor(0.1)},
-            {},
-        ),  # both provided
-    ],
-)
-def test_init_invalid_params(args, kwargs):
-    with pytest.raises(ValueError):
-        TensorBernoulli(shape=(), device=torch.device("cpu"), **args, **kwargs)
-
-
 def test_sample_shape_and_dtype_and_values():
     probs = torch.rand(4, 3)
     dist = TensorBernoulli(

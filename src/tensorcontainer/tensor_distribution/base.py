@@ -26,6 +26,10 @@ class TensorDistribution(TensorDataClass):
 
         super().__post_init__()
 
+        # Instantiate the torch.distributions.Distribution fail early if
+        # constraints are not uphold
+        self.dist()
+
     @abstractmethod
     def dist(self) -> Distribution:
         """Returns the underlying torch.distributions.Distribution instance."""

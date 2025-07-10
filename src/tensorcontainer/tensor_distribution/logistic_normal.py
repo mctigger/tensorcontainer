@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import torch
 from torch import Tensor
 from torch.distributions import LogisticNormal as TorchLogisticNormal
 from torch.distributions.distribution import Distribution
@@ -19,11 +18,6 @@ class LogisticNormal(TensorDistribution):
 
     loc: Tensor
     scale: Tensor
-
-    def __post_init__(self):
-        super().__post_init__()
-        if torch.any(self.scale <= 0):
-            raise ValueError("scale must be positive")
 
     def dist(self) -> Distribution:
         """

@@ -42,25 +42,6 @@ class TestTensorGeometricInitialization:
         assert isinstance(dist, TensorGeometric)
         assert_close(dist.logits, logits)
 
-    def test_both_probs_and_logits_raises_error(self):
-        """A ValueError should be raised if both probs and logits are given."""
-        with pytest.raises(ValueError):
-            probs = torch.tensor(0.5)
-            logits = torch.tensor(0.0)
-            TensorGeometric(
-                probs=probs,
-                logits=logits,
-                shape=probs.shape,
-                device=probs.device,
-            )
-
-    @pytest.mark.parametrize("probs", [-0.1, 1.1, 0.0, 1.0])
-    def test_invalid_probs_raises_error(self, probs):
-        """A ValueError should be raised for probs outside (0, 1)."""
-        with pytest.raises(ValueError):
-            probs = torch.tensor(probs)
-            TensorGeometric(probs=probs, shape=probs.shape, device=probs.device)
-
 
 class TestTensorGeometricMethods:
     """

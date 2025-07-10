@@ -86,7 +86,7 @@ class TestTensorExponentialMethods:
         assert_close(dist.log_prob(value), expected_log_prob)
 
     def test_log_prob_for_negative_value(self, dist):
-        """The log_prob should match torch behavior for negative values."""
+        """The log_prob should raise ValueError for negative values with validation enabled."""
         # Create a distribution without reinterpreted_batch_ndims for this test
         rate = torch.tensor([0.5, 1.0, 4.0])
         test_dist = TensorExponential(
@@ -94,17 +94,11 @@ class TestTensorExponentialMethods:
         )
         value = torch.tensor([-1.0, 2.0, 0.5])
 
-        # Disable validation to test the actual log_prob behavior
-        torch.distributions.Distribution.set_default_validate_args(False)
-        try:
-            log_prob = test_dist.log_prob(value)
-            # Check that the behavior matches the underlying torch distribution
-            torch_dist = torch.distributions.Exponential(rate)
-            expected_log_prob = torch_dist.log_prob(value)
-            assert_close(log_prob, expected_log_prob)
-        finally:
-            # Re-enable validation
-            torch.distributions.Distribution.set_default_validate_args(True)
+        # With validation enabled, negative values should raise an error
+        with pytest.raises(
+            ValueError, match="Expected value argument.*to be within the support"
+        ):
+            test_dist.log_prob(value)
 
     def test_mean(self, dist):
         """The mean should match the formula 1 / rate."""

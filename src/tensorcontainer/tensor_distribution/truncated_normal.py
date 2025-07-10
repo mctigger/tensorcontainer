@@ -14,9 +14,6 @@ class TensorTruncatedNormal(TensorDistribution):
     high: Tensor
     reinterpreted_batch_ndims: int = 1
 
-    def __post_init__(self):
-        super().__post_init__()
-
     def dist(self) -> Distribution:
         return Independent(
             TruncatedNormal(

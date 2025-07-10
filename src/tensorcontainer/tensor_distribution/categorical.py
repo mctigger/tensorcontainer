@@ -14,11 +14,10 @@ class TensorCategorical(TensorDistribution):
     logits: Tensor
     reinterpreted_batch_ndims: int = 1
 
-    def __post_init__(self):
-        super().__post_init__()
-
     def dist(self) -> Distribution:
-        one_hot = OneHotCategoricalStraightThrough(logits=self.logits.float())
+        one_hot = OneHotCategoricalStraightThrough(
+            logits=self.logits.float(), validate_args=False
+        )
         if self.reinterpreted_batch_ndims < 1:
             raise ValueError(
                 "reinterpreted_batch_ndims must be at least 1 for TensorCategorical, "
@@ -28,7 +27,9 @@ class TensorCategorical(TensorDistribution):
         return Independent(one_hot, dims_to_reinterpret)
 
     def entropy(self) -> Tensor:
-        return OneHotCategoricalStraightThrough(logits=self.logits.float()).entropy()
+        return OneHotCategoricalStraightThrough(
+            logits=self.logits.float(), validate_args=False
+        ).entropy()
 
     def log_prob(self, value: Tensor) -> Tensor:
         return self.dist().log_prob(value)

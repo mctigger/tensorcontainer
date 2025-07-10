@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import torch
 from torch import Tensor
 from torch.distributions import Distribution, Independent, Uniform
 
@@ -15,21 +14,16 @@ class TensorUniform(TensorDistribution):
     def __post_init__(self):
         super().__post_init__()
 
-        # Validate that low < high
-        if torch.any(self.low >= self.high):
+        # Validate that low < high (PyTorch doesn't validate this with validate_args=False)
+        if (self.low >= self.high).any():
             raise ValueError("low must be strictly less than high")
-
-        # Validate that parameters have compatible shapes
-        try:
-            torch.broadcast_tensors(self.low, self.high)
-        except RuntimeError as e:
-            raise ValueError(f"low and high must have compatible shapes: {e}")
 
     def dist(self) -> Distribution:
         return Independent(
             Uniform(
                 low=self.low,
                 high=self.high,
+                validate_args=False,
             ),
             self.reinterpreted_batch_ndims,
         )

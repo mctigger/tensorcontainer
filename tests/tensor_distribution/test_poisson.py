@@ -37,13 +37,19 @@ class TestTensorPoissonInitialization:
         "rate",
         [
             torch.tensor([-0.1, 1.0]),  # Negative rate
-            torch.tensor([0.0, 1.0]),  # Zero rate
         ],
     )
     def test_invalid_rate_raises_error(self, rate):
-        """A ValueError should be raised for a non-positive rate."""
+        """A ValueError should be raised for a negative rate."""
         with pytest.raises(ValueError):
             TensorPoisson(rate=rate, shape=rate.shape, device=rate.device)
+
+    def test_zero_rate_is_valid(self):
+        """Zero rate should be valid for Poisson distribution."""
+        rate = torch.tensor([0.0, 1.0])
+        dist = TensorPoisson(rate=rate, shape=rate.shape, device=rate.device)
+        assert isinstance(dist, TensorPoisson)
+        assert_close(dist.rate, rate)
 
 
 class TestTensorPoissonMethods:

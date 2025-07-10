@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from typing import Optional
 
-import torch
 from torch import Tensor
 from torch.distributions import Wishart as TorchWishart
 from torch.distributions.distribution import Distribution
@@ -25,11 +24,6 @@ class Wishart(TensorDistribution):
     covariance_matrix: Optional[Tensor] = None
     precision_matrix: Optional[Tensor] = None
     scale_tril: Optional[Tensor] = None
-
-    def __post_init__(self):
-        super().__post_init__()
-        if torch.any(self.df <= 0):
-            raise ValueError("df must be positive")
 
     def dist(self) -> Distribution:
         """

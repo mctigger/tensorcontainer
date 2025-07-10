@@ -16,13 +16,6 @@ class TensorSoftBernoulli(TensorDistribution):
     _logits: Optional[Tensor] = field(default=None)
     reinterpreted_batch_ndims: int = 0
 
-    def __post_init__(self):
-        super().__post_init__()  # Call parent's post_init
-        if (self._probs is None) == (self._logits is None):
-            raise ValueError(
-                "Either `probs` or `logits` must be specified, but not both."
-            )
-
     @property
     def probs(self):
         if self._probs is None:

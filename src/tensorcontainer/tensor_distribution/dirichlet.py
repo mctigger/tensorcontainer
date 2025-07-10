@@ -11,13 +11,6 @@ class TensorDirichlet(TensorDistribution):
     concentration: Tensor
     reinterpreted_batch_ndims: int = 0
 
-    def __post_init__(self):
-        super().__post_init__()
-
-        # Validate that concentration is positive
-        if torch.any(self.concentration <= 0):
-            raise ValueError("concentration must be positive")
-
     def dist(self) -> Distribution:
         return Dirichlet(
             concentration=self.concentration,

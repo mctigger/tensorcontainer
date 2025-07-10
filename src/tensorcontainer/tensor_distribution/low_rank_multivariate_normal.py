@@ -25,9 +25,11 @@ class LowRankMultivariateNormal(TensorDistribution):
     cov_diag: Tensor
 
     def __post_init__(self):
-        super().__post_init__()
+        # Validate cov_diag before calling super().__post_init__()
+        # which will call self.dist() and potentially fail with Cholesky error
         if torch.any(self.cov_diag <= 0):
             raise ValueError("cov_diag must be positive")
+        super().__post_init__()
 
     def dist(self) -> Distribution:
         """

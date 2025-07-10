@@ -110,10 +110,12 @@ class TestTensorDirichletMethods:
         assert_close(dist.log_prob(value), expected_log_prob)
 
     def test_log_prob_of_invalid_value(self, dist):
-        """The log_prob of a value not on the simplex should be -inf."""
+        """The log_prob of a value not on the simplex should raise ValueError with validation enabled."""
         value = torch.tensor([0.1, 0.8, 0.2])  # Sums to 1.1
-        log_prob = dist.log_prob(value)
-        assert log_prob != -float("inf")
+        with pytest.raises(
+            ValueError, match="Expected value argument.*to be within the support"
+        ):
+            dist.log_prob(value)
 
     def test_mean(self, dist):
         """The mean should be the normalized concentration."""

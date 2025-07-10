@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import torch
 from torch import Tensor
 from torch.distributions import Distribution, Exponential, Independent
 
@@ -10,13 +9,6 @@ from .base import TensorDistribution
 class TensorExponential(TensorDistribution):
     rate: Tensor
     reinterpreted_batch_ndims: int = 1
-
-    def __post_init__(self):
-        super().__post_init__()
-
-        # Validate that rate is positive
-        if torch.any(self.rate <= 0):
-            raise ValueError("rate must be positive")
 
     def dist(self) -> Distribution:
         return Independent(
