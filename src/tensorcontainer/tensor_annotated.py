@@ -20,10 +20,9 @@ class TensorAnnotated(TensorContainer, PytreeRegistered):
     def __init__(
         self,
         shape: torch.Size | List[int] | Tuple[int],
-        device: str | torch.device | int | None,
-        validate_args: bool = True,
+        device: str | torch.device | int | None
     ):
-        super().__init__(shape, device, validate_args)
+        super().__init__(shape, device, True)
 
     def _get_tensor_attributes(self):
         # In Python 3.9 __annotations__ also includes parent class

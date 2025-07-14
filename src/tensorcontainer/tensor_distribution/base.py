@@ -76,7 +76,7 @@ class TensorDistribution(TensorAnnotated):
         # TensorDistribution itself handles validation by calling self.dist()
         # and relies on the underlying torch.distributions for parameter validation.
         self.dist()
-        super().__init__(shape, device, validate_args=False)
+        super().__init__(shape, device)
 
     @classmethod
     def _init_from_reconstructed(
@@ -101,11 +101,11 @@ class TensorDistribution(TensorAnnotated):
         Returns:
             Reconstructed TensorDistribution instance
         """
-        return cls._unflatten_distribution(tensor_attributes, meta_attributes)
+        return cls._unflatten_distribution({**tensor_attributes, **meta_attributes})
 
     @classmethod
     def _unflatten_distribution(
-        cls, tensor_attributes: Dict[str, TDCompatible], meta_attributes: Dict[str, Any]
+        cls, attributes: Dict[str, Any]
     ):
         """
         Reconstruct a distribution from flattened tensor and metadata attributes.
@@ -115,27 +115,22 @@ class TensorDistribution(TensorAnnotated):
         to the constructor.
         
         Args:
-            tensor_attributes: Dictionary mapping attribute names to tensor values
-            meta_attributes: Dictionary mapping attribute names to non-tensor metadata
+            attributes: Dictionary mapping attribute names to values
             
         Returns:
             New instance of the distribution class
             
         Example:
-            For TensorCategorical, this extracts _probs and _logits from tensor_attributes
+            For TensorCategorical, this extracts _probs and _logits from attributes
             and passes them to the constructor:
             ```python
             return cls(
-                probs=tensor_attributes.get("_probs"),
-                logits=tensor_attributes.get("_logits"),
+                probs=attributes.get("_probs"),
+                logits=attributes.get("_logits"),
             )
             ```
         """
-        return cls(**tensor_attributes, **meta_attributes)
-
-        # Instantiate the torch.distributions.Distribution fail early if
-        # constraints are not uphold
-        self.dist()
+        return cls(**attributes)
 
     @abstractmethod
     def dist(self) -> Distribution:
