@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Optional, cast
+from typing import Any, Dict, Optional
 
-import torch
 from torch import Tensor
 from torch.distributions import Normal
-
+from torch.types import Number
 from tensorcontainer.tensor_annotated import TDCompatible
+from torch.distributions.utils import broadcast_all
 
 from .base import TensorDistribution
 
@@ -25,37 +25,30 @@ class TensorNormal(TensorDistribution):
     """
 
     # Annotated tensor parameters
-    _loc: Optional[Tensor] = None
-    _scale: Optional[Tensor] = None
+    _loc: Tensor
+    _scale: Tensor 
 
     def __init__(self, loc: Tensor, scale: Tensor):
-        # Parameter validation occurs in super().__init__(), but we need an early
-        # check here to safely derive shape and device from the data tensor
-        # before calling the parent constructor
-        if loc is None:
-            raise RuntimeError("'loc' must be provided.")
-        if scale is None:
-            raise RuntimeError("'scale' must be provided.")
+        self._loc, self._scale = broadcast_all(loc, scale)
 
-        # Store the parameters in annotated attributes before calling super().__init__()
-        # This is required because super().__init__() calls self.dist() which needs these attributes
-        batch_shape = torch.broadcast_shapes(loc.shape, scale.shape)
-        device = loc.device # Prioritize CUDA device if available
-        self._loc = loc
-        self._scale = scale
+        if isinstance(loc, Number) and isinstance(scale, Number):
+            shape = tuple()
+        else:
+            shape = self._loc.shape
 
-        super().__init__(batch_shape, device)
+        device = self._loc.device
+
+        super().__init__(shape, device)
 
     @classmethod
     def _unflatten_distribution(
         cls,
-        tensor_attributes: Dict[str, TDCompatible],
-        meta_attributes: Dict[str, Any],
+        attributes: Dict[str, Any],
     ) -> TensorNormal:
         """Reconstruct distribution from tensor attributes."""
         return cls(
-            loc=cast(Tensor, tensor_attributes.get("_loc")),
-            scale=cast(Tensor, tensor_attributes.get("_scale")),
+            loc=attributes.get("_loc"),  # type: ignore
+            scale=attributes.get("_scale"),  # type: ignore
         )
 
     def dist(self) -> Normal:
