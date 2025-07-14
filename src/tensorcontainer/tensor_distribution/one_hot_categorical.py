@@ -30,6 +30,9 @@ class TensorOneHotCategorical(TensorDistribution):
         self._probs = probs
         self._logits = logits
 
+        # For categorical distributions the last dimension must not be part of the 
+        # shape since it contains the probabilities for each class and thus, should
+        # never change.
         shape = data.shape[:-1]
         device = data.device
 
@@ -39,13 +42,12 @@ class TensorOneHotCategorical(TensorDistribution):
     @classmethod
     def _unflatten_distribution(
         cls,
-        tensor_attributes: Dict[str, TDCompatible],
-        meta_attributes: Dict[str, Any],
+        attributes: Dict[str, Any],
     ) -> TensorOneHotCategorical:
         """Reconstruct distribution from tensor attributes."""
         return cls(
-            probs=tensor_attributes.get("probs"),  # type: ignore
-            logits=tensor_attributes.get("logits"),  # type: ignore
+            probs=attributes.get("_probs", None),  # type: ignore
+            logits=attributes.get("_logits", None),  # type: ignore
         )
 
     def dist(self) -> TorchOneHotCategorical:
