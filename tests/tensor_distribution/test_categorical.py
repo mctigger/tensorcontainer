@@ -43,16 +43,34 @@ class TestTensorCategoricalTensorContainerIntegration:
         def sample_fn(td):
             return td.sample()
 
-        def rsample_fn(td):
-            return td.rsample()
 
         def log_prob_fn(td, s):
             return td.log_prob(s)
 
         run_and_compare_compiled(sample_fn, td_categorical, fullgraph=False)
-        run_and_compare_compiled(rsample_fn, td_categorical, fullgraph=False)
         run_and_compare_compiled(log_prob_fn, td_categorical, sample, fullgraph=False)
 
+        
+    def test_pytree_integration(self):
+        """
+        We use the copy method as a proxy to ensure pytree integration (e.g. unflattening)
+        works correctly.
+        """
+        logits = torch.randn(3, 5)
+        original_dist = TensorCategorical(logits=logits)
+        copied_dist = original_dist.copy()
+
+        # Assert that it's a new instance
+        assert copied_dist is not original_dist
+        assert isinstance(copied_dist, TensorCategorical)
+
+        # Assert that properties are identical
+        assert torch.equal(copied_dist.logits, original_dist.logits)
+        assert copied_dist.batch_shape == original_dist.batch_shape
+        assert copied_dist.event_shape == original_dist.event_shape
+        assert copied_dist.device == original_dist.device
+        assert copied_dist.logits.dtype == original_dist.logits.dtype
+        assert copied_dist.param_shape == original_dist.param_shape
 
 class TestTensorCategoricalAPIMatch:
     """

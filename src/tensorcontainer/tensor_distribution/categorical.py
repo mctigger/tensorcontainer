@@ -4,7 +4,7 @@ from typing import Any, Dict, Optional
 
 from torch import Size, Tensor
 from torch.distributions import (
-    OneHotCategoricalStraightThrough,
+    Categorical,
 )
 
 from tensorcontainer.tensor_annotated import TDCompatible
@@ -13,7 +13,7 @@ from .base import TensorDistribution
 
 
 class TensorCategorical(TensorDistribution):
-    """Tensor-aware categorical distribution using OneHotCategoricalStraightThrough."""
+    """Tensor-aware categorical distribution using Categorical."""
     
     # Annotated tensor parameters
     _probs: Optional[Tensor] = None
@@ -32,6 +32,9 @@ class TensorCategorical(TensorDistribution):
         self._probs = probs
         self._logits = logits
         
+        # For categorical distributions the last dimension must not be part of the 
+        # shape since it contains the probabilities for each class and thus, should
+        # never change.
         shape = data.shape[:-1]
         device = data.device
 
@@ -41,17 +44,16 @@ class TensorCategorical(TensorDistribution):
     @classmethod
     def _unflatten_distribution(
         cls,
-        tensor_attributes: Dict[str, TDCompatible],
-        meta_attributes: Dict[str, Any],
+        attributes: Dict[str, Any],
     ) -> TensorCategorical:
         """Reconstruct distribution from tensor attributes."""
         return cls(
-            probs=tensor_attributes.get("_probs"),  # type: ignore
-            logits=tensor_attributes.get("_logits"),  # type: ignore
+            probs=attributes.get("_probs"),  # type: ignore
+            logits=attributes.get("_logits"),  # type: ignore
         )
 
-    def dist(self) -> OneHotCategoricalStraightThrough:
-        return OneHotCategoricalStraightThrough(
+    def dist(self) -> Categorical:
+        return Categorical(
             probs=self._probs, logits=self._logits
         )
 
@@ -59,7 +61,7 @@ class TensorCategorical(TensorDistribution):
         return self.dist().log_prob(value)
 
     @property
-    def logits(self) -> Optional[Tensor]:
+    def logits(self) -> Tensor:
         """Returns the logits used to initialize the distribution."""
         return self.dist().logits
 
