@@ -44,7 +44,6 @@ class TestTensorNormalInitialization:
         assert td_normal.dist().batch_shape == expected_batch_shape
 
 
-
 class TestTensorNormalTensorContainerIntegration:
     @pytest.mark.parametrize("param_shape", [(5,), (3, 5), (2, 4, 5)])
     def test_compile_compatibility(self, param_shape):

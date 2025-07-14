@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from torch import Tensor
 from torch.distributions import Normal
-from torch.types import Number
-from tensorcontainer.tensor_annotated import TDCompatible
 from torch.distributions.utils import broadcast_all
+from torch.types import Number
+
 
 from .base import TensorDistribution
 
