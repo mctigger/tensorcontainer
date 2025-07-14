@@ -1,17 +1,5 @@
-"""
-Tests for TensorCategorical distribution.
-
-This module contains test classes that verify:
-- TensorCategorical initialization and parameter validation
-- Core distribution operations (sample, rsample, log_prob)
-- TensorContainer integration (view, reshape, device operations)
-- Distribution-specific properties and edge cases
-"""
-
 import pytest
 import torch
-import torch.distributions
-import torch.testing
 from torch.distributions import OneHotCategoricalStraightThrough
 
 from tensorcontainer.tensor_distribution.categorical import TensorCategorical
@@ -43,14 +31,12 @@ class TestTensorCategoricalTensorContainerIntegration:
         def sample_fn(td):
             return td.sample()
 
-
         def log_prob_fn(td, s):
             return td.log_prob(s)
 
         run_and_compare_compiled(sample_fn, td_categorical, fullgraph=False)
         run_and_compare_compiled(log_prob_fn, td_categorical, sample, fullgraph=False)
 
-        
     def test_pytree_integration(self):
         """
         We use the copy method as a proxy to ensure pytree integration (e.g. unflattening)
@@ -71,6 +57,7 @@ class TestTensorCategoricalTensorContainerIntegration:
         assert copied_dist.device == original_dist.device
         assert copied_dist.logits.dtype == original_dist.logits.dtype
         assert copied_dist.param_shape == original_dist.param_shape
+
 
 class TestTensorCategoricalAPIMatch:
     """

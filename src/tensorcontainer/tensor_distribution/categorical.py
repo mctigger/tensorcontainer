@@ -7,14 +7,13 @@ from torch.distributions import (
     Categorical,
 )
 
-from tensorcontainer.tensor_annotated import TDCompatible
 
 from .base import TensorDistribution
 
 
 class TensorCategorical(TensorDistribution):
     """Tensor-aware categorical distribution using Categorical."""
-    
+
     # Annotated tensor parameters
     _probs: Optional[Tensor] = None
     _logits: Optional[Tensor] = None
@@ -26,13 +25,13 @@ class TensorCategorical(TensorDistribution):
         # before calling the parent constructor
         if data is None:
             raise RuntimeError("Either 'probs' or 'logits' must be provided.")
-        
+
         # Store the parameters in annotated attributes before calling super().__init__()
         # This is required because super().__init__() calls self.dist() which needs these attributes
         self._probs = probs
         self._logits = logits
-        
-        # For categorical distributions the last dimension must not be part of the 
+
+        # For categorical distributions the last dimension must not be part of the
         # shape since it contains the probabilities for each class and thus, should
         # never change.
         shape = data.shape[:-1]
@@ -53,9 +52,7 @@ class TensorCategorical(TensorDistribution):
         )
 
     def dist(self) -> Categorical:
-        return Categorical(
-            probs=self._probs, logits=self._logits
-        )
+        return Categorical(probs=self._probs, logits=self._logits)
 
     def log_prob(self, value: Tensor) -> Tensor:
         return self.dist().log_prob(value)

@@ -5,7 +5,6 @@ from typing import Any, Dict, Optional
 from torch import Size, Tensor
 from torch.distributions import OneHotCategorical as TorchOneHotCategorical
 
-from tensorcontainer.tensor_annotated import TDCompatible
 
 from .base import TensorDistribution
 
@@ -30,7 +29,7 @@ class TensorOneHotCategorical(TensorDistribution):
         self._probs = probs
         self._logits = logits
 
-        # For categorical distributions the last dimension must not be part of the 
+        # For categorical distributions the last dimension must not be part of the
         # shape since it contains the probabilities for each class and thus, should
         # never change.
         shape = data.shape[:-1]

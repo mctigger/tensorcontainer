@@ -1,17 +1,5 @@
-"""
-Tests for TensorOneHotCategorical distribution.
-
-This module contains test classes that verify:
-- TensorOneHotCategorical initialization and parameter validation
-- Core distribution operations (sample, rsample, log_prob)
-- TensorContainer integration (view, reshape, device operations)
-- Distribution-specific properties and edge cases
-"""
-
 import pytest
 import torch
-import torch.distributions
-import torch.testing
 from torch.distributions import OneHotCategorical
 
 from tensorcontainer.tensor_distribution.one_hot_categorical import (
@@ -49,7 +37,9 @@ class TestTensorOneHotCategoricalTensorContainerIntegration:
             return td.log_prob(s)
 
         run_and_compare_compiled(sample_fn, td_one_hot_categorical, fullgraph=False)
-        run_and_compare_compiled(log_prob_fn, td_one_hot_categorical, sample, fullgraph=False)
+        run_and_compare_compiled(
+            log_prob_fn, td_one_hot_categorical, sample, fullgraph=False
+        )
 
     def test_pytree_integration(self):
         """
@@ -84,18 +74,14 @@ class TestTensorOneHotCategoricalAPIMatch:
         Tests that the __init__ signature of TensorOneHotCategorical matches
         torch.distributions.OneHotCategorical.
         """
-        assert_init_signatures_match(
-            TensorOneHotCategorical, OneHotCategorical
-        )
+        assert_init_signatures_match(TensorOneHotCategorical, OneHotCategorical)
 
     def test_properties_match(self):
         """
         Tests that the properties of TensorOneHotCategorical match
         torch.distributions.OneHotCategorical.
         """
-        assert_properties_signatures_match(
-            TensorOneHotCategorical, OneHotCategorical
-        )
+        assert_properties_signatures_match(TensorOneHotCategorical, OneHotCategorical)
 
     def test_property_values_match(self):
         """
