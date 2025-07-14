@@ -1,125 +1,89 @@
 """
-Tests for the TensorChi2 distribution.
+Tests for TensorChi2 distribution.
 
-This module contains tests for the TensorChi2 distribution, which wraps
-`torch.distributions.Chi2`. The tests cover:
-- Initialization with valid and invalid parameters.
-- Correctness of distribution properties (mean, variance).
-- `sample` and `rsample` methods.
-- `log_prob` and `entropy` calculations.
-- Behavior with different `reinterpreted_batch_ndims`.
+This module contains test classes that verify:
+- TensorChi2 initialization and parameter validation
+- Core distribution operations (sample, log_prob)
+- TensorContainer integration (view, reshape, device operations)
+- Distribution-specific properties and edge cases
 """
 
 import pytest
 import torch
-from torch.testing import assert_close
+import torch.distributions
+import torch.testing
+from torch.distributions import Chi2
 
 from tensorcontainer.tensor_distribution.chi2 import TensorChi2
+from tests.compile_utils import run_and_compare_compiled
+from tests.tensor_distribution.conftest import (
+    assert_init_signatures_match,
+    assert_properties_signatures_match,
+    assert_property_values_match,
+)
 
 
 class TestTensorChi2Initialization:
+    def test_init_no_params_raises_error(self):
+        """A RuntimeError should be raised when df is not provided."""
+        with pytest.raises(
+            RuntimeError, match="'df' must be provided."
+        ):
+            TensorChi2(df=None) # type: ignore
+
+
+class TestTensorChi2TensorContainerIntegration:
+    @pytest.mark.parametrize("param_shape", [(5,), (3, 5), (2, 4, 5)])
+    def test_compile_compatibility(self, param_shape):
+        """Core operations should be compatible with torch.compile."""
+        df = torch.rand(*param_shape).exp() + 1 # df must be positive
+        td_chi2 = TensorChi2(df=df)
+        
+        sample = td_chi2.sample()
+        rsample = td_chi2.rsample()
+
+        def sample_fn(td):
+            return td.sample()
+
+        def rsample_fn(td):
+            return td.rsample()
+
+        def log_prob_fn(td, s):
+            return td.log_prob(s)
+
+        run_and_compare_compiled(sample_fn, td_chi2, fullgraph=False)
+        run_and_compare_compiled(rsample_fn, td_chi2, fullgraph=False)
+        run_and_compare_compiled(log_prob_fn, td_chi2, sample, fullgraph=False)
+
+
+class TestTensorChi2APIMatch:
     """
-    Tests the initialization logic of the TensorChi2 distribution.
-
-    This suite verifies that:
-    - The distribution can be created with a valid `df`.
-    - Initialization fails when `df` is not positive.
-    """
-
-    def test_valid_initialization(self):
-        """The distribution should be created with valid parameters."""
-        df = torch.tensor([1.0, 2.0])
-        dist = TensorChi2(df=df, shape=torch.Size([2]), device=torch.device("cpu"))
-        assert isinstance(dist, TensorChi2)
-        assert_close(dist.df, df)
-
-    @pytest.mark.parametrize(
-        "df",
-        [
-            torch.tensor([-1.0, 1.0]),  # Negative value
-            torch.tensor([0.0, 1.0]),  # Zero value
-        ],
-    )
-    def test_invalid_parameter_values_raises_error(self, df):
-        """A ValueError should be raised for non-positive df."""
-        with pytest.raises(ValueError):
-            TensorChi2(df=df, shape=torch.Size([2]), device=torch.device("cpu"))
-
-
-class TestTensorChi2Methods:
-    """
-    Tests the methods of the TensorChi2 distribution.
-
-    This suite verifies that:
-    - `sample` and `rsample` produce tensors of the correct shape and type.
-    - `log_prob` computes the correct log probability.
-    - `mean` and `variance` match the expected values.
-    - `entropy` is calculated correctly.
-    - The `dist` property returns the correct underlying torch distribution.
+    Tests that the TensorChi2 API matches the PyTorch Chi2 API.
     """
 
-    @pytest.fixture
-    def dist(self):
-        """Provides a standard TensorChi2 distribution for testing."""
-        return TensorChi2(
-            df=torch.tensor([1.0, 2.0, 5.0]),
-            shape=torch.Size([3]),
-            device=torch.device("cpu"),
+    def test_init_signatures_match(self):
+        """
+        Tests that the __init__ signature of TensorChi2 matches
+        torch.distributions.Chi2.
+        """
+        assert_init_signatures_match(
+            TensorChi2, Chi2
         )
 
-    def test_sample_shape(self, dist):
-        """The shape of the sampled tensor should be correct."""
-        sample = dist.sample()
-        assert sample.shape == dist.shape
-
-        samples = dist.sample(sample_shape=torch.Size([4, 4]))
-        assert samples.shape == (4, 4) + dist.shape
-
-    def test_rsample_shape(self, dist):
-        """The shape of the r-sampled tensor should be correct and require grad."""
-        dist.df.requires_grad = True
-        rsample = dist.rsample()
-        assert rsample.shape == dist.shape
-        assert rsample.requires_grad
-
-    def test_log_prob(self, dist):
-        """The log_prob should be consistent with the underlying torch distribution."""
-        value = torch.tensor([1.0, 0.5, 5.0])
-        expected_log_prob = dist.dist().log_prob(value)
-        assert_close(dist.log_prob(value), expected_log_prob)
-
-    def test_mean(self, dist):
-        """The mean should match the df."""
-        expected_mean = dist.df
-        assert_close(dist.mean, expected_mean)
-
-    def test_variance(self, dist):
-        """The variance should match 2 * df."""
-        expected_variance = 2 * dist.df
-        assert_close(dist.variance, expected_variance)
-
-    def test_entropy(self, dist):
-        """The entropy should be consistent with the underlying torch distribution."""
-        expected_entropy = dist.dist().entropy()
-        assert_close(dist.entropy(), expected_entropy)
-
-    @pytest.mark.parametrize(
-        "rbn_dims, expected_shape",
-        [
-            (0, (2, 3)),
-            (1, (2,)),
-            (2, ()),
-        ],
-    )
-    def test_reinterpreted_batch_ndims(self, rbn_dims, expected_shape):
-        """Tests log_prob with different reinterpreted_batch_ndims."""
-        df = torch.ones(2, 3)
-        dist = TensorChi2(
-            df=df,
-            reinterpreted_batch_ndims=rbn_dims,
-            shape=torch.Size([2, 3]),
-            device=torch.device("cpu"),
+    def test_properties_match(self):
+        """
+        Tests that the properties of TensorChi2 match
+        torch.distributions.Chi2.
+        """
+        assert_properties_signatures_match(
+            TensorChi2, Chi2
         )
-        value = torch.rand(2, 3)
-        log_prob = dist.log_prob(value)
-        assert log_prob.shape == expected_shape
+
+    def test_property_values_match(self):
+        """
+        Tests that the property values of TensorChi2 match
+        torch.distributions.Chi2.
+        """
+        df = torch.rand(3, 5).exp() + 1 # df must be positive
+        td_chi2 = TensorChi2(df=df)
+        assert_property_values_match(td_chi2)

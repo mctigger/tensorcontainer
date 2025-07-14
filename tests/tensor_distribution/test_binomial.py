@@ -1,152 +1,104 @@
 """
-Tests for the TensorBinomial distribution.
+Tests for TensorBinomial distribution.
 
-This module contains tests for the TensorBinomial distribution, which wraps
-`torch.distributions.Binomial`. The tests cover:
-- Initialization with `probs` and `logits`.
-- Parameter validation for `total_count`, `probs`, and `logits`.
-- Correctness of distribution properties (mean, variance).
-- The `sample` method.
-- `log_prob` and `entropy` calculations.
+This module contains test classes that verify:
+- TensorBinomial initialization and parameter validation
+- Core distribution operations (sample, rsample, log_prob)
+- TensorContainer integration (view, reshape, device operations)
+- Distribution-specific properties and edge cases
 """
 
 import pytest
 import torch
-from torch.testing import assert_close
+import torch.distributions
+import torch.testing
 
 from tensorcontainer.tensor_distribution.binomial import TensorBinomial
+from tests.compile_utils import run_and_compare_compiled
+from tests.tensor_distribution.conftest import (
+    assert_init_signatures_match,
+    assert_properties_signatures_match,
+    assert_property_values_match,
+)
 
 
 class TestTensorBinomialInitialization:
-    """
-    Tests the initialization logic of the TensorBinomial distribution.
+    def test_init_no_params_raises_error(self):
+        """A ValueError should be raised when neither probs nor logits are provided."""
+        with pytest.raises(
+            ValueError, match="Either `probs` or `logits` must be specified, but not both."
+        ):
+            TensorBinomial(total_count=10)
 
-    This suite verifies that:
-    - The distribution can be created with `total_count` and `probs`.
-    - The distribution can be created with `total_count` and `logits`.
-    - Initialization fails if both `probs` and `logits` are provided.
-    - Initialization fails if `total_count` is not a non-negative integer.
-    - Initialization fails if `probs` are not in the range [0, 1].
-    """
-
-    def test_valid_initialization_with_probs(self):
-        """The distribution should be created with total_count and probs."""
-        total_count = torch.tensor([10, 20])
-        probs = torch.tensor([0.1, 0.8])
-        dist = TensorBinomial(
-            total_count=total_count,
-            probs=probs,
-            shape=probs.shape,
-            device=probs.device,
-        )
+    def test_init_with_probs(self):
+        """Test initialization with probs."""
+        dist = TensorBinomial(total_count=10, probs=torch.tensor([0.5]))
         assert isinstance(dist, TensorBinomial)
-        assert_close(dist.total_count, total_count.float())
-        assert_close(dist.probs, probs)
+        assert dist.total_count == 10
+        torch.testing.assert_close(dist.probs, torch.tensor([0.5]))
 
-    def test_valid_initialization_with_logits(self):
-        """The distribution should be created with total_count and logits."""
-        total_count = torch.tensor([10, 20])
-        logits = torch.tensor([-2.0, 1.5])
-        dist = TensorBinomial(
-            total_count=total_count,
-            logits=logits,
-            shape=logits.shape,
-            device=logits.device,
-        )
+    def test_init_with_logits(self):
+        """Test initialization with logits."""
+        dist = TensorBinomial(total_count=10, logits=torch.tensor([0.0]))
         assert isinstance(dist, TensorBinomial)
-        assert_close(dist.total_count, total_count.float())
-        assert_close(dist.logits, logits)
-
-    def test_both_probs_and_logits_raises_error(self):
-        """A ValueError should be raised if both probs and logits are given."""
-        with pytest.raises(ValueError):
-            total_count = torch.tensor(10)
-            probs = torch.tensor(0.5)
-            logits = torch.tensor(0.0)
-            TensorBinomial(
-                total_count=total_count,
-                probs=probs,
-                logits=logits,
-                shape=total_count.shape,
-                device=total_count.device,
-            )
-
-    @pytest.mark.parametrize("total_count", [-1, 10.5])
-    def test_invalid_total_count_raises_error(self, total_count):
-        """A ValueError should be raised for invalid total_count."""
-        with pytest.raises(ValueError):
-            total_count = torch.tensor(total_count)
-            probs = torch.tensor(0.5)
-            TensorBinomial(
-                total_count=total_count,
-                probs=probs,
-                shape=total_count.shape,
-                device=total_count.device,
-            )
-
-    @pytest.mark.parametrize("probs", [-0.1, 1.1])
-    def test_invalid_probs_raises_error(self, probs):
-        """A ValueError should be raised for probs outside [0, 1]."""
-        with pytest.raises(ValueError):
-            total_count = torch.tensor(10)
-            probs = torch.tensor(probs)
-            TensorBinomial(
-                total_count=total_count,
-                probs=probs,
-                shape=total_count.shape,
-                device=total_count.device,
-            )
+        assert dist.total_count == 10
+        torch.testing.assert_close(dist.logits, torch.tensor([0.0]))
 
 
-class TestTensorBinomialMethods:
+class TestTensorBinomialTensorContainerIntegration:
+    @pytest.mark.parametrize("param_shape", [(5,), (3, 5), (2, 4, 5)])
+    def test_compile_compatibility(self, param_shape):
+        """Core operations should be compatible with torch.compile."""
+        total_count = 10
+        probs = torch.rand(*param_shape, requires_grad=True)
+        td_binomial = TensorBinomial(total_count=total_count, probs=probs)
+        sample = td_binomial.sample()
+
+        def sample_fn(td):
+            return td.sample()
+
+        def rsample_fn(td):
+            # Binomial does not support rsample
+            with pytest.raises(NotImplementedError):
+                return td.rsample()
+
+        def log_prob_fn(td, s):
+            return td.log_prob(s)
+
+        run_and_compare_compiled(sample_fn, td_binomial, fullgraph=False)
+        # run_and_compare_compiled(rsample_fn, td_binomial, fullgraph=False) # rsample not supported
+        run_and_compare_compiled(log_prob_fn, td_binomial, sample, fullgraph=False)
+
+
+class TestTensorBinomialAPIMatch:
     """
-    Tests the methods of the TensorBinomial distribution.
-
-    This suite verifies that:
-    - `sample` produces tensors of the correct shape and type.
-    - `log_prob` computes the correct log probability.
-    - `mean` and `variance` match the expected values.
-    - `entropy` is calculated correctly.
+    Tests that the TensorBinomial API matches the PyTorch Binomial API.
     """
 
-    @pytest.fixture
-    def dist(self):
-        """Provides a standard TensorBinomial distribution for testing."""
-        total_count = torch.tensor([10, 20, 30])
-        probs = torch.tensor([0.1, 0.5, 0.9])
-        return TensorBinomial(
-            total_count=total_count,
-            probs=probs,
-            shape=probs.shape,
-            device=probs.device,
+    def test_init_signatures_match(self):
+        """
+        Tests that the __init__ signature of TensorBinomial matches
+        torch.distributions.Binomial.
+        """
+        assert_init_signatures_match(
+            TensorBinomial, torch.distributions.Binomial
         )
 
-    def test_sample_shape(self, dist):
-        """The shape of the sampled tensor should be correct."""
-        sample = dist.sample()
-        assert sample.shape == dist.shape
+    def test_properties_match(self):
+        """
+        Tests that the properties of TensorBinomial match
+        torch.distributions.Binomial.
+        """
+        assert_properties_signatures_match(
+            TensorBinomial, torch.distributions.Binomial
+        )
 
-        samples = dist.sample(sample_shape=torch.Size([4, 4]))
-        assert samples.shape == (4, 4) + dist.shape
-
-    def test_log_prob(self, dist):
-        """The log_prob should be consistent with the underlying torch distribution."""
-        value = torch.tensor([1.0, 10.0, 27.0])
-        expected_log_prob = dist.dist().log_prob(value)
-        assert_close(dist.log_prob(value), expected_log_prob)
-
-    def test_mean(self, dist):
-        """The mean should match the formula total_count * probs."""
-        expected_mean = dist.total_count * dist.probs
-        assert_close(dist.mean, expected_mean)
-
-    def test_variance(self, dist):
-        """The variance should match the formula total_count * p * (1-p)."""
-        expected_variance = dist.total_count * dist.probs * (1 - dist.probs)
-        assert_close(dist.variance, expected_variance)
-
-    @pytest.mark.xfail(raises=NotImplementedError)
-    def test_entropy(self, dist):
-        """The entropy should be consistent with the underlying torch distribution."""
-        expected_entropy = dist.dist().entropy()
-        assert_close(dist.entropy(), expected_entropy)
+    def test_property_values_match(self):
+        """
+        Tests that the property values of TensorBinomial match
+        torch.distributions.Binomial.
+        """
+        total_count = 10
+        probs = torch.rand(3, 5)
+        td_binomial = TensorBinomial(total_count=total_count, probs=probs)
+        assert_property_values_match(td_binomial)

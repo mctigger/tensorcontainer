@@ -1,60 +1,69 @@
 from __future__ import annotations
 
-from dataclasses import field
-from typing import Optional
+from typing import Any, Dict, Optional
 
-import torch
-from torch import Tensor
-from torch.distributions import Independent
+from torch import Size, Tensor
+from torch.distributions import Bernoulli
+
+from tensorcontainer.tensor_annotated import TDCompatible
 
 from .base import TensorDistribution
 
 
 class TensorBernoulli(TensorDistribution):
-    _probs: Optional[Tensor] = field(default=None)
-    _logits: Optional[Tensor] = field(default=None)
-    reinterpreted_batch_ndims: int = 0
+    """Tensor-aware Bernoulli distribution."""
+    
+    # Annotated tensor parameters
+    _probs: Optional[Tensor] = None
+    _logits: Optional[Tensor] = None
+
+    def __init__(self, probs: Optional[Tensor] = None, logits: Optional[Tensor] = None):
+        data = probs if probs is not None else logits
+        # Parameter validation occurs in super().__init__(), but we need an early
+        # check here to safely derive shape and device from the data tensor
+        # before calling the parent constructor
+        if data is None:
+            raise RuntimeError("Either 'probs' or 'logits' must be provided.")
+        
+        # Store the parameters in annotated attributes before calling super().__init__()
+        # This is required because super().__init__() calls self.dist() which needs these attributes
+        self._probs = probs
+        self._logits = logits
+        
+        shape = data.shape
+        device = data.device
+
+        super().__init__(shape, device)
+
+    @classmethod
+    def _unflatten_distribution(
+        cls,
+        tensor_attributes: Dict[str, TDCompatible],
+        meta_attributes: Dict[str, Any],
+    ) -> TensorBernoulli:
+        """Reconstruct distribution from tensor attributes."""
+        return cls(
+            probs=tensor_attributes.get("_probs"),  # type: ignore
+            logits=tensor_attributes.get("_logits"),  # type: ignore
+        )
+
+    def dist(self) -> Bernoulli:
+        return Bernoulli(probs=self._probs, logits=self._logits)
+
+    def log_prob(self, value: Tensor) -> Tensor:
+        return self.dist().log_prob(value)
 
     @property
-    def probs(self):
-        if self._probs is None:
-            assert self._logits is not None
-            self._probs = torch.sigmoid(self._logits)
-        return self._probs
-
-    @probs.setter
-    def probs(self, value):
-        self._probs = value
-        if value is not None:
-            self._logits = None
+    def logits(self) -> Optional[Tensor]:
+        """Returns the logits used to initialize the distribution."""
+        return self.dist().logits
 
     @property
-    def logits(self):
-        if self._logits is None:
-            assert self._probs is not None
-            self._logits = torch.log(self._probs / (1 - self._probs + 1e-8))
-        return self._logits
+    def probs(self) -> Optional[Tensor]:
+        """Returns the probabilities used to initialize the distribution."""
+        return self.dist().probs
 
-    @logits.setter
-    def logits(self, value):
-        self._logits = value
-        if value is not None:
-            self._probs = None
-
-    def dist(self):
-        if self._probs is not None:
-            return Independent(
-                torch.distributions.Bernoulli(
-                    probs=self._probs,
-                    validate_args=False,
-                ),
-                self.reinterpreted_batch_ndims,
-            )
-        else:
-            return Independent(
-                torch.distributions.Bernoulli(
-                    logits=self._logits,
-                    validate_args=False,
-                ),
-                self.reinterpreted_batch_ndims,
-            )
+    @property
+    def param_shape(self) -> Size:
+        """Returns the shape of the underlying parameter."""
+        return self.dist().param_shape

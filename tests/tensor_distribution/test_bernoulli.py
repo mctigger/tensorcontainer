@@ -1,113 +1,99 @@
+"""
+Tests for TensorBernoulli distribution.
+
+This module contains test classes that verify:
+- TensorBernoulli initialization and parameter validation
+- Core distribution operations (sample, rsample, log_prob)
+- TensorContainer integration (view, reshape, device operations)
+- Distribution-specific properties and edge cases
+"""
+
 import pytest
 import torch
+import torch.distributions
+import torch.testing
+from torch.distributions import Bernoulli
 
 from tensorcontainer.tensor_distribution.bernoulli import TensorBernoulli
-from tests.conftest import skipif_no_cuda
-
-from .conftest import normalize_device
-
-
-def test_sample_shape_and_dtype_and_values():
-    probs = torch.rand(4, 3)
-    dist = TensorBernoulli(
-        _probs=probs,
-        reinterpreted_batch_ndims=0,
-        shape=probs.shape,
-        device=probs.device,
-    )
-    # draw 5 i.i.d. samples
-    samples = dist.sample(sample_shape=torch.Size([5]))
-    # shape = (5, *batch_shape)
-    assert samples.shape == (5, *probs.shape)
-    assert samples.dtype == torch.float32  # Bernoulli returns floats 0/1
-    # values must be 0 or 1
-    assert ((samples == 0) | (samples == 1)).all()
-
-
-@pytest.mark.parametrize(
-    "rbn_dims,expected_shape",
-    [
-        (0, (2, 3)),  # no reinterpret → log_prob per-element
-        (1, (2,)),  # sum over last 1 dim
-        (2, ()),  # sum over last 2 dims → scalar
-    ],
+from tests.compile_utils import run_and_compare_compiled
+from tests.tensor_distribution.conftest import (
+    assert_init_signatures_match,
+    assert_properties_signatures_match,
+    assert_property_values_match,
 )
-def test_log_prob_reinterpreted_batch_ndims(rbn_dims, expected_shape):
-    probs = torch.tensor([[0.2, 0.8, 0.1], [0.5, 0.5, 0.5]])
-    dist = TensorBernoulli(
-        _probs=probs,
-        reinterpreted_batch_ndims=rbn_dims,
-        shape=probs.shape,
-        device=probs.device,
-    )
-    x = torch.tensor([[0.0, 1.0, 0.0], [1.0, 0.0, 1.0]])
-    lp = dist.log_prob(x)
-    # expected via torch.distributions
-    td = torch.distributions.Bernoulli(probs)
-    ref = td.log_prob(x)
-    if rbn_dims > 0:
-        ref = ref.sum(dim=list(range(len(ref.shape)))[-rbn_dims:])
-    assert lp.shape == expected_shape
-    assert torch.allclose(lp, ref)
 
 
-@skipif_no_cuda
-def test_device_normalization_helper():
-    # internal devices cuda vs cuda:0
-    a = torch.device("cuda")
-    b = torch.ones(1, device="cuda").device  # cuda:0
-    # they compare equal under the same normalization logic used by TensorBernoulli
+class TestTensorBernoulliInitialization:
+    def test_init_no_params_raises_error(self):
+        """A RuntimeError should be raised when neither probs nor logits are provided."""
+        with pytest.raises(
+            RuntimeError, match="Either 'probs' or 'logits' must be provided."
+        ):
+            TensorBernoulli()
 
-    assert normalize_device(a) == normalize_device(b)
+    @pytest.mark.parametrize("probs_shape", [(5,), (3, 5), (2, 4, 5)])
+    def test_init_with_probs(self, probs_shape):
+        """TensorBernoulli should initialize correctly with 'probs'."""
+        probs = torch.rand(*probs_shape)
+        td_bernoulli = TensorBernoulli(probs=probs)
+        assert td_bernoulli.batch_shape == probs_shape
+        assert td_bernoulli.event_shape == torch.Size([])
 
-
-def test_init_logits():
-    logits = torch.randn(4, 3)
-    dist = TensorBernoulli(_logits=logits, shape=logits.shape, device=logits.device)
-    assert torch.allclose(dist.logits, logits)
-    assert torch.allclose(dist.probs, torch.sigmoid(logits))
-
-
-def test_sample_logits():
-    logits = torch.randn(4, 3)
-    dist = TensorBernoulli(
-        _logits=logits,
-        reinterpreted_batch_ndims=0,
-        shape=logits.shape,
-        device=logits.device,
-    )
-    samples = dist.sample(sample_shape=torch.Size([5]))
-    assert samples.shape == (5, *logits.shape)
-    assert samples.dtype == torch.float32
-    assert ((samples == 0) | (samples == 1)).all()
+    @pytest.mark.parametrize("logits_shape", [(5,), (3, 5), (2, 4, 5)])
+    def test_init_with_logits(self, logits_shape):
+        """TensorBernoulli should initialize correctly with 'logits'."""
+        logits = torch.randn(*logits_shape)
+        td_bernoulli = TensorBernoulli(logits=logits)
+        assert td_bernoulli.batch_shape == logits_shape
+        assert td_bernoulli.event_shape == torch.Size([])
 
 
-def test_log_prob_logits():
-    logits = torch.randn(2, 3)
-    dist = TensorBernoulli(
-        _logits=logits,
-        reinterpreted_batch_ndims=0,
-        shape=logits.shape,
-        device=logits.device,
-    )
-    x = torch.tensor([[0.0, 1.0, 0.0], [1.0, 0.0, 1.0]])
-    lp = dist.log_prob(x)
-    td = torch.distributions.Bernoulli(logits=logits)
-    ref = td.log_prob(x)
-    assert torch.allclose(lp, ref)
+class TestTensorBernoulliTensorContainerIntegration:
+    @pytest.mark.parametrize("logits_shape", [(5,), (3, 5), (2, 4, 5)])
+    def test_compile_compatibility(self, logits_shape):
+        """Core operations should be compatible with torch.compile."""
+        logits = torch.randn(*logits_shape, requires_grad=True)
+        td_bernoulli = TensorBernoulli(logits=logits)
+        sample = td_bernoulli.sample()
+
+        def sample_fn(td):
+            return td.sample()
+
+        def log_prob_fn(td, s):
+            return td.log_prob(s)
+
+        run_and_compare_compiled(sample_fn, td_bernoulli, fullgraph=False)
+        run_and_compare_compiled(log_prob_fn, td_bernoulli, sample, fullgraph=False)
 
 
-@pytest.mark.parametrize("shape", [(4,), (2, 2)])
-def test_view_probs(shape):
-    probs = torch.rand(*shape)
-    dist = TensorBernoulli(_probs=probs, shape=probs.shape, device=probs.device)
-    dist_view = dist.view(-1)
-    assert dist_view.probs.shape == (probs.numel(),)
+class TestTensorBernoulliAPIMatch:
+    """
+    Tests that the TensorBernoulli API matches the PyTorch Bernoulli API.
+    """
 
+    def test_init_signatures_match(self):
+        """
+        Tests that the __init__ signature of TensorBernoulli matches
+        torch.distributions.Bernoulli.
+        """
+        assert_init_signatures_match(
+            TensorBernoulli, Bernoulli
+        )
 
-@pytest.mark.parametrize("shape", [(4,), (2, 2)])
-def test_view_logits(shape):
-    logits = torch.randn(*shape)
-    dist = TensorBernoulli(_logits=logits, shape=logits.shape, device=logits.device)
-    dist_view = dist.view(-1)
-    assert dist_view.logits.shape == (logits.numel(),)
+    def test_properties_match(self):
+        """
+        Tests that the properties of TensorBernoulli match
+        torch.distributions.Bernoulli.
+        """
+        assert_properties_signatures_match(
+            TensorBernoulli, Bernoulli
+        )
+
+    def test_property_values_match(self):
+        """
+        Tests that the property values of TensorBernoulli match
+        torch.distributions.Bernoulli.
+        """
+        logits = torch.randn(3, 5)
+        td_bernoulli = TensorBernoulli(logits=logits)
+        assert_property_values_match(td_bernoulli)

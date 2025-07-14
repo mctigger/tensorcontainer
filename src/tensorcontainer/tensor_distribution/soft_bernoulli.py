@@ -1,20 +1,47 @@
 from __future__ import annotations
 
-from dataclasses import field
-from typing import Optional
+from typing import Any, Dict, Optional
 
 import torch
-from torch import Tensor
 from torch.distributions import Independent
 
 from tensorcontainer.distributions.soft_bernoulli import SoftBernoulli
+from tensorcontainer.tensor_dict import TDCompatible
+
 from .base import TensorDistribution
 
 
 class TensorSoftBernoulli(TensorDistribution):
-    _probs: Optional[Tensor] = field(default=None)
-    _logits: Optional[Tensor] = field(default=None)
-    reinterpreted_batch_ndims: int = 0
+    def __init__(
+        self,
+        logits: Optional[torch.Tensor] = None,
+        probs: Optional[torch.Tensor] = None,
+    ):
+        if (probs is None) == (logits is None):
+            raise ValueError(
+                "Either `probs` or `logits` must be specified, but not both."
+            )
+        if probs is not None:
+            assert probs is not None
+            shape = probs.shape
+            device = probs.device
+        else:
+            assert logits is not None
+            shape = logits.shape
+            device = logits.device
+
+        super().__init__(shape, device)
+        self._probs = probs
+        self._logits = logits
+
+    @classmethod
+    def _unflatten_distribution(
+        cls, tensor_attributes: Dict[str, TDCompatible], meta_attributes: Dict[str, Any]
+    ):
+        return cls(
+            probs=tensor_attributes.get("_probs"),
+            logits=tensor_attributes.get("_logits"),
+        )
 
     @property
     def probs(self):
@@ -48,12 +75,12 @@ class TensorSoftBernoulli(TensorDistribution):
                 SoftBernoulli(
                     probs=self._probs,
                 ),
-                self.reinterpreted_batch_ndims,
+                0,
             )
         else:
             return Independent(
                 SoftBernoulli(
                     logits=self._logits,
                 ),
-                self.reinterpreted_batch_ndims,
+                0,
             )

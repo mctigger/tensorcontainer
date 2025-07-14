@@ -1,129 +1,95 @@
 """
-Tests for the TensorHalfNormal distribution.
+Tests for TensorHalfNormal distribution.
 
-This module contains tests for the TensorHalfNormal distribution, which wraps
-`torch.distributions.HalfNormal`. The tests cover:
-- Initialization with valid and invalid parameters.
-- Correctness of distribution properties (mean, variance).
-- `sample` and `rsample` methods.
-- `log_prob` and `entropy` calculations.
-- Behavior with different `reinterpreted_batch_ndims`.
+This module contains test classes that verify:
+- TensorHalfNormal initialization and parameter validation
+- Core distribution operations (sample, rsample, log_prob)
+- TensorContainer integration (view, reshape, device operations)
+- Distribution-specific properties and edge cases
 """
 
 import pytest
 import torch
-from torch.testing import assert_close
+import torch.distributions
+import torch.testing
+from torch.distributions import HalfNormal
 
 from tensorcontainer.tensor_distribution.half_normal import TensorHalfNormal
+from tests.compile_utils import run_and_compare_compiled
+from tests.tensor_distribution.conftest import (
+    assert_init_signatures_match,
+    assert_properties_signatures_match,
+    assert_property_values_match,
+)
 
 
 class TestTensorHalfNormalInitialization:
-    """
-    Tests the initialization logic of the TensorHalfNormal distribution.
+    def test_init_invalid_scale_raises_error(self):
+        """A ValueError should be raised when scale is not positive."""
+        with pytest.raises(ValueError, match="scale must be positive"):
+            TensorHalfNormal(scale=torch.tensor([-1.0]))
+        with pytest.raises(ValueError, match="scale must be positive"):
+            TensorHalfNormal(scale=torch.tensor([0.0]))
 
-    This suite verifies that:
-    - The distribution can be created with a valid `scale`.
-    - Initialization fails when `scale` is not positive.
-    """
-
-    def test_valid_initialization(self):
-        """The distribution should be created with valid parameters."""
+    def test_init_valid_scale(self):
+        """TensorHalfNormal should initialize correctly with a positive scale."""
         scale = torch.tensor([1.0, 2.0])
-        dist = TensorHalfNormal(
-            scale=scale, shape=torch.Size([2]), device=torch.device("cpu")
-        )
-        assert isinstance(dist, TensorHalfNormal)
-        assert_close(dist.scale, scale)
-
-    @pytest.mark.parametrize(
-        "scale",
-        [
-            torch.tensor([-1.0, 1.0]),  # Negative value
-            torch.tensor([0.0, 1.0]),  # Zero value
-        ],
-    )
-    def test_invalid_parameter_values_raises_error(self, scale):
-        """A ValueError should be raised for non-positive scale."""
-        with pytest.raises(ValueError):
-            TensorHalfNormal(
-                scale=scale, shape=torch.Size([2]), device=torch.device("cpu")
-            )
+        dist = TensorHalfNormal(scale=scale)
+        assert dist._scale is scale
+        assert dist.batch_shape == scale.shape
+        assert dist.event_shape == torch.Size([])
 
 
-class TestTensorHalfNormalMethods:
+class TestTensorHalfNormalTensorContainerIntegration:
+    @pytest.mark.parametrize("scale_shape", [(1,), (3, 1), (2, 4, 1)])
+    def test_compile_compatibility(self, scale_shape):
+        """Core operations should be compatible with torch.compile."""
+        scale = torch.rand(*scale_shape) + 0.1  # Ensure scale is positive
+        td_half_normal = TensorHalfNormal(scale=scale)
+        sample = td_half_normal.sample()
+
+        def sample_fn(td):
+            return td.sample()
+
+        def rsample_fn(td):
+            return td.rsample()
+
+        def log_prob_fn(td, s):
+            return td.log_prob(s)
+
+        run_and_compare_compiled(sample_fn, td_half_normal, fullgraph=False)
+        run_and_compare_compiled(rsample_fn, td_half_normal, fullgraph=False)
+        run_and_compare_compiled(log_prob_fn, td_half_normal, sample, fullgraph=False)
+
+
+class TestTensorHalfNormalAPIMatch:
     """
-    Tests the methods of the TensorHalfNormal distribution.
-
-    This suite verifies that:
-    - `sample` and `rsample` produce tensors of the correct shape and type.
-    - `log_prob` computes the correct log probability.
-    - `mean` and `variance` match the expected values.
-    - `entropy` is calculated correctly.
-    - The `dist` property returns the correct underlying torch distribution.
+    Tests that the TensorHalfNormal API matches the PyTorch HalfNormal API.
     """
 
-    @pytest.fixture
-    def dist(self):
-        """Provides a standard TensorHalfNormal distribution for testing."""
-        return TensorHalfNormal(
-            scale=torch.tensor([1.0, 2.0, 5.0]),
-            shape=torch.Size([3]),
-            device=torch.device("cpu"),
+    def test_init_signatures_match(self):
+        """
+        Tests that the __init__ signature of TensorHalfNormal matches
+        torch.distributions.HalfNormal.
+        """
+        assert_init_signatures_match(
+            TensorHalfNormal, HalfNormal
         )
 
-    def test_sample_shape(self, dist):
-        """The shape of the sampled tensor should be correct."""
-        sample = dist.sample()
-        assert sample.shape == dist.shape
-
-        samples = dist.sample(sample_shape=torch.Size([4, 4]))
-        assert samples.shape == (4, 4) + dist.shape
-
-    def test_rsample_shape(self, dist):
-        """The shape of the r-sampled tensor should be correct and require grad."""
-        dist.scale.requires_grad = True
-        rsample = dist.rsample()
-        assert rsample.shape == dist.shape
-        assert rsample.requires_grad
-
-    def test_log_prob(self, dist):
-        """The log_prob should be consistent with the underlying torch distribution."""
-        value = torch.tensor([1.0, 0.5, 5.0])
-        expected_log_prob = dist.dist().log_prob(value)
-        assert_close(dist.log_prob(value), expected_log_prob)
-
-    def test_mean(self, dist):
-        """The mean should match the formula scale * sqrt(2 / pi)."""
-        expected_mean = dist.scale * (2 / torch.pi) ** 0.5
-        assert_close(dist.mean, expected_mean)
-
-    def test_variance(self, dist):
-        """The variance should be consistent with the underlying torch distribution."""
-        expected_variance = dist.dist().variance
-        assert_close(dist.variance, expected_variance)
-
-    def test_entropy(self, dist):
-        """The entropy should be consistent with the underlying torch distribution."""
-        expected_entropy = dist.dist().entropy()
-        assert_close(dist.entropy(), expected_entropy)
-
-    @pytest.mark.parametrize(
-        "rbn_dims, expected_shape",
-        [
-            (0, (2, 3)),
-            (1, (2,)),
-            (2, ()),
-        ],
-    )
-    def test_reinterpreted_batch_ndims(self, rbn_dims, expected_shape):
-        """Tests log_prob with different reinterpreted_batch_ndims."""
-        scale = torch.ones(2, 3)
-        dist = TensorHalfNormal(
-            scale=scale,
-            reinterpreted_batch_ndims=rbn_dims,
-            shape=torch.Size([2, 3]),
-            device=torch.device("cpu"),
+    def test_properties_match(self):
+        """
+        Tests that the properties of TensorHalfNormal match
+        torch.distributions.HalfNormal.
+        """
+        assert_properties_signatures_match(
+            TensorHalfNormal, HalfNormal
         )
-        value = torch.rand(2, 3)
-        log_prob = dist.log_prob(value)
-        assert log_prob.shape == expected_shape
+
+    def test_property_values_match(self):
+        """
+        Tests that the property values of TensorHalfNormal match
+        torch.distributions.HalfNormal.
+        """
+        scale = torch.rand(3, 5) + 0.1
+        td_half_normal = TensorHalfNormal(scale=scale)
+        assert_property_values_match(td_half_normal)

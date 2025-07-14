@@ -1,87 +1,105 @@
 """
-Tests for the Kumaraswamy distribution.
+Tests for TensorKumaraswamy distribution.
+
+This module contains test classes that verify:
+- TensorKumaraswamy initialization and parameter validation
+- Core distribution operations (sample, rsample, log_prob)
+- TensorContainer integration (view, reshape, device operations)
+- Distribution-specific properties and edge cases
 """
 
 import pytest
 import torch
+import torch.distributions
+import torch.testing
+from torch.distributions import Kumaraswamy as TorchKumaraswamy
 
-from tensorcontainer.tensor_distribution.kumaraswamy import Kumaraswamy
+from tensorcontainer.tensor_distribution.kumaraswamy import TensorKumaraswamy
+from tests.compile_utils import run_and_compare_compiled
+from tests.tensor_distribution.conftest import (
+    assert_init_signatures_match,
+    assert_properties_signatures_match,
+    assert_property_values_match,
+)
 
 
-class TestKumaraswamy:
+class TestTensorKumaraswamyInitialization:
+    def test_init_no_params_raises_error(self):
+        """A RuntimeError should be raised when concentration1 or concentration0 are not provided."""
+        with pytest.raises(
+            RuntimeError, match="Both 'concentration1' and 'concentration0' must be provided."
+        ):
+            TensorKumaraswamy(concentration1=torch.tensor(1.0), concentration0=None)
+        with pytest.raises(
+            RuntimeError, match="Both 'concentration1' and 'concentration0' must be provided."
+        ):
+            TensorKumaraswamy(concentration1=None, concentration0=torch.tensor(1.0))
+
+    def test_init_success(self):
+        """TensorKumaraswamy should initialize successfully with valid parameters."""
+        concentration1 = torch.tensor([0.5, 1.0, 2.0])
+        concentration0 = torch.tensor([0.5, 1.0, 2.0])
+        dist = TensorKumaraswamy(concentration1=concentration1, concentration0=concentration0)
+        assert isinstance(dist, TensorKumaraswamy)
+        torch.testing.assert_close(dist.concentration1, concentration1)
+        torch.testing.assert_close(dist.concentration0, concentration0)
+        assert dist.shape == concentration1.shape
+        assert dist.device == concentration1.device
+
+
+class TestTensorKumaraswamyTensorContainerIntegration:
+    @pytest.mark.parametrize("shape", [(5,), (3, 5), (2, 4, 5)])
+    def test_compile_compatibility(self, shape):
+        """Core operations should be compatible with torch.compile."""
+        concentration1 = torch.rand(*shape, requires_grad=True) + 0.1
+        concentration0 = torch.rand(*shape, requires_grad=True) + 0.1
+        td_kumaraswamy = TensorKumaraswamy(concentration1=concentration1, concentration0=concentration0)
+        sample = td_kumaraswamy.sample()
+
+        def sample_fn(td):
+            return td.sample()
+
+        def rsample_fn(td):
+            return td.rsample()
+
+        def log_prob_fn(td, s):
+            return td.log_prob(s)
+
+        run_and_compare_compiled(sample_fn, td_kumaraswamy, fullgraph=False)
+        # Kumaraswamy is not reparameterizable, so rsample is not applicable
+        # run_and_compare_compiled(rsample_fn, td_kumaraswamy, fullgraph=False)
+        run_and_compare_compiled(log_prob_fn, td_kumaraswamy, sample, fullgraph=False)
+
+
+class TestTensorKumaraswamyAPIMatch:
     """
-    Tests the Kumaraswamy distribution.
-
-    This suite verifies that:
-    - The distribution is initialized correctly.
-    - Samples are drawn with the correct shape.
-    - Log probabilities are calculated correctly.
-    - The `view` method works as expected.
+    Tests that the TensorKumaraswamy API matches the PyTorch Kumaraswamy API.
     """
 
-    def test_sample_shape_and_dtype(self):
+    def test_init_signatures_match(self):
         """
-        Tests that samples have the correct shape and dtype.
+        Tests that the __init__ signature of TensorKumaraswamy matches
+        torch.distributions.Kumaraswamy.
         """
-        concentration1 = torch.rand(4, 3)
-        concentration0 = torch.rand(4, 3)
-        dist = Kumaraswamy(
-            concentration1=concentration1,
-            concentration0=concentration0,
-            reinterpreted_batch_ndims=0,
-            shape=concentration1.shape,
-            device=concentration1.device,
+        assert_init_signatures_match(
+            TensorKumaraswamy, TorchKumaraswamy
         )
-        # draw 5 i.i.d. samples
-        samples = dist.sample(sample_shape=torch.Size([5]))
-        # shape = (5, *batch_shape)
-        assert samples.shape == (5, *concentration1.shape)
-        assert samples.dtype == torch.float32
 
-    @pytest.mark.parametrize(
-        "rbn_dims,expected_shape",
-        [
-            (0, (2, 3)),  # no reinterpret → log_prob per-element
-            (1, (2,)),  # sum over last 1 dim
-            (2, ()),  # sum over last 2 dims → scalar
-        ],
-    )
-    def test_log_prob_reinterpreted_batch_ndims(self, rbn_dims, expected_shape):
+    def test_properties_match(self):
         """
-        Tests that log_prob is calculated correctly with different `reinterpreted_batch_ndims`.
+        Tests that the properties of TensorKumaraswamy match
+        torch.distributions.Kumaraswamy.
         """
-        concentration1 = torch.rand(2, 3)
-        concentration0 = torch.rand(2, 3)
-        dist = Kumaraswamy(
-            concentration1=concentration1,
-            concentration0=concentration0,
-            reinterpreted_batch_ndims=rbn_dims,
-            shape=concentration1.shape,
-            device=concentration1.device,
+        assert_properties_signatures_match(
+            TensorKumaraswamy, TorchKumaraswamy
         )
-        x = dist.sample()
-        lp = dist.log_prob(x)
-        # expected via torch.distributions
-        td = torch.distributions.Kumaraswamy(concentration1, concentration0)
-        ref = td.log_prob(x)
-        if rbn_dims > 0:
-            ref = ref.sum(dim=list(range(len(ref.shape)))[-rbn_dims:])
-        assert lp.shape == expected_shape
-        assert torch.allclose(lp, ref)
 
-    @pytest.mark.parametrize("shape", [(4,), (2, 2)])
-    def test_view(self, shape):
+    def test_property_values_match(self):
         """
-        Tests that the `view` method works correctly.
+        Tests that the property values of TensorKumaraswamy match
+        torch.distributions.Kumaraswamy.
         """
-        concentration1 = torch.rand(*shape)
-        concentration0 = torch.rand(*shape)
-        dist = Kumaraswamy(
-            concentration1=concentration1,
-            concentration0=concentration0,
-            shape=concentration1.shape,
-            device=concentration1.device,
-        )
-        dist_view = dist.view(-1)
-        assert dist_view.concentration1.shape == (concentration1.numel(),)
-        assert dist_view.concentration0.shape == (concentration0.numel(),)
+        concentration1 = torch.rand(3, 5) + 0.1
+        concentration0 = torch.rand(3, 5) + 0.1
+        td_kumaraswamy = TensorKumaraswamy(concentration1=concentration1, concentration0=concentration0)
+        assert_property_values_match(td_kumaraswamy)

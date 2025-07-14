@@ -1,82 +1,93 @@
 """
-Tests for the FisherSnedecor distribution.
+Tests for FisherSnedecor distribution.
+
+This module contains test classes that verify:
+- FisherSnedecor initialization and parameter validation
+- Core distribution operations (sample, rsample, log_prob)
+- TensorContainer integration (view, reshape, device operations)
+- Distribution-specific properties and edge cases
 """
 
 import pytest
 import torch
+import torch.distributions
+import torch.testing
+from torch.distributions import FisherSnedecor as TorchFisherSnedecor
 
 from tensorcontainer.tensor_distribution.fisher_snedecor import FisherSnedecor
+from tests.compile_utils import run_and_compare_compiled
+from tests.tensor_distribution.conftest import (
+    assert_init_signatures_match,
+    assert_properties_signatures_match,
+    assert_property_values_match,
+)
 
 
-class TestFisherSnedecor:
+class TestTensorFisherSnedecorInitialization:
+    def test_init_no_params_raises_error(self):
+        """A RuntimeError should be raised when either df1 or df2 is not provided."""
+        with pytest.raises(
+            RuntimeError, match="Both 'df1' and 'df2' must be provided."
+        ):
+            FisherSnedecor(df1=None, df2=torch.tensor([1.0]))
+        with pytest.raises(
+            RuntimeError, match="Both 'df1' and 'df2' must be provided."
+        ):
+            FisherSnedecor(df1=torch.tensor([1.0]), df2=None)
+
+
+class TestTensorFisherSnedecorTensorContainerIntegration:
+    @pytest.mark.parametrize("shape", [(5,), (3, 5), (2, 4, 5)])
+    def test_compile_compatibility(self, shape):
+        """Core operations should be compatible with torch.compile."""
+        df1 = torch.rand(*shape) + 0.1
+        df2 = torch.rand(*shape) + 0.1
+        td_fisher_snedecor = FisherSnedecor(df1=df1, df2=df2)
+        sample = td_fisher_snedecor.sample()
+
+        def sample_fn(td):
+            return td.sample()
+
+        def rsample_fn(td):
+            return td.rsample()
+
+        def log_prob_fn(td, s):
+            return td.log_prob(s)
+
+        run_and_compare_compiled(sample_fn, td_fisher_snedecor, fullgraph=False)
+        run_and_compare_compiled(rsample_fn, td_fisher_snedecor, fullgraph=False)
+        run_and_compare_compiled(log_prob_fn, td_fisher_snedecor, sample, fullgraph=False)
+
+
+class TestTensorFisherSnedecorAPIMatch:
     """
-    Tests the FisherSnedecor distribution.
-
-    This suite verifies that:
-    - The distribution is initialized correctly.
-    - Samples are drawn with the correct shape.
-    - Log probabilities are calculated correctly.
-    - The `view` method works as expected.
+    Tests that the FisherSnedecor API matches the PyTorch FisherSnedecor API.
     """
 
-    def test_sample_shape_and_dtype(self):
+    def test_init_signatures_match(self):
         """
-        Tests that samples have the correct shape and dtype.
+        Tests that the __init__ signature of FisherSnedecor matches
+        torch.distributions.FisherSnedecor.
         """
-        df1 = torch.rand(4, 3) * 5 + 1
-        df2 = torch.rand(4, 3) * 5 + 1
-        dist = FisherSnedecor(
-            df1=df1,
-            df2=df2,
-            reinterpreted_batch_ndims=0,
-            shape=df1.shape,
-            device=df1.device,
+        assert_init_signatures_match(
+            FisherSnedecor, TorchFisherSnedecor
         )
-        # draw 5 i.i.d. samples
-        samples = dist.sample(sample_shape=torch.Size([5]))
-        # shape = (5, *batch_shape)
-        assert samples.shape == (5, *df1.shape)
-        assert samples.dtype == torch.float32
 
-    @pytest.mark.parametrize(
-        "rbn_dims,expected_shape",
-        [
-            (0, (2, 3)),  # no reinterpret → log_prob per-element
-            (1, (2,)),  # sum over last 1 dim
-            (2, ()),  # sum over last 2 dims → scalar
-        ],
-    )
-    def test_log_prob_reinterpreted_batch_ndims(self, rbn_dims, expected_shape):
+    def test_properties_match(self):
         """
-        Tests that log_prob is calculated correctly with different `reinterpreted_batch_ndims`.
+        Tests that the properties of FisherSnedecor match
+        torch.distributions.FisherSnedecor.
         """
-        df1 = torch.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])
-        df2 = torch.tensor([[6.0, 5.0, 4.0], [3.0, 2.0, 1.0]])
-        dist = FisherSnedecor(
-            df1=df1,
-            df2=df2,
-            reinterpreted_batch_ndims=rbn_dims,
-            shape=df1.shape,
-            device=df1.device,
+        assert_properties_signatures_match(
+            FisherSnedecor, TorchFisherSnedecor
         )
-        x = dist.sample()
-        lp = dist.log_prob(x)
-        # expected via torch.distributions
-        td = torch.distributions.FisherSnedecor(df1, df2)
-        ref = td.log_prob(x)
-        if rbn_dims > 0:
-            ref = ref.sum(dim=list(range(len(ref.shape)))[-rbn_dims:])
-        assert lp.shape == expected_shape
-        assert torch.allclose(lp, ref)
 
-    @pytest.mark.parametrize("shape", [(4,), (2, 2)])
-    def test_view(self, shape):
+    def test_property_values_match(self):
         """
-        Tests that the `view` method works correctly.
+        Tests that the property values of FisherSnedecor match
+        torch.distributions.FisherSnedecor.
         """
-        df1 = torch.rand(*shape) * 5 + 1
-        df2 = torch.rand(*shape) * 5 + 1
-        dist = FisherSnedecor(df1=df1, df2=df2, shape=df1.shape, device=df1.device)
-        dist_view = dist.view(-1)
-        assert dist_view.df1.shape == (df1.numel(),)
-        assert dist_view.df2.shape == (df2.numel(),)
+        df1 = torch.rand(3, 5) + 0.1
+        df2 = torch.rand(3, 5) + 0.1
+        td_fisher_snedecor = FisherSnedecor(df1=df1, df2=df2)
+        assert_property_values_match(td_fisher_snedecor)

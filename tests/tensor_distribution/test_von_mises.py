@@ -1,87 +1,97 @@
 """
-Tests for the VonMises distribution.
+Tests for TensorVonMises distribution.
+
+This module contains test classes that verify:
+- TensorVonMises initialization and parameter validation
+- Core distribution operations (sample, rsample, log_prob)
+- TensorContainer integration (view, reshape, device operations)
+- Distribution-specific properties and edge cases
 """
 
 import pytest
 import torch
+import torch.distributions
+import torch.testing
+from torch.distributions import VonMises as TorchVonMises
 
-from tensorcontainer.tensor_distribution.von_mises import VonMises
+from tensorcontainer.tensor_distribution.von_mises import TensorVonMises
+from tests.compile_utils import run_and_compare_compiled
+from tests.tensor_distribution.conftest import (
+    assert_init_signatures_match,
+    assert_properties_signatures_match,
+    assert_property_values_match,
+)
 
 
-class TestVonMises:
+class TestTensorVonMisesInitialization:
+    def test_init_no_loc_raises_error(self):
+        """A RuntimeError should be raised when loc is not provided."""
+        with pytest.raises(
+            RuntimeError, match="'loc' must be provided."
+        ):
+            TensorVonMises(loc=None, concentration=torch.tensor([1.0]))
+
+    def test_init_no_concentration_raises_error(self):
+        """A RuntimeError should be raised when concentration is not provided."""
+        with pytest.raises(
+            RuntimeError, match="'concentration' must be provided."
+        ):
+            TensorVonMises(loc=torch.tensor([0.0]), concentration=None)
+
+
+class TestTensorVonMisesTensorContainerIntegration:
+    @pytest.mark.parametrize("shape", [(5,), (3, 5), (2, 4, 5)])
+    def test_compile_compatibility(self, shape):
+        """Core operations should be compatible with torch.compile."""
+        loc = torch.randn(*shape, requires_grad=True)
+        concentration = torch.rand(*shape, requires_grad=True) + 0.1 # concentration must be > 0
+        td_von_mises = TensorVonMises(loc=loc, concentration=concentration)
+        sample = td_von_mises.sample()
+
+        def sample_fn(td):
+            return td.sample()
+
+        def rsample_fn(td):
+            return td.rsample()
+
+        def log_prob_fn(td, s):
+            return td.log_prob(s)
+
+        run_and_compare_compiled(sample_fn, td_von_mises, fullgraph=False)
+        # VonMises does not support rsample
+        # run_and_compare_compiled(rsample_fn, td_von_mises, fullgraph=False)
+        run_and_compare_compiled(log_prob_fn, td_von_mises, sample, fullgraph=False)
+
+
+class TestTensorVonMisesAPIMatch:
     """
-    Tests the VonMises distribution.
-
-    This suite verifies that:
-    - The distribution is initialized correctly.
-    - Samples are drawn with the correct shape.
-    - Log probabilities are calculated correctly.
-    - The `view` method works as expected.
+    Tests that the TensorVonMises API matches the PyTorch VonMises API.
     """
 
-    def test_sample_shape_and_dtype(self):
+    def test_init_signatures_match(self):
         """
-        Tests that samples have the correct shape and dtype.
+        Tests that the __init__ signature of TensorVonMises matches
+        torch.distributions.VonMises.
         """
-        loc = torch.randn(4, 3)
-        concentration = torch.rand(4, 3)
-        dist = VonMises(
-            loc=loc,
-            concentration=concentration,
-            reinterpreted_batch_ndims=0,
-            shape=loc.shape,
-            device=loc.device,
+        assert_init_signatures_match(
+            TensorVonMises, TorchVonMises
         )
-        # draw 5 i.i.d. samples
-        samples = dist.sample(sample_shape=torch.Size([5]))
-        # shape = (5, *batch_shape)
-        assert samples.shape == (5, *loc.shape)
-        assert samples.dtype == torch.float32
 
-    @pytest.mark.parametrize(
-        "rbn_dims,expected_shape",
-        [
-            (0, (2, 3)),  # no reinterpret → log_prob per-element
-            (1, (2,)),  # sum over last 1 dim
-            (2, ()),  # sum over last 2 dims → scalar
-        ],
-    )
-    def test_log_prob_reinterpreted_batch_ndims(self, rbn_dims, expected_shape):
+    def test_properties_match(self):
         """
-        Tests that log_prob is calculated correctly with different `reinterpreted_batch_ndims`.
+        Tests that the properties of TensorVonMises match
+        torch.distributions.VonMises.
         """
-        loc = torch.randn(2, 3)
-        concentration = torch.rand(2, 3)
-        dist = VonMises(
-            loc=loc,
-            concentration=concentration,
-            reinterpreted_batch_ndims=rbn_dims,
-            shape=loc.shape,
-            device=loc.device,
+        assert_properties_signatures_match(
+            TensorVonMises, TorchVonMises
         )
-        x = dist.sample()
-        lp = dist.log_prob(x)
-        # expected via torch.distributions
-        td = torch.distributions.VonMises(loc, concentration)
-        ref = td.log_prob(x)
-        if rbn_dims > 0:
-            ref = ref.sum(dim=list(range(len(ref.shape)))[-rbn_dims:])
-        assert lp.shape == expected_shape
-        assert torch.allclose(lp, ref)
 
-    @pytest.mark.parametrize("shape", [(4,), (2, 2)])
-    def test_view(self, shape):
+    def test_property_values_match(self):
         """
-        Tests that the `view` method works correctly.
+        Tests that the property values of TensorVonMises match
+        torch.distributions.VonMises.
         """
-        loc = torch.randn(*shape)
-        concentration = torch.rand(*shape)
-        dist = VonMises(
-            loc=loc,
-            concentration=concentration,
-            shape=loc.shape,
-            device=loc.device,
-        )
-        dist_view = dist.view(-1)
-        assert dist_view.loc.shape == (loc.numel(),)
-        assert dist_view.concentration.shape == (concentration.numel(),)
+        loc = torch.randn(3, 5)
+        concentration = torch.rand(3, 5) + 0.1 # concentration must be > 0
+        td_von_mises = TensorVonMises(loc=loc, concentration=concentration)
+        assert_property_values_match(td_von_mises)

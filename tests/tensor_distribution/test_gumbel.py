@@ -1,82 +1,89 @@
 """
-Tests for the Gumbel distribution.
+Tests for TensorGumbel distribution.
+
+This module contains test classes that verify:
+- TensorGumbel initialization and parameter validation
+- Core distribution operations (sample, rsample, log_prob)
+- TensorContainer integration (view, reshape, device operations)
+- Distribution-specific properties and edge cases
 """
 
 import pytest
 import torch
+import torch.distributions
+import torch.testing
+from torch.distributions import Gumbel as TorchGumbel
 
-from tensorcontainer.tensor_distribution.gumbel import Gumbel
+from tensorcontainer.tensor_distribution.gumbel import TensorGumbel
+from tests.compile_utils import run_and_compare_compiled
+from tests.tensor_distribution.conftest import (
+    assert_init_signatures_match,
+    assert_properties_signatures_match,
+    assert_property_values_match,
+)
 
 
-class TestGumbel:
+class TestTensorGumbelInitialization:
+    def test_init_no_params_raises_error(self):
+        """A ValueError should be raised when neither loc nor scale are provided."""
+        with pytest.raises(
+            RuntimeError, match="Either 'loc' or 'scale' must be provided."
+        ):
+            TensorGumbel(loc=None, scale=None)
+
+
+class TestTensorGumbelTensorContainerIntegration:
+    @pytest.mark.parametrize("shape", [(5,), (3, 5), (2, 4, 5)])
+    def test_compile_compatibility(self, shape):
+        """Core operations should be compatible with torch.compile."""
+        loc = torch.randn(*shape, requires_grad=True)
+        scale = torch.rand(*shape, requires_grad=True) + 0.1  # scale must be positive
+        td_gumbel = TensorGumbel(loc=loc, scale=scale)
+        sample = td_gumbel.sample()
+
+        def sample_fn(td):
+            return td.sample()
+
+        def rsample_fn(td):
+            return td.rsample()
+
+        def log_prob_fn(td, s):
+            return td.log_prob(s)
+
+        run_and_compare_compiled(sample_fn, td_gumbel, fullgraph=False)
+        run_and_compare_compiled(rsample_fn, td_gumbel, fullgraph=False)
+        run_and_compare_compiled(log_prob_fn, td_gumbel, sample, fullgraph=False)
+
+
+class TestTensorGumbelAPIMatch:
     """
-    Tests the Gumbel distribution.
-
-    This suite verifies that:
-    - The distribution is initialized correctly.
-    - Samples are drawn with the correct shape.
-    - Log probabilities are calculated correctly.
-    - The `view` method works as expected.
+    Tests that the TensorGumbel API matches the PyTorch Gumbel API.
     """
 
-    def test_sample_shape_and_dtype(self):
+    def test_init_signatures_match(self):
         """
-        Tests that samples have the correct shape and dtype.
+        Tests that the __init__ signature of TensorGumbel matches
+        torch.distributions.Gumbel.
         """
-        loc = torch.randn(4, 3)
-        scale = torch.rand(4, 3)
-        dist = Gumbel(
-            loc=loc,
-            scale=scale,
-            reinterpreted_batch_ndims=0,
-            shape=loc.shape,
-            device=loc.device,
+        assert_init_signatures_match(
+            TensorGumbel, TorchGumbel
         )
-        # draw 5 i.i.d. samples
-        samples = dist.sample(sample_shape=torch.Size([5]))
-        # shape = (5, *batch_shape)
-        assert samples.shape == (5, *loc.shape)
-        assert samples.dtype == torch.float32
 
-    @pytest.mark.parametrize(
-        "rbn_dims,expected_shape",
-        [
-            (0, (2, 3)),  # no reinterpret → log_prob per-element
-            (1, (2,)),  # sum over last 1 dim
-            (2, ()),  # sum over last 2 dims → scalar
-        ],
-    )
-    def test_log_prob_reinterpreted_batch_ndims(self, rbn_dims, expected_shape):
+    def test_properties_match(self):
         """
-        Tests that log_prob is calculated correctly with different `reinterpreted_batch_ndims`.
+        Tests that the properties of TensorGumbel match
+        torch.distributions.Gumbel.
         """
-        loc = torch.randn(2, 3)
-        scale = torch.rand(2, 3)
-        dist = Gumbel(
-            loc=loc,
-            scale=scale,
-            reinterpreted_batch_ndims=rbn_dims,
-            shape=loc.shape,
-            device=loc.device,
+        assert_properties_signatures_match(
+            TensorGumbel, TorchGumbel
         )
-        x = dist.sample()
-        lp = dist.log_prob(x)
-        # expected via torch.distributions
-        td = torch.distributions.Gumbel(loc, scale)
-        ref = td.log_prob(x)
-        if rbn_dims > 0:
-            ref = ref.sum(dim=list(range(len(ref.shape)))[-rbn_dims:])
-        assert lp.shape == expected_shape
-        assert torch.allclose(lp, ref)
 
-    @pytest.mark.parametrize("shape", [(4,), (2, 2)])
-    def test_view(self, shape):
+    def test_property_values_match(self):
         """
-        Tests that the `view` method works correctly.
+        Tests that the property values of TensorGumbel match
+        torch.distributions.Gumbel.
         """
-        loc = torch.randn(*shape)
-        scale = torch.rand(*shape)
-        dist = Gumbel(loc=loc, scale=scale, shape=loc.shape, device=loc.device)
-        dist_view = dist.view(-1)
-        assert dist_view.loc.shape == (loc.numel(),)
-        assert dist_view.scale.shape == (scale.numel(),)
+        loc = torch.randn(3, 5)
+        scale = torch.rand(3, 5) + 0.1
+        td_gumbel = TensorGumbel(loc=loc, scale=scale)
+        assert_property_values_match(td_gumbel)

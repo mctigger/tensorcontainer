@@ -1,48 +1,95 @@
 from __future__ import annotations
 
-from typing import Optional
+from typing import Any, Dict, Optional
 
-from torch import Tensor
-from torch.distributions import Distribution, Independent, Multinomial
+import torch  # Add this import
+from torch import Size, Tensor
+from torch.distributions import Multinomial
+
+from tensorcontainer.tensor_annotated import TDCompatible
 
 from .base import TensorDistribution
 
 
 class TensorMultinomial(TensorDistribution):
-    total_count: int
-    probs: Optional[Tensor] = None
-    logits: Optional[Tensor] = None
-    reinterpreted_batch_ndims: int = 1
+    """Tensor-aware Multinomial distribution."""
 
-    def __post_init__(self):
-        super().__post_init__()
+    # Annotated tensor parameters
+    _total_count: Tensor
+    _probs: Optional[Tensor] = None
+    _logits: Optional[Tensor] = None
 
-        if self.total_count < 1:
-            raise ValueError("total_count must be a positive integer")
+    def __init__(
+        self, total_count: int = 1, probs: Optional[Tensor] = None, logits: Optional[Tensor] = None
+    ):
+        # Parameter validation
+        if not isinstance(total_count, int) or total_count < 0:
+            raise ValueError("total_count must be a non-negative integer.")
 
-        if self.probs is None and self.logits is None:
-            raise ValueError("Either probs or logits must be specified")
-        if self.probs is not None and self.logits is not None:
-            raise ValueError("Only one of probs or logits can be specified")
+        if probs is None and logits is None:
+            raise RuntimeError("Either 'probs' or 'logits' must be provided.")
+        if probs is not None and logits is not None:
+            raise RuntimeError("Only one of 'probs' or 'logits' can be provided.")
 
-    def dist(self) -> Distribution:
-        base_dist = Multinomial(
-            total_count=self.total_count,
-            probs=self.probs,
-            logits=self.logits,
-            validate_args=False,
+        data = probs if probs is not None else logits
+        if data is None: # This case is already handled by the above checks, but for mypy
+            raise RuntimeError("Internal error: data tensor is None.")
+
+        # Store the parameters in annotated attributes before calling super().__init__()
+        # Convert total_count to a scalar Tensor
+        self._total_count = torch.tensor(total_count, dtype=torch.float, device=data.device)
+        self._probs = probs
+        self._logits = logits
+
+        # The batch shape is all dimensions except the last one.
+        shape = data.shape[:-1]
+        device = data.device
+
+        super().__init__(shape, device)
+
+    @classmethod
+    def _unflatten_distribution(
+        cls,
+        tensor_attributes: Dict[str, TDCompatible],
+        meta_attributes: Dict[str, Any],
+    ) -> TensorMultinomial:
+        """Reconstruct distribution from tensor attributes."""
+        return cls(
+            total_count=tensor_attributes["_total_count"],  # type: ignore
+            probs=tensor_attributes.get("_probs"),  # type: ignore
+            logits=tensor_attributes.get("_logits"),  # type: ignore
         )
 
-        # Only use Independent if reinterpreted_batch_ndims > 0 and we have batch dimensions
-        if (
-            self.reinterpreted_batch_ndims > 0
-            and len(base_dist.batch_shape) >= self.reinterpreted_batch_ndims
-        ):
-            return Independent(base_dist, self.reinterpreted_batch_ndims)
-        else:
-            return base_dist
+    def dist(self) -> Multinomial: # Changed return type
+        return Multinomial( # Removed Independent wrapper
+            total_count=int(self._total_count.item()), probs=self._probs, logits=self._logits
+        )
+
+    def log_prob(self, value: Tensor) -> Tensor:
+        return self.dist().log_prob(value)
 
     @property
-    def variance(self) -> Tensor:
-        """Returns the variance of the Multinomial distribution."""
-        return self.dist().variance
+    def total_count(self) -> Tensor:
+        """Returns the total_count used to initialize the distribution."""
+        return self._total_count
+
+    @property
+    def logits(self) -> Optional[Tensor]:
+        """Returns the logits used to initialize the distribution."""
+        return self.dist().logits # Access directly
+
+    @property
+    def probs(self) -> Optional[Tensor]:
+        """Returns the probabilities used to initialize the distribution."""
+        return self.dist().probs # Access directly
+    @property
+    def param_shape(self) -> Size:
+        """Returns the shape of the underlying parameter."""
+        # The param_shape should be the shape of the probs/logits tensor
+        # including the last dimension (number of categories)
+        if self._probs is not None:
+            return self._probs.shape
+        elif self._logits is not None:
+            return self._logits.shape
+        else:
+            raise RuntimeError("Neither probs nor logits are available.")

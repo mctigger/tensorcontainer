@@ -1,26 +1,75 @@
 from __future__ import annotations
 
+from typing import Any, Dict, Optional
+
+import torch
 from torch import Tensor
-from torch.distributions import Distribution, Independent, Laplace
+from torch.distributions import Laplace
+
+from tensorcontainer.tensor_annotated import TDCompatible
 
 from .base import TensorDistribution
 
 
 class TensorLaplace(TensorDistribution):
-    loc: Tensor
-    scale: Tensor
-    reinterpreted_batch_ndims: int = 1
+    """Tensor-aware Laplace distribution."""
 
-    def dist(self) -> Distribution:
-        return Independent(
-            Laplace(
-                loc=self.loc,
-                scale=self.scale,
-            ),
-            self.reinterpreted_batch_ndims,
+    # Annotated tensor parameters
+    _loc: Optional[Tensor] = None
+    _scale: Optional[Tensor] = None
+
+    def __init__(self, loc: Tensor, scale: Tensor):
+        # Store the parameters in annotated attributes before calling super().__init__()
+        # This is required because super().__init__() calls self.dist() which needs these attributes
+        self._loc = loc
+        self._scale = scale
+
+        if torch.any(self._scale <= 0):
+            raise ValueError("scale must be positive")
+
+        try:
+            torch.broadcast_tensors(self._loc, self._scale)
+        except RuntimeError as e:
+            raise ValueError(f"loc and scale must have compatible shapes: {e}")
+
+        shape = torch.broadcast_shapes(self._loc.shape, self._scale.shape)
+        device = self._loc.device if self._loc.numel() > 0 else self._scale.device
+        super().__init__(shape, device)
+
+    @classmethod
+    def _unflatten_distribution(
+        cls,
+        tensor_attributes: Dict[str, TDCompatible],
+        meta_attributes: Dict[str, Any],
+    ) -> TensorLaplace:
+        """Reconstruct distribution from tensor attributes."""
+        return cls(
+            loc=tensor_attributes.get("_loc"),  # type: ignore
+            scale=tensor_attributes.get("_scale"),  # type: ignore
         )
+
+    def dist(self) -> Laplace:
+        return Laplace(
+            loc=self._loc,
+            scale=self._scale,
+        )
+
+    def log_prob(self, value: Tensor) -> Tensor:
+        return self.dist().log_prob(value)
+
+    @property
+    def loc(self) -> Optional[Tensor]:
+        """Returns the loc used to initialize the distribution."""
+        return self.dist().loc
+
+    @property
+    def scale(self) -> Optional[Tensor]:
+        """Returns the scale used to initialize the distribution."""
+        return self.dist().scale
 
     @property
     def variance(self) -> Tensor:
         """Returns the variance of the Laplace distribution."""
-        return 2 * self.scale**2
+        assert self._scale is not None
+        return self.dist().variance
+

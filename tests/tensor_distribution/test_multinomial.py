@@ -1,152 +1,125 @@
-"""
-Tests for the TensorMultinomial distribution.
-
-This module contains tests for the TensorMultinomial distribution, which wraps
-`torch.distributions.Multinomial`. The tests cover:
-- Initialization with valid and invalid parameters.
-- Correctness of distribution properties (mean, variance).
-- `sample` method.
-- `log_prob` calculations.
-- Behavior with different `reinterpreted_batch_ndims`.
-"""
+from typing import Any, cast
 
 import pytest
 import torch
-from torch.testing import assert_close
+import torch.distributions
+import torch.testing
+from torch.distributions import Multinomial
 
 from tensorcontainer.tensor_distribution.multinomial import TensorMultinomial
+from tests.compile_utils import run_and_compare_compiled
+from tests.tensor_distribution.conftest import (
+    assert_init_signatures_match,
+    assert_properties_signatures_match,
+    assert_property_values_match,
+)
 
 
 class TestTensorMultinomialInitialization:
-    """
-    Tests the initialization logic of the TensorMultinomial distribution.
+    def test_init_no_params_raises_error(self):
+        """A RuntimeError should be raised when neither probs nor logits are provided."""
+        with pytest.raises(
+            RuntimeError, match="Either 'probs' or 'logits' must be provided."
+        ):
+            TensorMultinomial(total_count=1)
 
-    This suite verifies that:
-    - The distribution can be created with valid `total_count` and `probs`/`logits`.
-    - Initialization fails when `total_count` is not a positive integer.
-    - Initialization fails when both or neither of `probs` and `logits` are provided.
-    """
-
-    def test_valid_initialization_with_probs(self):
-        """The distribution should be created with valid `total_count` and `probs`."""
-        probs = torch.tensor([0.1, 0.2, 0.7])
-        dist = TensorMultinomial(
-            total_count=10,
-            probs=probs,
-            shape=torch.Size([3]),
-            device=torch.device("cpu"),
-        )
-        assert isinstance(dist, TensorMultinomial)
-        assert dist.total_count == 10
-        assert_close(dist.probs, probs)
-
-    def test_valid_initialization_with_logits(self):
-        """The distribution should be created with valid `total_count` and `logits`."""
-        logits = torch.tensor([-1.0, 0.0, 1.0])
-        dist = TensorMultinomial(
-            total_count=10,
-            logits=logits,
-            shape=torch.Size([3]),
-            device=torch.device("cpu"),
-        )
-        assert isinstance(dist, TensorMultinomial)
-        assert dist.total_count == 10
-        assert_close(dist.logits, logits)
-
-    @pytest.mark.parametrize("total_count", [-1, 0])
-    def test_invalid_total_count_raises_error(self, total_count):
-        """A ValueError should be raised for non-positive total_count."""
-        with pytest.raises(ValueError):
+    def test_init_both_params_raises_error(self):
+        """A RuntimeError should be raised when both probs and logits are provided."""
+        with pytest.raises(
+            RuntimeError, match="Only one of 'probs' or 'logits' can be provided."
+        ):
             TensorMultinomial(
-                total_count=total_count,
+                total_count=1,
                 probs=torch.tensor([0.5, 0.5]),
-                shape=torch.Size([2]),
-                device=torch.device("cpu"),
+                logits=torch.tensor([0.0, 0.0]),
             )
 
-    def test_probs_and_logits_raises_error(self):
-        """A ValueError should be raised if both probs and logits are provided."""
-        with pytest.raises(ValueError):
-            TensorMultinomial(
-                total_count=10,
-                probs=torch.tensor([0.5, 0.5]),
-                logits=torch.tensor([-1.0, 1.0]),
-                shape=torch.Size([2]),
-                device=torch.device("cpu"),
-            )
+    def test_init_total_count_non_integer_raises_error(self):
+        """A ValueError should be raised when total_count is not an integer."""
+        with pytest.raises(ValueError, match="total_count must be a non-negative integer."):
+            TensorMultinomial(total_count=cast(Any, 1.5), probs=torch.tensor([0.5, 0.5]))
 
-    def test_no_probs_or_logits_raises_error(self):
-        """A ValueError should be raised if neither probs nor logits are provided."""
-        with pytest.raises(ValueError):
-            TensorMultinomial(
-                total_count=10, shape=torch.Size([]), device=torch.device("cpu")
-            )
+    def test_init_total_count_negative_raises_error(self):
+        """A ValueError should be raised when total_count is negative."""
+        with pytest.raises(ValueError, match="total_count must be a non-negative integer."):
+            TensorMultinomial(total_count=-1, probs=torch.tensor([0.5, 0.5]))
+
+    @pytest.mark.parametrize("total_count", [1, 5, 10])
+    @pytest.mark.parametrize("probs_shape", [(5,), (3, 5), (2, 4, 5)])
+    def test_init_with_probs(self, total_count, probs_shape):
+        """Test successful initialization with probs."""
+        probs = torch.rand(*probs_shape)
+        probs = probs / probs.sum(dim=-1, keepdim=True)  # Normalize probabilities
+        td_multinomial = TensorMultinomial(total_count=total_count, probs=probs)
+        assert td_multinomial is not None
+        assert td_multinomial.total_count.item() == total_count
+        torch.testing.assert_close(td_multinomial.probs, probs)
+
+    @pytest.mark.parametrize("total_count", [1, 5, 10])
+    @pytest.mark.parametrize("logits_shape", [(5,), (3, 5), (2, 4, 5)])
+    def test_init_with_logits(self, total_count, logits_shape):
+        """Test successful initialization with logits."""
+        logits = torch.randn(*logits_shape)
+        td_multinomial = TensorMultinomial(total_count=total_count, logits=logits)
+        assert td_multinomial is not None
+        assert td_multinomial.total_count.item() == total_count
+        torch.testing.assert_close(td_multinomial.probs, torch.softmax(logits, dim=-1))
 
 
-class TestTensorMultinomialMethods:
+class TestTensorMultinomialTensorContainerIntegration:
+    @pytest.mark.parametrize("logits_shape", [(5,), (3, 5), (2, 4, 5)])
+    @pytest.mark.parametrize("total_count", [1, 5])
+    def test_compile_compatibility(self, logits_shape, total_count):
+        """Core operations should be compatible with torch.compile."""
+        logits = torch.randn(*logits_shape, requires_grad=True)
+        td_multinomial = TensorMultinomial(total_count=total_count, logits=logits)
+        sample = td_multinomial.sample()
+
+        def sample_fn(td):
+            return td.sample()
+
+        def rsample_fn(td):
+            # Multinomial does not have rsample
+            with pytest.raises(NotImplementedError):
+                return td.rsample()
+
+        def log_prob_fn(td, s):
+            return td.log_prob(s)
+
+        run_and_compare_compiled(sample_fn, td_multinomial, fullgraph=False)
+        # rsample is not implemented for Multinomial, so we don't test it
+        run_and_compare_compiled(log_prob_fn, td_multinomial, sample, fullgraph=False)
+
+
+class TestTensorMultinomialAPIMatch:
     """
-    Tests the methods of the TensorMultinomial distribution.
-
-    This suite verifies that:
-    - `sample` produces tensors of the correct shape and type.
-    - `log_prob` computes the correct log probability.
-    - `mean` and `variance` match the expected values.
-    - The `dist` property returns the correct underlying torch distribution.
+    Tests that the TensorMultinomial API matches the PyTorch Multinomial API.
     """
 
-    @pytest.fixture
-    def dist_probs(self):
-        """Provides a standard TensorMultinomial distribution for testing."""
-        return TensorMultinomial(
-            total_count=10,
-            probs=torch.tensor([[0.1, 0.9], [0.8, 0.2]]),
-            shape=torch.Size([2, 2]),
-            device=torch.device("cpu"),
+    def test_init_signatures_match(self):
+        """
+        Tests that the __init__ signature of TensorMultinomial matches
+        torch.distributions.Multinomial.
+        """
+        assert_init_signatures_match(
+            TensorMultinomial, Multinomial
         )
 
-    def test_sample_shape(self, dist_probs):
-        """The shape of the sampled tensor should be correct."""
-        sample = dist_probs.sample()
-        assert sample.shape == dist_probs.shape
-
-        samples = dist_probs.sample(sample_shape=torch.Size([4, 4]))
-        assert samples.shape == (4, 4) + dist_probs.shape
-
-    def test_log_prob(self, dist_probs):
-        """The log_prob should be consistent with the underlying torch distribution."""
-        value = torch.tensor([[1.0, 9.0], [8.0, 2.0]])
-        expected_log_prob = dist_probs.dist().log_prob(value)
-        assert_close(dist_probs.log_prob(value), expected_log_prob)
-
-    def test_mean(self, dist_probs):
-        """The mean should be consistent with the underlying torch distribution."""
-        expected_mean = dist_probs.dist().mean
-        assert_close(dist_probs.mean, expected_mean)
-
-    def test_variance(self, dist_probs):
-        """The variance should be consistent with the underlying torch distribution."""
-        expected_variance = dist_probs.dist().variance
-        assert_close(dist_probs.variance, expected_variance)
-
-    @pytest.mark.parametrize(
-        "rbn_dims, expected_shape",
-        [
-            (0, (2, 3)),
-            (1, (2,)),
-            (2, ()),
-        ],
-    )
-    def test_reinterpreted_batch_ndims(self, rbn_dims, expected_shape):
-        """Tests log_prob with different reinterpreted_batch_ndims."""
-        probs = torch.ones(2, 3, 4) / 4
-        dist = TensorMultinomial(
-            total_count=10,
-            probs=probs,
-            reinterpreted_batch_ndims=rbn_dims,
-            shape=torch.Size([2, 3, 4]),
-            device=torch.device("cpu"),
+    def test_properties_match(self):
+        """
+        Tests that the properties of TensorMultinomial match
+        torch.distributions.Multinomial.
+        """
+        assert_properties_signatures_match(
+            TensorMultinomial, Multinomial
         )
-        value = torch.randint(0, 10, (2, 3, 4)).float()
-        value = value / value.sum(-1, True) * 10
-        log_prob = dist.log_prob(value)
-        assert log_prob.shape == expected_shape
+
+    def test_property_values_match(self):
+        """
+        Tests that the property values of TensorMultinomial match
+        torch.distributions.Multinomial.
+        """
+        total_count = 10
+        logits = torch.randn(3, 5)
+        td_multinomial = TensorMultinomial(total_count=total_count, logits=logits)
+        assert_property_values_match(td_multinomial)

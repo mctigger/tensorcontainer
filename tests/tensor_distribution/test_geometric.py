@@ -1,90 +1,101 @@
 """
-Tests for the TensorGeometric distribution.
+Tests for TensorGeometric distribution.
 
-This module contains tests for the TensorGeometric distribution, which wraps
-`torch.distributions.Geometric`. The tests cover:
-- Initialization with `probs` and `logits`.
-- Parameter validation for `probs` and `logits`.
-- Correctness of distribution properties (mean, variance).
-- The `sample` method.
-- `log_prob` and `entropy` calculations.
+This module contains test classes that verify:
+- TensorGeometric initialization and parameter validation
+- Core distribution operations (sample, log_prob)
+- TensorContainer integration (view, reshape, device operations)
+- Distribution-specific properties and edge cases
 """
 
 import pytest
 import torch
-from torch.testing import assert_close
+import torch.distributions
+import torch.testing
+from torch.distributions import Geometric
 
 from tensorcontainer.tensor_distribution.geometric import TensorGeometric
+from tests.compile_utils import run_and_compare_compiled
+from tests.tensor_distribution.conftest import (
+    assert_init_signatures_match,
+    assert_properties_signatures_match,
+    assert_property_values_match,
+)
 
 
 class TestTensorGeometricInitialization:
+    def test_init_no_params_raises_error(self):
+        """A RuntimeError should be raised when neither probs nor logits are provided."""
+        with pytest.raises(
+            RuntimeError, match="Either 'probs' or 'logits' must be provided."
+        ):
+            TensorGeometric(probs=None, logits=None) # type: ignore
+
+    def test_init_both_params_raises_error(self):
+        """A RuntimeError should be raised when both probs and logits are provided."""
+        with pytest.raises(
+            RuntimeError, match="Only one of 'probs' or 'logits' can be provided."
+        ):
+            TensorGeometric(probs=torch.rand(1), logits=torch.rand(1))
+
+
+class TestTensorGeometricTensorContainerIntegration:
+    @pytest.mark.parametrize("param_shape", [(5,), (3, 5), (2, 4, 5)])
+    @pytest.mark.parametrize("param_type", ["probs", "logits"])
+    def test_compile_compatibility(self, param_shape, param_type):
+        """Core operations should be compatible with torch.compile."""
+        if param_type == "probs":
+            param = torch.rand(*param_shape, requires_grad=True)
+            td_geometric = TensorGeometric(probs=param)
+        else:
+            param = torch.rand(*param_shape, requires_grad=True)
+            td_geometric = TensorGeometric(logits=param)
+        
+        sample = td_geometric.sample()
+
+        def sample_fn(td):
+            return td.sample()
+
+        def log_prob_fn(td, s):
+            return td.log_prob(s)
+
+        run_and_compare_compiled(sample_fn, td_geometric, fullgraph=False)
+        run_and_compare_compiled(log_prob_fn, td_geometric, sample, fullgraph=False)
+
+
+class TestTensorGeometricAPIMatch:
     """
-    Tests the initialization logic of the TensorGeometric distribution.
-
-    This suite verifies that:
-    - The distribution can be created with `probs`.
-    - The distribution can be created with `logits`.
-    - Initialization fails if both `probs` and `logits` are provided.
-    - Initialization fails if `probs` are not in the range [0, 1].
+    Tests that the TensorGeometric API matches the PyTorch Geometric API.
     """
 
-    def test_valid_initialization_with_probs(self):
-        """The distribution should be created with probs."""
-        probs = torch.tensor([0.1, 0.5, 0.9])
-        dist = TensorGeometric(probs=probs, shape=probs.shape, device=probs.device)
-        assert isinstance(dist, TensorGeometric)
-        assert_close(dist.probs, probs)
+    def test_init_signatures_match(self):
+        """
+        Tests that the __init__ signature of TensorGeometric matches
+        torch.distributions.Geometric.
+        """
+        assert_init_signatures_match(
+            TensorGeometric, Geometric
+        )
 
-    def test_valid_initialization_with_logits(self):
-        """The distribution should be created with logits."""
-        logits = torch.tensor([-2.0, 0.0, 2.0])
-        dist = TensorGeometric(logits=logits, shape=logits.shape, device=logits.device)
-        assert isinstance(dist, TensorGeometric)
-        assert_close(dist.logits, logits)
+    def test_properties_match(self):
+        """
+        Tests that the properties of TensorGeometric match
+        torch.distributions.Geometric.
+        """
+        assert_properties_signatures_match(
+            TensorGeometric, Geometric
+        )
 
-
-class TestTensorGeometricMethods:
-    """
-    Tests the methods of the TensorGeometric distribution.
-
-    This suite verifies that:
-    - `sample` produces tensors of the correct shape and type.
-    - `log_prob` computes the correct log probability.
-    - `mean` and `variance` match the expected values.
-    - `entropy` is calculated correctly.
-    """
-
-    @pytest.fixture
-    def dist(self):
-        """Provides a standard TensorGeometric distribution for testing."""
-        probs = torch.tensor([0.1, 0.5, 0.9])
-        return TensorGeometric(probs=probs, shape=probs.shape, device=probs.device)
-
-    def test_sample_shape(self, dist):
-        """The shape of the sampled tensor should be correct."""
-        sample = dist.sample()
-        assert sample.shape == dist.shape
-
-        samples = dist.sample(sample_shape=torch.Size([4, 4]))
-        assert samples.shape == (4, 4) + dist.shape
-
-    def test_log_prob(self, dist):
-        """The log_prob should be consistent with the underlying torch distribution."""
-        value = torch.tensor([1.0, 2.0, 0.0])
-        expected_log_prob = dist.dist().log_prob(value)
-        assert_close(dist.log_prob(value), expected_log_prob)
-
-    def test_mean(self, dist):
-        """The mean should match the formula 1/p."""
-        expected_mean = 1 / dist.probs
-        assert_close(dist.mean, expected_mean)
-
-    def test_variance(self, dist):
-        """The variance should match the formula (1-p)/p^2."""
-        expected_variance = (1 - dist.probs) / (dist.probs**2)
-        assert_close(dist.variance, expected_variance)
-
-    def test_entropy(self, dist):
-        """The entropy should be consistent with the underlying torch distribution."""
-        expected_entropy = dist.dist().entropy()
-        assert_close(dist.entropy(), expected_entropy)
+    @pytest.mark.parametrize("param_type", ["probs", "logits"])
+    def test_property_values_match(self, param_type):
+        """
+        Tests that the property values of TensorGeometric match
+        torch.distributions.Geometric.
+        """
+        if param_type == "probs":
+            param = torch.rand(3, 5)
+            td_geometric = TensorGeometric(probs=param)
+        else:
+            param = torch.rand(3, 5)
+            td_geometric = TensorGeometric(logits=param)
+        assert_property_values_match(td_geometric)

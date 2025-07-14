@@ -1,87 +1,76 @@
 """
-Tests for the InverseGamma distribution.
+Tests for TensorInverseGamma distribution.
+
+This module contains test classes that verify:
+- TensorInverseGamma initialization and parameter validation
+- Core distribution operations (sample, rsample, log_prob)
+- TensorContainer integration (view, reshape, device operations)
+- Distribution-specific properties and edge cases
 """
 
 import pytest
 import torch
+import torch.distributions
+import torch.testing
+from torch.distributions import InverseGamma as TorchInverseGamma
 
-from tensorcontainer.tensor_distribution.inverse_gamma import InverseGamma
+from tensorcontainer.tensor_distribution.inverse_gamma import TensorInverseGamma
+from tests.compile_utils import run_and_compare_compiled
+from tests.tensor_distribution.conftest import (
+    assert_init_signatures_match,
+    assert_properties_signatures_match,
+    assert_property_values_match,
+)
 
 
-class TestInverseGamma:
+class TestTensorInverseGammaContainerIntegration:
+    @pytest.mark.parametrize("shape", [(5,), (3, 5), (2, 4, 5)])
+    def test_compile_compatibility(self, shape):
+        """Core operations should be compatible with torch.compile."""
+        concentration = torch.rand(*shape, requires_grad=True) + 1.0
+        rate = torch.rand(*shape, requires_grad=True) + 1.0
+        td_inverse_gamma = TensorInverseGamma(concentration=concentration, rate=rate)
+        sample = td_inverse_gamma.sample()
+
+        def sample_fn(td):
+            return td.sample()
+
+        def log_prob_fn(td, s):
+            return td.log_prob(s)
+
+        run_and_compare_compiled(sample_fn, td_inverse_gamma, fullgraph=False)
+        run_and_compare_compiled(log_prob_fn, td_inverse_gamma, sample, fullgraph=False)
+
+
+class TestTensorInverseGammaAPIMatch:
     """
-    Tests the InverseGamma distribution.
-
-    This suite verifies that:
-    - The distribution is initialized correctly.
-    - Samples are drawn with the correct shape.
-    - Log probabilities are calculated correctly.
-    - The `view` method works as expected.
+    Tests that the TensorInverseGamma API matches the PyTorch InverseGamma API.
     """
 
-    def test_sample_shape_and_dtype(self):
+    def test_init_signatures_match(self):
         """
-        Tests that samples have the correct shape and dtype.
+        Tests that the __init__ signature of TensorInverseGamma matches
+        torch.distributions.InverseGamma.
         """
-        concentration = torch.rand(4, 3)
-        rate = torch.rand(4, 3)
-        dist = InverseGamma(
-            concentration=concentration,
-            rate=rate,
-            reinterpreted_batch_ndims=0,
-            shape=concentration.shape,
-            device=concentration.device,
+        assert_init_signatures_match(
+            TensorInverseGamma, TorchInverseGamma
         )
-        # draw 5 i.i.d. samples
-        samples = dist.sample(sample_shape=torch.Size([5]))
-        # shape = (5, *batch_shape)
-        assert samples.shape == (5, *concentration.shape)
-        assert samples.dtype == torch.float32
 
-    @pytest.mark.parametrize(
-        "rbn_dims,expected_shape",
-        [
-            (0, (2, 3)),  # no reinterpret → log_prob per-element
-            (1, (2,)),  # sum over last 1 dim
-            (2, ()),  # sum over last 2 dims → scalar
-        ],
-    )
-    def test_log_prob_reinterpreted_batch_ndims(self, rbn_dims, expected_shape):
+    def test_properties_match(self):
         """
-        Tests that log_prob is calculated correctly with different `reinterpreted_batch_ndims`.
+        Tests that the properties of TensorInverseGamma match
+        torch.distributions.InverseGamma.
         """
-        concentration = torch.rand(2, 3)
-        rate = torch.rand(2, 3)
-        dist = InverseGamma(
-            concentration=concentration,
-            rate=rate,
-            reinterpreted_batch_ndims=rbn_dims,
-            shape=concentration.shape,
-            device=concentration.device,
+        assert_properties_signatures_match(
+            TensorInverseGamma, TorchInverseGamma
         )
-        x = dist.sample()
-        lp = dist.log_prob(x)
-        # expected via torch.distributions
-        td = torch.distributions.InverseGamma(concentration, rate)
-        ref = td.log_prob(x)
-        if rbn_dims > 0:
-            ref = ref.sum(dim=list(range(len(ref.shape)))[-rbn_dims:])
-        assert lp.shape == expected_shape
-        assert torch.allclose(lp, ref)
 
-    @pytest.mark.parametrize("shape", [(4,), (2, 2)])
-    def test_view(self, shape):
+    def test_property_values_match(self):
         """
-        Tests that the `view` method works correctly.
+        Tests that the property values of TensorInverseGamma match
+        torch.distributions.InverseGamma.
         """
-        concentration = torch.rand(*shape)
-        rate = torch.rand(*shape)
-        dist = InverseGamma(
-            concentration=concentration,
-            rate=rate,
-            shape=concentration.shape,
-            device=concentration.device,
-        )
-        dist_view = dist.view(-1)
-        assert dist_view.concentration.shape == (concentration.numel(),)
-        assert dist_view.rate.shape == (rate.numel(),)
+        concentration = torch.rand(3, 5) + 1.0
+        rate = torch.rand(3, 5) + 1.0
+        td_inv_gamma = TensorInverseGamma(concentration=concentration, rate=rate)
+        assert_property_values_match(td_inv_gamma)

@@ -1,35 +1,70 @@
 from __future__ import annotations
 
-from dataclasses import field
+from typing import Any, Dict, Optional
 
 from torch import Tensor
 from torch.distributions import Kumaraswamy as TorchKumaraswamy
-from torch.distributions import Independent
+
+from tensorcontainer.tensor_annotated import TDCompatible
 
 from .base import TensorDistribution
 
 
-class Kumaraswamy(TensorDistribution):
-    """
-    A Kumaraswamy distribution.
+class TensorKumaraswamy(TensorDistribution):
+    """Tensor-aware Kumaraswamy distribution."""
 
-    This distribution is parameterized by `concentration1` and `concentration0`.
+    # Annotated tensor parameters
+    _concentration1: Optional[Tensor]
+    _concentration0: Optional[Tensor]
 
-    Source: https://pytorch.org/docs/stable/distributions.html#kumaraswamy
-    """
+    def __init__(self, concentration1: Optional[Tensor], concentration0: Optional[Tensor]):
+        # Parameter validation
+        if concentration1 is None or concentration0 is None:
+            raise RuntimeError(
+                "Both 'concentration1' and 'concentration0' must be provided."
+            )
 
-    concentration1: Tensor = field()
-    concentration0: Tensor = field()
-    reinterpreted_batch_ndims: int = 0
+        # Store the parameters in annotated attributes before calling super().__init__()
+        # This is required because super().__init__() calls self.dist() which needs these attributes
+        self._concentration1 = concentration1
+        self._concentration0 = concentration0
 
-    def dist(self) -> Independent:
+        shape = concentration1.shape
+        device = concentration1.device
+
+        super().__init__(shape, device)
+
+    @classmethod
+    def _unflatten_distribution(
+        cls,
+        tensor_attributes: Dict[str, TDCompatible],
+        meta_attributes: Dict[str, Any],
+    ) -> "TensorKumaraswamy":
+        """Reconstruct distribution from tensor attributes."""
+        return cls(
+            concentration1=tensor_attributes["_concentration1"],  # type: ignore
+            concentration0=tensor_attributes["_concentration0"],  # type: ignore
+        )
+
+    def dist(self) -> TorchKumaraswamy:
         """
         Returns the underlying torch.distributions.Distribution instance.
         """
-        return Independent(
-            TorchKumaraswamy(
-                concentration1=self.concentration1,
-                concentration0=self.concentration0,
-            ),
-            self.reinterpreted_batch_ndims,
+        return TorchKumaraswamy(
+            concentration1=self._concentration1,
+            concentration0=self._concentration0,
         )
+
+    def log_prob(self, value: Tensor) -> Tensor:
+        return self.dist().log_prob(value)
+
+    @property
+    def concentration1(self) -> Tensor:
+        """Returns the concentration1 parameter of the distribution."""
+        return self.dist().concentration1
+
+    @property
+    def concentration0(self) -> Tensor:
+        """Returns the concentration0 parameter of the distribution."""
+        return self.dist().concentration0
+
