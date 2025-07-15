@@ -1,85 +1,83 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Union
 
-import torch
-from torch import Size, Tensor
-from torch.distributions import Distribution, Gamma
-
-from tensorcontainer.tensor_annotated import TDCompatible
+from torch import Tensor
+from torch.distributions import Gamma as TorchGamma
+from torch.distributions.utils import broadcast_all
 
 from .base import TensorDistribution
 
 
 class TensorGamma(TensorDistribution):
-    """Tensor-aware Gamma distribution."""
+    """Tensor-aware Gamma distribution.
 
-    # Annotated tensor parameters
-    _concentration: Optional[Tensor] = None
-    _rate: Optional[Tensor] = None
+    Creates a Gamma distribution parameterized by shape `concentration` and `rate`.
 
-    def __init__(self, concentration: Tensor, rate: Tensor):
-        # Store the parameters in annotated attributes before calling super().__init__()
-        # This is required because super().__init__() calls self.dist() which needs these attributes
-        self._concentration = concentration
-        self._rate = rate
+    Args:
+        concentration: shape parameter of the distribution (often referred to as alpha)
+        rate: rate parameter of the distribution (often referred to as beta), rate = 1 / scale
+    """
 
-        # Determine batch_shape and device
-        batch_shape = torch.broadcast_shapes(concentration.shape, rate.shape)
-        device = concentration.device if concentration.is_cuda else rate.device
+    _concentration: Tensor
+    _rate: Tensor
 
-        super().__init__(shape=batch_shape, device=device)
+    def __init__(
+        self,
+        concentration: Union[float, Tensor],
+        rate: Union[float, Tensor],
+        validate_args: Optional[bool] = None,
+    ):
+        self._validate_args = validate_args
+        self._concentration, self._rate = broadcast_all(concentration, rate)
+        batch_shape = self._concentration.shape
+        super().__init__(batch_shape, self._concentration.device)
 
     @classmethod
     def _unflatten_distribution(
         cls,
-        tensor_attributes: Dict[str, TDCompatible],
-        meta_attributes: Dict[str, Any],
+        attributes: Dict[str, Any],
     ) -> TensorGamma:
         """Reconstruct distribution from tensor attributes."""
         return cls(
-            concentration=tensor_attributes["_concentration"].as_tensor(), # type: ignore
-            rate=tensor_attributes["_rate"].as_tensor(), # type: ignore
+            concentration=attributes["_concentration"],
+            rate=attributes["_rate"],
         )
 
-    def dist(self) -> Distribution:
-        # The constructor ensures concentration and rate are Tensors, so no None check needed here.
-        return Gamma(concentration=self.concentration, rate=self.rate)
-
-    def log_prob(self, value: Tensor) -> Tensor:
-        return self.dist().log_prob(value)
+    def dist(self) -> TorchGamma:
+        """Return Gamma distribution."""
+        return TorchGamma(
+            concentration=self._concentration,
+            rate=self._rate,
+            validate_args=self._validate_args,
+        )
 
     @property
     def concentration(self) -> Tensor:
-        """Returns the concentration used to initialize the distribution."""
-        return self._concentration # type: ignore
+        """Returns the concentration parameter of the distribution."""
+        return self._concentration
 
     @property
     def rate(self) -> Tensor:
-        """Returns the rate used to initialize the distribution."""
-        return self._rate # type: ignore
+        """Returns the rate parameter of the distribution."""
+        return self._rate
 
     @property
     def mean(self) -> Tensor:
+        """Returns the mean of the distribution."""
         return self.dist().mean
 
     @property
     def variance(self) -> Tensor:
+        """Returns the variance of the distribution."""
         return self.dist().variance
 
     @property
     def stddev(self) -> Tensor:
+        """Returns the standard deviation of the distribution."""
         return self.dist().stddev
 
     @property
-    def param_shape(self) -> Size:
-        """Returns the shape of the underlying parameter."""
-        # This property is not directly available in torch.distributions.Gamma,
-        # but it's common in other TensorDistribution subclasses.
-        # We can derive it from the concentration or rate.
-        if self._concentration is not None:
-            return self._concentration.shape
-        elif self._rate is not None:
-            return self._rate.shape
-        else:
-            raise RuntimeError("Neither concentration nor rate is set.")
+    def mode(self) -> Tensor:
+        """Returns the mode of the distribution."""
+        return self.dist().mode

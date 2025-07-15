@@ -1,17 +1,5 @@
-"""
-Tests for TensorGamma distribution.
-
-This module contains test classes that verify:
-- TensorGamma initialization and parameter validation
-- Core distribution operations (sample, rsample, log_prob)
-- TensorContainer integration (view, reshape, device operations)
-- Distribution-specific properties and edge cases
-"""
-
 import pytest
 import torch
-import torch.distributions
-import torch.testing
 from torch.distributions import Gamma
 
 from tensorcontainer.tensor_distribution.gamma import TensorGamma
@@ -39,23 +27,40 @@ class TestTensorGammaInitialization:
     )
     def test_broadcasting_shapes(self, concentration_shape, rate_shape, expected_batch_shape):
         """Test that batch_shape is correctly determined by broadcasting."""
-        concentration = torch.rand(concentration_shape) + 0.5 # concentration must be > 0
-        rate = torch.rand(rate_shape) + 0.5 # rate must be > 0
+        concentration = torch.rand(concentration_shape).exp()  # concentration must be positive
+        rate = torch.rand(rate_shape).exp()  # rate must be positive
         td_gamma = TensorGamma(concentration=concentration, rate=rate)
         assert td_gamma.batch_shape == expected_batch_shape
         assert td_gamma.dist().batch_shape == expected_batch_shape
+
+    def test_scalar_parameters(self):
+        """Test initialization with scalar parameters."""
+        concentration = torch.tensor(2.0)
+        rate = torch.tensor(3.0)
+        td_gamma = TensorGamma(concentration=concentration, rate=rate)
+        assert td_gamma.batch_shape == ()
+        assert td_gamma.device == concentration.device
+
+    def test_parameter_validation_deferred_to_torch(self, with_distributions_validation):
+        """Test that parameter validation is deferred to torch.distributions.Gamma."""
+        # concentration <= 0 should raise an error when validation is enabled
+        with pytest.raises(ValueError, match="Expected parameter concentration"):
+            TensorGamma(
+                concentration=torch.tensor([1.0, 0.0]),
+                rate=torch.tensor([2.0, 3.0]),
+                validate_args=True,
+            )
 
 
 class TestTensorGammaTensorContainerIntegration:
     @pytest.mark.parametrize("param_shape", [(5,), (3, 5), (2, 4, 5)])
     def test_compile_compatibility(self, param_shape):
         """Core operations should be compatible with torch.compile."""
-        concentration = torch.rand(*param_shape) + 0.5
-        rate = torch.rand(*param_shape) + 0.5
+        concentration = torch.rand(*param_shape).exp()  # concentration must be positive
+        rate = torch.rand(*param_shape).exp()  # rate must be positive
         td_gamma = TensorGamma(concentration=concentration, rate=rate)
-        
+
         sample = td_gamma.sample()
-        rsample = td_gamma.rsample()
 
         def sample_fn(td):
             return td.sample()
@@ -70,6 +75,20 @@ class TestTensorGammaTensorContainerIntegration:
         run_and_compare_compiled(rsample_fn, td_gamma, fullgraph=False)
         run_and_compare_compiled(log_prob_fn, td_gamma, sample, fullgraph=False)
 
+    def test_pytree_integration(self):
+        """
+        We use the copy method as a proxy to ensure pytree integration (e.g. unflattening)
+        works correctly.
+        """
+        concentration = torch.rand(3, 5).exp()
+        rate = torch.rand(3, 5).exp()
+        original_dist = TensorGamma(concentration=concentration, rate=rate)
+        copied_dist = original_dist.copy()
+
+        # Assert that it's a new instance
+        assert copied_dist is not original_dist
+        assert isinstance(copied_dist, TensorGamma)
+
 
 class TestTensorGammaAPIMatch:
     """
@@ -81,25 +100,21 @@ class TestTensorGammaAPIMatch:
         Tests that the __init__ signature of TensorGamma matches
         torch.distributions.Gamma.
         """
-        assert_init_signatures_match(
-            TensorGamma, Gamma
-        )
+        assert_init_signatures_match(TensorGamma, Gamma)
 
     def test_properties_match(self):
         """
         Tests that the properties of TensorGamma match
         torch.distributions.Gamma.
         """
-        assert_properties_signatures_match(
-            TensorGamma, Gamma
-        )
+        assert_properties_signatures_match(TensorGamma, Gamma)
 
     def test_property_values_match(self):
         """
         Tests that the property values of TensorGamma match
         torch.distributions.Gamma.
         """
-        concentration = torch.rand(3, 5) + 0.5
-        rate = torch.rand(3, 5) + 0.5
+        concentration = torch.rand(3, 5).exp()
+        rate = torch.rand(3, 5).exp()
         td_gamma = TensorGamma(concentration=concentration, rate=rate)
         assert_property_values_match(td_gamma)
