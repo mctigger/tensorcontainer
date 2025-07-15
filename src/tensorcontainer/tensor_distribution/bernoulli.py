@@ -1,50 +1,49 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Union
 
 from torch import Size, Tensor
 from torch.distributions import Bernoulli
-
-from tensorcontainer.tensor_annotated import TDCompatible
+from torch.distributions.utils import broadcast_all
+from torch.types import Number
 
 from .base import TensorDistribution
 
 
 class TensorBernoulli(TensorDistribution):
     """Tensor-aware Bernoulli distribution."""
-    
-    # Annotated tensor parameters
-    _probs: Optional[Tensor] = None
-    _logits: Optional[Tensor] = None
 
-    def __init__(self, probs: Optional[Tensor] = None, logits: Optional[Tensor] = None):
-        data = probs if probs is not None else logits
-        # Parameter validation occurs in super().__init__(), but we need an early
-        # check here to safely derive shape and device from the data tensor
-        # before calling the parent constructor
-        if data is None:
-            raise RuntimeError("Either 'probs' or 'logits' must be provided.")
-        
-        # Store the parameters in annotated attributes before calling super().__init__()
-        # This is required because super().__init__() calls self.dist() which needs these attributes
-        self._probs = probs
-        self._logits = logits
-        
-        shape = data.shape
-        device = data.device
+    # Annotated tensor parameters
+    _probs: Optional[Tensor]
+    _logits: Optional[Tensor]
+
+    def __init__(
+        self,
+        probs: Optional[Union[Number, Tensor]] = None,
+        logits: Optional[Union[Number, Tensor]] = None,
+    ):
+        if (probs is None) == (logits is None):
+            raise ValueError("Either `probs` or `logits` must be specified, but not both.")
+
+        if probs is not None:
+            (self._probs,) = broadcast_all(probs)
+            shape = self._probs.shape
+            device = self._probs.device
+            self._logits = None
+        else:
+            (self._logits,) = broadcast_all(logits)
+            shape = self._logits.shape
+            device = self._logits.device
+            self._probs = None
 
         super().__init__(shape, device)
 
     @classmethod
-    def _unflatten_distribution(
-        cls,
-        tensor_attributes: Dict[str, TDCompatible],
-        meta_attributes: Dict[str, Any],
-    ) -> TensorBernoulli:
+    def _unflatten_distribution(cls, attributes: Dict[str, Any]) -> TensorBernoulli:
         """Reconstruct distribution from tensor attributes."""
         return cls(
-            probs=tensor_attributes.get("_probs"),  # type: ignore
-            logits=tensor_attributes.get("_logits"),  # type: ignore
+            probs=attributes.get("_probs"),
+            logits=attributes.get("_logits"),
         )
 
     def dist(self) -> Bernoulli:
@@ -54,16 +53,26 @@ class TensorBernoulli(TensorDistribution):
         return self.dist().log_prob(value)
 
     @property
-    def logits(self) -> Optional[Tensor]:
-        """Returns the logits used to initialize the distribution."""
+    def mean(self) -> Tensor:
+        return self.dist().mean
+
+    @property
+    def variance(self) -> Tensor:
+        return self.dist().variance
+
+    @property
+    def mode(self) -> Tensor:
+        return self.dist().mode
+
+
+    @property
+    def logits(self) -> Tensor:
         return self.dist().logits
 
     @property
-    def probs(self) -> Optional[Tensor]:
-        """Returns the probabilities used to initialize the distribution."""
+    def probs(self) -> Tensor:
         return self.dist().probs
 
     @property
     def param_shape(self) -> Size:
-        """Returns the shape of the underlying parameter."""
         return self.dist().param_shape

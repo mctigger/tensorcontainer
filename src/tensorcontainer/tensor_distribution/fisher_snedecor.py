@@ -1,74 +1,77 @@
-from __future__ import annotations
+from typing import Any, Dict, Optional
 
-from typing import Any, Dict
-
-from torch import Size, Tensor
+import torch
+from torch import Tensor
 from torch.distributions import FisherSnedecor as TorchFisherSnedecor
-
-from tensorcontainer.tensor_annotated import TDCompatible
+from torch.distributions.utils import broadcast_all
 
 from .base import TensorDistribution
 
 
-class FisherSnedecor(TensorDistribution):
-    """
-    A Fisher-Snedecor distribution.
-
-    This distribution is parameterized by two degrees of freedom parameters, `df1` and `df2`.
-
-    Source: https://pytorch.org/docs/stable/distributions.html#fishersnedecor
-    """
-
-    # Annotated tensor parameters
-    _df1: Tensor
-    _df2: Tensor
-
-    def __init__(self, df1: Tensor, df2: Tensor):
-        # Parameter validation occurs in super().__init__(), but we need an early
-        # check here to safely derive shape and device from the data tensor
-        # before calling the parent constructor
-        if df1 is None or df2 is None:
-            raise RuntimeError("Both 'df1' and 'df2' must be provided.")
-
-        # Store the parameters in annotated attributes before calling super().__init__()
-        # This is required because super().__init__() calls self.dist() which needs these attributes
-        self._df1 = df1
-        self._df2 = df2
-
-        shape = self._df1.shape
-        device = self._df1.device
-
-        super().__init__(shape, device)
-
-    @classmethod
-    def _unflatten_distribution(
-        cls,
-        tensor_attributes: Dict[str, TDCompatible],
-        meta_attributes: Dict[str, Any],
-    ) -> FisherSnedecor:
-        """Reconstruct distribution from tensor attributes."""
-        return cls(
-            df1=tensor_attributes["_df1"],  # type: ignore
-            df2=tensor_attributes["_df2"],  # type: ignore
-        )
+class TensorFisherSnedecor(TensorDistribution):
+    def __init__(self, df1: Tensor, df2: Tensor, *, validate_args: Optional[bool] = None):
+        self._df1: Tensor
+        self._df2: Tensor
+        self._df1, self._df2 = broadcast_all(df1, df2)
+        batch_shape = self._df1.shape
+        super().__init__(batch_shape, self._df1.device)
 
     def dist(self) -> TorchFisherSnedecor:
-        return TorchFisherSnedecor(df1=self._df1, df2=self._df2)
+        return TorchFisherSnedecor(self._df1, self._df2)
+
+    @classmethod
+    def _unflatten_distribution(cls, attributes: Dict[str, Any]) -> "TensorFisherSnedecor":
+        return cls(
+            df1=attributes["_df1"],
+            df2=attributes["_df2"],
+            validate_args=attributes.get("validate_args"),
+        )
+
+    @property
+    def mean(self) -> Tensor:
+        return self.dist().mean
+
+    @property
+    def variance(self) -> Tensor:
+        return self.dist().variance
+
+    @property
+    def mode(self) -> Tensor:
+        return self.dist().mode
+
+    @property
+    def support(self):
+        return self.dist().support
+
+    @property
+    def has_rsample(self):
+        return self.dist().has_rsample
+
+    def entropy(self) -> Tensor:
+        return self.dist().entropy()
+
+
 
     def log_prob(self, value: Tensor) -> Tensor:
         return self.dist().log_prob(value)
 
-    @property
-    def df1(self) -> Tensor:
-        """Returns the first degree of freedom parameter."""
-        return self.dist().df1
+    def cdf(self, value: Tensor) -> Tensor:
+        return self.dist().cdf(value)
 
-    @property
-    def df2(self) -> Tensor:
-        """Returns the second degree of freedom parameter."""
-        return self.dist().df2
+    def icdf(self, value: Tensor) -> Tensor:
+        return self.dist().icdf(value)
 
-    @property
-    def param_shape(self) -> Size:
-        """Returns the shape of the underlying parameter."""
-        return self.dist().batch_shape
+    def sample(self, sample_shape: torch.Size = torch.Size()) -> Tensor:
+        return self.dist().sample(sample_shape)
+
+    def rsample(self, sample_shape: torch.Size = torch.Size()) -> Tensor:
+        return self.dist().rsample(sample_shape)
+
+    def enumerate_support(self, expand: bool = True) -> Tensor:
+        return self.dist().enumerate_support(expand)
+
+    def __repr__(self):
+        return self.dist().__repr__()
+
+    def __eq__(self, other):
+        return self.dist().__eq__(other)

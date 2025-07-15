@@ -1,76 +1,88 @@
+from typing import Optional, Tuple, Union
 
-from __future__ import annotations
-
-from typing import Any, Dict, Optional
-
-from torch import Size, Tensor
+import torch
+from torch import Tensor
 from torch.distributions import ContinuousBernoulli as TorchContinuousBernoulli
-
-from tensorcontainer.tensor_annotated import TDCompatible
+from torch.types import Number
 
 from .base import TensorDistribution
 
 
 class ContinuousBernoulli(TensorDistribution):
-    """Tensor-aware Continuous Bernoulli distribution."""
-
-    # Annotated tensor parameters
-    _probs: Optional[Tensor] = None
-    _logits: Optional[Tensor] = None
-    _lims: tuple[float, float] = (0.499, 0.501)
+    _probs: Optional[Tensor]
+    _logits: Optional[Tensor]
+    _lims: Tuple[float, float]
 
     def __init__(
         self,
-        probs: Optional[Tensor] = None,
-        logits: Optional[Tensor] = None,
-        lims: tuple[float, float] = (0.499, 0.501),
+        probs: Optional[Union[Tensor, Number]] = None,
+        logits: Optional[Union[Tensor, Number]] = None,
+        lims: Tuple[float, float] = (0.499, 0.501),
     ) -> None:
-        data = probs if probs is not None else logits
-        if data is None:
-            raise RuntimeError("Either 'probs' or 'logits' must be provided.")
-
-        # Store the parameters in annotated attributes before calling super().__init__()
-        self._probs = probs
-        self._logits = logits
         self._lims = lims
+        
+        if probs is not None and logits is not None:
+            raise ValueError("Either `probs` or `logits` must be specified, but not both.")
+        elif probs is None and logits is None:
+            raise ValueError("Either `probs` or `logits` must be specified.")
 
-        shape = data.shape
-        device = data.device
+        if probs is not None and isinstance(probs, Number):
+            self._probs = torch.tensor(probs)
+        else:
+            self._probs = probs
 
-        super().__init__(shape, device)
+        if logits is not None and isinstance(logits, Number):
+            self._logits = torch.tensor(logits)
+        else:
+            self._logits = logits
+
+        if self._probs is not None:
+            batch_shape = self._probs.shape
+            device = self._probs.device
+        elif self._logits is not None:
+            batch_shape = self._logits.shape
+            device = self._logits.device
+        else:
+            # This case should ideally not be reached due to the checks above,
+            # but as a fallback for type inference or future changes.
+            raise ValueError("Either `probs` or `logits` must be specified.")
+
+        super().__init__(shape=batch_shape, device=device)
+
+    def dist(self) -> TorchContinuousBernoulli:
+        return TorchContinuousBernoulli(
+            probs=self._probs,
+            logits=self._logits,
+            lims=self._lims,
+        )
 
     @classmethod
     def _unflatten_distribution(
         cls,
-        tensor_attributes: Dict[str, TDCompatible],
-        meta_attributes: Dict[str, Any],
-    ) -> ContinuousBernoulli:
-        """Reconstruct distribution from tensor attributes."""
+        attributes: dict,
+    ) -> "ContinuousBernoulli":
         return cls(
-            probs=tensor_attributes.get("_probs"),  # type: ignore
-            logits=tensor_attributes.get("_logits"),  # type: ignore
-            lims=meta_attributes.get("_lims", (0.499, 0.501)),
+            probs=attributes.get("_probs"),
+            logits=attributes.get("_logits"),
+            lims=attributes["_lims"],
         )
 
-    def dist(self) -> TorchContinuousBernoulli:
-        return TorchContinuousBernoulli(
-            probs=self._probs, logits=self._logits, lims=self._lims
-        )
-
-    def log_prob(self, value: Tensor) -> Tensor:
-        return self.dist().log_prob(value)
-
     @property
-    def logits(self) -> Optional[Tensor]:
-        """Returns the logits used to initialize the distribution."""
-        return self.dist().logits
-
-    @property
-    def probs(self) -> Optional[Tensor]:
-        """Returns the probabilities used to initialize the distribution."""
+    def probs(self) -> Tensor:
         return self.dist().probs
 
     @property
-    def param_shape(self) -> Size:
-        """Returns the shape of the underlying parameter."""
+    def logits(self) -> Tensor:
+        return self.dist().logits
+
+    @property
+    def mean(self) -> Tensor:
+        return self.dist().mean
+
+    @property
+    def variance(self) -> Tensor:
+        return self.dist().variance
+
+    @property
+    def param_shape(self) -> torch.Size:
         return self.dist().param_shape

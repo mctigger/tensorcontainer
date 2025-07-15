@@ -1,12 +1,11 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Union
 
 import torch
 from torch import Tensor
 from torch.distributions import Cauchy
-
-from tensorcontainer.tensor_annotated import TDCompatible
+from torch.distributions.utils import broadcast_all
 
 from .base import TensorDistribution
 
@@ -18,8 +17,8 @@ class TensorCauchy(TensorDistribution):
     The Cauchy distribution is a continuous probability distribution with heavy tails.
     
     Args:
-        loc: Location parameter (median) of the distribution.
-        scale: Scale parameter of the distribution. Must be positive.
+        loc (float or Tensor): mode or median of the distribution.
+        scale (float or Tensor): half width at half maximum.
         
     Note:
         The Cauchy distribution has no finite mean or variance. These properties
@@ -27,42 +26,32 @@ class TensorCauchy(TensorDistribution):
     """
     
     # Annotated tensor parameters
-    _loc: Optional[Tensor] = None
-    _scale: Optional[Tensor] = None
+    _loc: Union[Tensor, float]
+    _scale: Union[Tensor, float]
 
-    def __init__(self, loc: Tensor, scale: Tensor):
-        # Parameter validation occurs in super().__init__(), but we need an early
-        # check here to safely derive shape and device from the data tensor
-        # before calling the parent constructor
-        if loc is None or scale is None:
-            raise RuntimeError("Both 'loc' and 'scale' must be provided.")
+    def __init__(self, loc: Union[Tensor, float], scale: Union[Tensor, float]):
+        self._loc, self._scale = broadcast_all(loc, scale)
         
-        # Store the parameters in annotated attributes before calling super().__init__()
-        # This is required because super().__init__() calls self.dist() which needs these attributes
-        shape = torch.broadcast_shapes(loc.shape, scale.shape)
-        device = loc.device
-        self._loc = loc.expand(shape)
-        self._scale = scale.expand(shape)
+        if isinstance(loc, (float, int)) and isinstance(scale, (float, int)):
+            batch_shape = torch.Size()
+            device = None
+        else:
+            batch_shape = self._loc.size()
+            device = self._loc.device
 
-        super().__init__(shape, device)
+
+        super().__init__(batch_shape, device)
 
     @classmethod
-    def _unflatten_distribution(
-        cls,
-        tensor_attributes: Dict[str, TDCompatible],
-        meta_attributes: Dict[str, Any],
-    ) -> TensorCauchy:
+    def _unflatten_distribution(cls, attributes: Dict[str, Any]) -> TensorCauchy:
         """Reconstruct distribution from tensor attributes."""
         return cls(
-            loc=tensor_attributes.get("_loc"),  # type: ignore
-            scale=tensor_attributes.get("_scale"),  # type: ignore
+            loc=attributes["_loc"],
+            scale=attributes["_scale"],
         )
 
     def dist(self) -> Cauchy:
         return Cauchy(loc=self._loc, scale=self._scale)
-
-    def log_prob(self, value: Tensor) -> Tensor:
-        return self.dist().log_prob(value)
 
     @property
     def loc(self) -> Tensor:
@@ -73,3 +62,15 @@ class TensorCauchy(TensorDistribution):
     def scale(self) -> Tensor:
         """Returns the scale parameter of the distribution."""
         return self.dist().scale
+
+    @property
+    def mean(self) -> Tensor:
+        return self.dist().mean
+
+    @property
+    def mode(self) -> Tensor:
+        return self.dist().mode
+
+    @property
+    def variance(self) -> Tensor:
+        return self.dist().variance
