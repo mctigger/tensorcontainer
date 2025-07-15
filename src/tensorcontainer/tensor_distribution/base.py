@@ -293,11 +293,6 @@ class TensorDistribution(TensorAnnotated):
         """
         return self.dist().perplexity()
 
-    @property
-    def _validate_args(self) -> bool:
-        """Whether argument validation is enabled."""
-        return self.dist()._validate_args
-
     def _extended_shape(self, sample_shape: Size = Size()) -> Size:
         """
         Compute the extended shape for sampling.
