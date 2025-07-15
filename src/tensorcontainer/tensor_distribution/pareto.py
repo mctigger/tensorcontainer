@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any, Dict, Union
 
 from torch import Tensor
 from torch.distributions import Pareto as TorchPareto
@@ -23,7 +23,12 @@ class TensorPareto(TensorDistribution):
     _scale: Tensor
     _alpha: Tensor
 
-    def __init__(self, scale: Tensor, alpha: Tensor) -> None:
+    def __init__(self, scale: Union[float, Tensor], alpha: Union[float, Tensor]) -> None:
+        if isinstance(scale, (float, int)):
+            scale = Tensor([scale])
+        if isinstance(alpha, (float, int)):
+            alpha = Tensor([alpha])
+
         if scale is None:
             raise RuntimeError("`scale` must be provided.")
         if alpha is None:
@@ -32,21 +37,19 @@ class TensorPareto(TensorDistribution):
         self._scale = scale
         self._alpha = alpha
 
-        shape = scale.shape
-        device = scale.device
+        shape = self._scale.shape
+        device = self._scale.device
 
         super().__init__(shape, device)
 
     @classmethod
     def _unflatten_distribution(
-        cls,
-        tensor_attributes: Dict[str, TDCompatible],
-        meta_attributes: Dict[str, Any],
+        cls, attributes: Dict[str, Any]
     ) -> TensorPareto:
         """Reconstruct distribution from tensor attributes."""
         return cls(
-            scale=tensor_attributes["_scale"],  # type: ignore
-            alpha=tensor_attributes["_alpha"],  # type: ignore
+            scale=attributes["_scale"],  # type: ignore
+            alpha=attributes["_alpha"],  # type: ignore
         )
 
     def dist(self) -> TorchPareto:

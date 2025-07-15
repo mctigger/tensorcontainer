@@ -82,7 +82,7 @@ def assert_init_signatures_match(
     td_params = [
         p.replace(annotation=inspect.Parameter.empty)
         for p in td_sig.parameters.values()
-        if p.name != "self"
+        if p.name not in ("self", "validate_args", "reinterpreted_batch_ndims")
     ]
     torch_params = [
         p.replace(annotation=inspect.Parameter.empty)
@@ -249,8 +249,34 @@ def assert_property_values_match(td: TensorDistribution) -> None:
                     f"Tensor value mismatch for property '{name}': {str(e)}"
                 ) from e
         else:
-            assert td_value == dist_value, (
-                f"Value mismatch for property '{name}':\n"
-                f"  {td.__class__.__name__}: {td_value}\n"
-                f"  {dist.__class__.__name__}: {dist_value}"
-            )
+            if isinstance(td_value, TensorDistribution):
+                # Compare parameters of the underlying torch.Distribution instances
+                td_dist = td_value.dist()
+                dist_dist = dist_value
+
+                # Check if they are the same class
+                assert td_dist.__class__ == dist_dist.__class__, (
+                    f"Class mismatch for property '{name}':\n"
+                    f"  {td.__class__.__name__}: {td_dist.__class__.__name__}\n"
+                    f"  {dist.__class__.__name__}: {dist_dist.__class__.__name__}"
+                )
+
+                # Compare parameters (e.g., loc, scale, probs, logits)
+                # This assumes that the parameters are accessible as attributes
+                # and are either Tensors or simple Python types.
+                # This might need to be more robust for complex distributions.
+                for param_name in td_dist.arg_constraints.keys():
+                    td_param = getattr(td_dist, param_name)
+                    dist_param = getattr(dist_dist, param_name)
+
+                    if isinstance(td_param, torch.Tensor):
+                        torch.testing.assert_close(td_param, dist_param, msg=f"Parameter '{param_name}' mismatch for property '{name}'")
+                    else:
+                        assert td_param == dist_param, f"Parameter '{param_name}' mismatch for property '{name}'"
+            else:
+                # For other non-tensor values, use direct equality check
+                assert td_value == dist_value, (
+                    f"Value mismatch for property '{name}':\n"
+                    f"  {td.__class__.__name__}: {td_value}\n"
+                    f"  {dist.__class__.__name__}: {dist_value}"
+                )

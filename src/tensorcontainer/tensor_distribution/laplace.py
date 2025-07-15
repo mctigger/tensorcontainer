@@ -15,14 +15,14 @@ class TensorLaplace(TensorDistribution):
     """Tensor-aware Laplace distribution."""
 
     # Annotated tensor parameters
-    _loc: Optional[Tensor] = None
-    _scale: Optional[Tensor] = None
+    _loc: Tensor
+    _scale: Tensor
 
-    def __init__(self, loc: Tensor, scale: Tensor):
+    def __init__(self, loc: Tensor | float, scale: Tensor | float):
         # Store the parameters in annotated attributes before calling super().__init__()
         # This is required because super().__init__() calls self.dist() which needs these attributes
-        self._loc = loc
-        self._scale = scale
+        self._loc = loc if isinstance(loc, Tensor) else torch.tensor(loc)
+        self._scale = scale if isinstance(scale, Tensor) else torch.tensor(scale)
 
         if torch.any(self._scale <= 0):
             raise ValueError("scale must be positive")
@@ -38,14 +38,12 @@ class TensorLaplace(TensorDistribution):
 
     @classmethod
     def _unflatten_distribution(
-        cls,
-        tensor_attributes: Dict[str, TDCompatible],
-        meta_attributes: Dict[str, Any],
+        cls, attributes: Dict[str, Any]
     ) -> TensorLaplace:
         """Reconstruct distribution from tensor attributes."""
         return cls(
-            loc=tensor_attributes.get("_loc"),  # type: ignore
-            scale=tensor_attributes.get("_scale"),  # type: ignore
+            loc=attributes["_loc"],
+            scale=attributes["_scale"],
         )
 
     def dist(self) -> Laplace:

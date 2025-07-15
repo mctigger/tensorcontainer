@@ -1,13 +1,16 @@
 from __future__ import annotations
 
+from typing import Any, Dict
+
 from torch.distributions import Categorical
+from tensorcontainer.tensor_distribution.categorical import TensorCategorical
 from torch.distributions import MixtureSameFamily as TorchMixtureSameFamily
 from torch.distributions.distribution import Distribution
 
 from tensorcontainer.tensor_distribution.base import TensorDistribution
 
 
-class MixtureSameFamily(TensorDistribution):
+class TensorMixtureSameFamily(TensorDistribution):
     """
     Creates a mixture of distributions of the same family.
 
@@ -16,14 +19,43 @@ class MixtureSameFamily(TensorDistribution):
         component_distribution (TensorDistribution): The component distribution.
     """
 
-    mixture_distribution: Categorical
-    component_distribution: TensorDistribution
+    _mixture_distribution: TensorCategorical
+    _component_distribution: TensorDistribution
 
     def dist(self) -> Distribution:
         """
         Returns the underlying torch.distributions.Distribution instance.
         """
         return TorchMixtureSameFamily(
-            mixture_distribution=self.mixture_distribution,
-            component_distribution=self.component_distribution.dist(),
+            mixture_distribution=self._mixture_distribution.dist(),
+            component_distribution=self._component_distribution.dist(),
+        )
+
+    def __init__(
+        self,
+        mixture_distribution: TensorCategorical,
+        component_distribution: TensorDistribution,
+    ) -> None:
+        self._mixture_distribution = mixture_distribution
+        self._component_distribution = component_distribution
+        super().__init__(
+            shape=mixture_distribution.batch_shape,
+            device=mixture_distribution.device,
+        )
+
+    @property
+    def mixture_distribution(self) -> TensorCategorical:
+        return self._mixture_distribution
+
+    @property
+    def component_distribution(self) -> TensorDistribution:
+        return self._component_distribution
+
+    @classmethod
+    def _unflatten_distribution(
+        cls, attributes: Dict[str, Any]
+    ) -> TensorMixtureSameFamily:
+        return cls(
+            mixture_distribution=attributes["_mixture_distribution"],
+            component_distribution=attributes["_component_distribution"],
         )

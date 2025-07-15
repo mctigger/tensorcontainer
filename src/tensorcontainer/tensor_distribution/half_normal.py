@@ -1,12 +1,10 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Union, cast
 
 import torch
 from torch import Tensor
 from torch.distributions import HalfNormal
-
-from tensorcontainer.tensor_annotated import TDCompatible
 
 from .base import TensorDistribution
 
@@ -15,34 +13,36 @@ class TensorHalfNormal(TensorDistribution):
     """Tensor-aware HalfNormal distribution."""
 
     # Annotated tensor parameters
-    _scale: Optional[Tensor] = None
+    _scale: Union[Tensor, float]
+    _validate_args: Optional[bool] = None
 
-    def __init__(self, scale: Tensor):
-        if torch.any(scale <= 0):
-            raise ValueError("scale must be positive")
-
+    def __init__(self, scale: Union[Tensor, float], validate_args: Optional[bool] = None):
         # Store the parameters in annotated attributes before calling super().__init__()
         # This is required because super().__init__() calls self.dist() which needs these attributes
         self._scale = scale
+        self._validate_args = validate_args
 
-        shape = scale.shape
-        device = scale.device
+        if isinstance(scale, Tensor):
+            shape = scale.shape
+            device = scale.device
+        else:
+            shape = torch.Size([])
+            device = None
 
         super().__init__(shape, device)
 
     @classmethod
     def _unflatten_distribution(
-        cls,
-        tensor_attributes: Dict[str, TDCompatible],
-        meta_attributes: Dict[str, Any],
+        cls, attributes: Dict[str, Any]
     ) -> TensorHalfNormal:
         """Reconstruct distribution from tensor attributes."""
         return cls(
-            scale=tensor_attributes.get("_scale"),  # type: ignore
+            scale=cast(Union[Tensor, float], attributes.get("_scale")),
+            validate_args=cast(Optional[bool], attributes.get("_validate_args")),
         )
 
     def dist(self) -> HalfNormal:
-        return HalfNormal(scale=self._scale)  # type: ignore
+        return HalfNormal(scale=self._scale, validate_args=self._validate_args)
 
     def log_prob(self, value: Tensor) -> Tensor:
         return self.dist().log_prob(value)
@@ -56,4 +56,3 @@ class TensorHalfNormal(TensorDistribution):
     def scale(self) -> Tensor:
         """Returns the scale used to initialize the distribution."""
         return self.dist().scale
-

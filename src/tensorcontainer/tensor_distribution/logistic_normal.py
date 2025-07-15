@@ -1,29 +1,59 @@
 from __future__ import annotations
 
+from typing import Any, Dict
+
+import torch # Added import torch
+
 from torch import Tensor
 from torch.distributions import LogisticNormal as TorchLogisticNormal
+from torch.distributions.utils import broadcast_all
 from torch.distributions.distribution import Distribution
+from torch.types import Number
 
-from tensorcontainer.tensor_distribution.base import TensorDistribution
+from .base import TensorDistribution
 
 
-class LogisticNormal(TensorDistribution):
-    """
-    Creates a logistic-normal distribution.
+class TensorLogisticNormal(TensorDistribution):
+    _loc: Tensor
+    _scale: Tensor
 
-    Args:
-        loc (Tensor): The mean of the underlying Normal distribution.
-        scale (Tensor): The standard deviation of the underlying Normal distribution.
-    """
+    def __init__(self, loc: Tensor, scale: Tensor):
+        self._loc, self._scale = broadcast_all(loc, scale)
 
-    loc: Tensor
-    scale: Tensor
+        if isinstance(loc, Number) and isinstance(scale, Number):
+            shape = torch.Size([1])
+            self._loc = self._loc.unsqueeze(0) # Unsqueeze for scalar inputs
+            self._scale = self._scale.unsqueeze(0) # Unsqueeze for scalar inputs
+        else:
+            shape = self._loc.shape
+
+        device = self._loc.device
+
+        super().__init__(shape, device)
 
     def dist(self) -> Distribution:
-        """
-        Returns the underlying torch.distributions.Distribution instance.
-        """
-        return TorchLogisticNormal(
-            loc=self.loc,
-            scale=self.scale,
+        return TorchLogisticNormal(loc=self._loc, scale=self._scale)
+
+    @property
+    def loc(self) -> Tensor:
+        """Returns the location parameter of the distribution."""
+        return self._loc
+
+    @property
+    def scale(self) -> Tensor:
+        """Returns the scale parameter of the distribution."""
+        return self._scale
+
+    @classmethod
+    def _unflatten_distribution(
+        cls,
+        attributes: Dict[str, Any],
+    ) -> TensorLogisticNormal:
+        loc = attributes.get("_loc")
+        scale = attributes.get("_scale")
+        assert loc is not None and isinstance(loc, Tensor)
+        assert scale is not None and isinstance(scale, Tensor)
+        return cls(
+            loc=loc,
+            scale=scale,
         )

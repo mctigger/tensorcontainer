@@ -1,12 +1,11 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from numbers import Number
+from typing import Any, Dict, Optional, Union
 
 import torch
 from torch import Tensor
 from torch.distributions import Geometric
-
-from tensorcontainer.tensor_annotated import TDCompatible
 
 from .base import TensorDistribution
 
@@ -15,39 +14,47 @@ class TensorGeometric(TensorDistribution):
     """Tensor-aware Geometric distribution."""
 
     # Annotated tensor parameters
-    _probs: Optional[Tensor] = None
-    _logits: Optional[Tensor] = None
+    _probs: Optional[Union[Tensor, Number]] = None
+    _logits: Optional[Union[Tensor, Number]] = None
 
-    def __init__(self, probs: Optional[Tensor] = None, logits: Optional[Tensor] = None):
-        data = probs if probs is not None else logits
-        # Parameter validation occurs in super().__init__(), but we need an early
-        # check here to safely derive shape and device from the data tensor
-        # before calling the parent constructor
-        if data is None:
-            raise RuntimeError("Either 'probs' or 'logits' must be provided.")
-        if probs is not None and logits is not None:
-            raise RuntimeError("Only one of 'probs' or 'logits' can be provided.")
+    def __init__(
+        self,
+        probs: Optional[Union[Tensor, Number]] = None,
+        logits: Optional[Union[Tensor, Number]] = None,
+    ):
+        if (probs is None) == (logits is None):
+            raise ValueError(
+                "Either `probs` or `logits` must be specified, but not both."
+            )
 
-        # Store the parameters in annotated attributes before calling super().__init__()
-        # This is required because super().__init__() calls self.dist() which needs these attributes
-        self._probs = probs
-        self._logits = logits
+        if probs is not None:
+            self._probs = probs
+            data = probs
+        else:
+            self._logits = logits
+            data = logits
 
-        shape = data.shape
-        device = data.device
-
-        super().__init__(shape, device)
+        # Create a temporary distribution to get the batch_shape and device
+        # Create a temporary distribution to get the batch_shape and device
+        temp_dist = Geometric(probs=probs, logits=logits)
+        
+        # Determine the device based on which parameter is used
+        if logits is not None:
+            device = logits.device if isinstance(logits, Tensor) else torch.device("cpu")
+        else:
+            device = probs.device if isinstance(probs, Tensor) else torch.device("cpu")
+            
+        super().__init__(temp_dist.batch_shape, device)
 
     @classmethod
     def _unflatten_distribution(
         cls,
-        tensor_attributes: Dict[str, TDCompatible],
-        meta_attributes: Dict[str, Any],
+        attributes: Dict[str, Any],
     ) -> TensorGeometric:
         """Reconstruct distribution from tensor attributes."""
         return cls(
-            probs=tensor_attributes.get("_probs"),  # type: ignore
-            logits=tensor_attributes.get("_logits"),  # type: ignore
+            probs=attributes.get("_probs"),
+            logits=attributes.get("_logits"),
         )
 
     def dist(self) -> Geometric:

@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Union
 
+import torch
 from torch import Tensor
 from torch.distributions import Gumbel as TorchGumbel
 
-from tensorcontainer.tensor_annotated import TDCompatible
+from tensorcontainer.tensor_container import TensorContainer
 
 from .base import TensorDistribution
 
@@ -19,42 +20,38 @@ class TensorGumbel(TensorDistribution):
     Source: https://pytorch.org/docs/stable/distributions.html#gumbel
     """
 
-    _loc: Optional[Tensor] = None
-    _scale: Optional[Tensor] = None
+    _loc: Union[Tensor, float]
+    _scale: Union[Tensor, float]
 
-    def __init__(self, loc: Tensor, scale: Tensor):
-        # Parameter validation occurs in super().__init__(), but we need an early
-        # check here to safely derive shape and device from the data tensor
-        # before calling the parent constructor
-        # Store the parameters in annotated attributes before calling super().__init__()
-        # This is required because super().__init__() calls self.dist() which needs these attributes
+    def __init__(self, loc: Union[Tensor, float], scale: Union[Tensor, float]):
         self._loc = loc
         self._scale = scale
-
-        if loc is None and scale is None:
-            raise RuntimeError("Either 'loc' or 'scale' must be provided.")
-        elif loc is not None:
+        if isinstance(loc, Tensor):
             shape = loc.shape
             device = loc.device
-        elif scale is not None:
+        elif isinstance(scale, Tensor):
             shape = scale.shape
             device = scale.device
         else:
-            # This case should not be reached due to the check above
-            raise RuntimeError("Unexpected error: No valid parameters provided.")
-
+            # If both are floats, assume scalar distribution on CPU
+            shape = torch.Size([])
+            device = torch.device("cpu")
         super().__init__(shape, device)
 
     @classmethod
     def _unflatten_distribution(
-        cls,
-        tensor_attributes: Dict[str, TDCompatible],
-        meta_attributes: Dict[str, Any],
+        cls, attributes: Dict[str, Any]
     ) -> TensorGumbel:
         """Reconstruct distribution from tensor attributes."""
+        loc = attributes["_loc"]
+        scale = attributes["_scale"]
+        if isinstance(loc, TensorContainer):
+            loc = loc.as_tensor()
+        if isinstance(scale, TensorContainer):
+            scale = scale.as_tensor()
         return cls(
-            loc=tensor_attributes.get("_loc"),  # type: ignore
-            scale=tensor_attributes.get("_scale"),  # type: ignore
+            loc=loc,
+            scale=scale,
         )
 
     def dist(self) -> TorchGumbel:
@@ -70,12 +67,12 @@ class TensorGumbel(TensorDistribution):
         return self.dist().log_prob(value)
 
     @property
-    def loc(self) -> Optional[Tensor]:
+    def loc(self) -> Union[Tensor, float]:
         """Returns the loc used to initialize the distribution."""
-        return self.dist().loc
+        return self._loc
 
     @property
-    def scale(self) -> Optional[Tensor]:
+    def scale(self) -> Union[Tensor, float]:
         """Returns the scale used to initialize the distribution."""
-        return self.dist().scale
+        return self._scale
 

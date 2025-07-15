@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from typing import Any, Dict, Union
+
+import torch
 from torch import Tensor
 from torch.distributions import LKJCholesky as TorchLKJCholesky
 from torch.distributions.distribution import Distribution
@@ -7,7 +10,7 @@ from torch.distributions.distribution import Distribution
 from tensorcontainer.tensor_distribution.base import TensorDistribution
 
 
-class LKJCholesky(TensorDistribution):
+class TensorLKJCholesky(TensorDistribution):
     """
     Creates a distribution of Cholesky factors of correlation matrices.
 
@@ -16,19 +19,44 @@ class LKJCholesky(TensorDistribution):
     correlation matrix.
 
     Args:
-        dimension (int): The dimension of the correlation matrix.
-        concentration (Tensor): The concentration parameter of the distribution.
+        dim (int): The dimension of the correlation matrix.
+        concentration (float or Tensor): The concentration parameter of the distribution.
             Must be positive.
     """
 
-    dimension: int
-    concentration: Tensor
+    _dim: int
+    _concentration: Tensor
+
+    def __init__(
+        self,
+        dim: int,
+        concentration: Union[float, Tensor] = 1.0,
+    ):
+        self._dim = dim
+        self._concentration = (
+            concentration
+            if isinstance(concentration, Tensor)
+            else torch.tensor(concentration, dtype=torch.float)
+        )
+        super().__init__(
+            shape=self._concentration.shape,
+            device=self._concentration.device,
+        )
 
     def dist(self) -> Distribution:
         """
         Returns the underlying torch.distributions.Distribution instance.
         """
         return TorchLKJCholesky(
-            dim=self.dimension,
-            concentration=self.concentration,
+            dim=self._dim,
+            concentration=self._concentration,
+        )
+
+    @classmethod
+    def _unflatten_distribution(
+        cls, attributes: Dict[str, Any]
+    ) -> TensorLKJCholesky:
+        return cls(
+            dim=attributes["_dim"],
+            concentration=attributes["_concentration"],
         )

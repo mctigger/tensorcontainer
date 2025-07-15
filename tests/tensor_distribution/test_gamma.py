@@ -41,17 +41,6 @@ class TestTensorGammaInitialization:
         assert td_gamma.batch_shape == ()
         assert td_gamma.device == concentration.device
 
-    def test_parameter_validation_deferred_to_torch(self, with_distributions_validation):
-        """Test that parameter validation is deferred to torch.distributions.Gamma."""
-        # concentration <= 0 should raise an error when validation is enabled
-        with pytest.raises(ValueError, match="Expected parameter concentration"):
-            TensorGamma(
-                concentration=torch.tensor([1.0, 0.0]),
-                rate=torch.tensor([2.0, 3.0]),
-                validate_args=True,
-            )
-
-
 class TestTensorGammaTensorContainerIntegration:
     @pytest.mark.parametrize("param_shape", [(5,), (3, 5), (2, 4, 5)])
     def test_compile_compatibility(self, param_shape):

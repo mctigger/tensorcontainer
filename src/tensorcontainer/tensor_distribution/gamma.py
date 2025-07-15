@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, Union
 
 from torch import Tensor
 from torch.distributions import Gamma as TorchGamma
@@ -26,9 +26,7 @@ class TensorGamma(TensorDistribution):
         self,
         concentration: Union[float, Tensor],
         rate: Union[float, Tensor],
-        validate_args: Optional[bool] = None,
     ):
-        self._validate_args = validate_args
         self._concentration, self._rate = broadcast_all(concentration, rate)
         batch_shape = self._concentration.shape
         super().__init__(batch_shape, self._concentration.device)
@@ -49,7 +47,6 @@ class TensorGamma(TensorDistribution):
         return TorchGamma(
             concentration=self._concentration,
             rate=self._rate,
-            validate_args=self._validate_args,
         )
 
     @property

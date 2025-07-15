@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Union
 
 import torch  # Add this import
 from torch import Size, Tensor
@@ -15,17 +15,13 @@ class TensorMultinomial(TensorDistribution):
     """Tensor-aware Multinomial distribution."""
 
     # Annotated tensor parameters
-    _total_count: Tensor
+    _total_count: int
     _probs: Optional[Tensor] = None
     _logits: Optional[Tensor] = None
 
     def __init__(
-        self, total_count: int = 1, probs: Optional[Tensor] = None, logits: Optional[Tensor] = None
+        self, total_count: Union[int, Tensor] = 1, probs: Optional[Tensor] = None, logits: Optional[Tensor] = None
     ):
-        # Parameter validation
-        if not isinstance(total_count, int) or total_count < 0:
-            raise ValueError("total_count must be a non-negative integer.")
-
         if probs is None and logits is None:
             raise RuntimeError("Either 'probs' or 'logits' must be provided.")
         if probs is not None and logits is not None:
@@ -36,8 +32,10 @@ class TensorMultinomial(TensorDistribution):
             raise RuntimeError("Internal error: data tensor is None.")
 
         # Store the parameters in annotated attributes before calling super().__init__()
-        # Convert total_count to a scalar Tensor
-        self._total_count = torch.tensor(total_count, dtype=torch.float, device=data.device)
+        if isinstance(total_count, Tensor):
+            self._total_count = int(total_count.item())
+        else:
+            self._total_count = total_count
         self._probs = probs
         self._logits = logits
 
@@ -50,26 +48,25 @@ class TensorMultinomial(TensorDistribution):
     @classmethod
     def _unflatten_distribution(
         cls,
-        tensor_attributes: Dict[str, TDCompatible],
-        meta_attributes: Dict[str, Any],
+        attributes: Dict[str, Any],
     ) -> TensorMultinomial:
         """Reconstruct distribution from tensor attributes."""
         return cls(
-            total_count=tensor_attributes["_total_count"],  # type: ignore
-            probs=tensor_attributes.get("_probs"),  # type: ignore
-            logits=tensor_attributes.get("_logits"),  # type: ignore
+            total_count=attributes["_total_count"],
+            probs=attributes.get("_probs"),
+            logits=attributes.get("_logits"),
         )
 
     def dist(self) -> Multinomial: # Changed return type
         return Multinomial( # Removed Independent wrapper
-            total_count=int(self._total_count.item()), probs=self._probs, logits=self._logits
+            total_count=self._total_count, probs=self._probs, logits=self._logits
         )
 
     def log_prob(self, value: Tensor) -> Tensor:
         return self.dist().log_prob(value)
 
     @property
-    def total_count(self) -> Tensor:
+    def total_count(self) -> int:
         """Returns the total_count used to initialize the distribution."""
         return self._total_count
 

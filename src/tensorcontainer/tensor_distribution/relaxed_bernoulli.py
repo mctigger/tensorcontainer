@@ -24,35 +24,20 @@ class TensorRelaxedBernoulli(TensorDistribution):
         probs: Optional[Tensor] = None,
         logits: Optional[Tensor] = None,
     ):
-        # Parameter validation occurs in super().__init__(), but we need an early
-        # check here to safely derive shape and device from the data tensor
-        # before calling the parent constructor
-        if temperature is None:
-            raise RuntimeError("`temperature` must be provided.")
-        data = probs if probs is not None else logits
-        if data is None:
-            raise RuntimeError("Either `probs` or `logits` must be provided.")
-
         self._temperature = temperature
         self._probs = probs
         self._logits = logits
-
-        shape = data.shape
-        device = data.device
-
-        super().__init__(shape, device)
+        super().__init__(temperature.shape, temperature.device)
 
     @classmethod
     def _unflatten_distribution(
-        cls,
-        tensor_attributes: Dict[str, TDCompatible],
-        meta_attributes: Dict[str, Any],
+        cls, attributes: Dict[str, Any]
     ) -> "TensorRelaxedBernoulli":
         """Reconstruct distribution from tensor attributes."""
         return cls(
-            temperature=tensor_attributes["_temperature"],  # type: ignore
-            probs=tensor_attributes.get("_probs"),  # type: ignore
-            logits=tensor_attributes.get("_logits"),  # type: ignore
+            temperature=attributes["_temperature"],  # type: ignore
+            probs=attributes.get("_probs"),  # type: ignore
+            logits=attributes.get("_logits"),  # type: ignore
         )
 
     def dist(self) -> TorchRelaxedBernoulli:

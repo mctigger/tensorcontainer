@@ -15,38 +15,40 @@ class TensorLogNormal(TensorDistribution):
     """Tensor-aware LogNormal distribution."""
 
     # Annotated tensor parameters
-    _loc: Optional[Tensor] = None
-    _scale: Optional[Tensor] = None
+    _loc: Tensor
+    _scale: Tensor
 
-    def __init__(self, loc: Tensor, scale: Tensor):
-        # Store the parameters in annotated attributes before calling super().__init__()
-        # This is required because super().__init__() calls self.dist() which needs these attributes
-        self._loc = loc
-        self._scale = scale
-
-        if torch.any(scale <= 0):
-            raise ValueError("scale must be positive")
+    def __init__(self, loc: float | Tensor, scale: float | Tensor):
+        # Convert inputs to tensors
+        loc = torch.as_tensor(loc)
+        scale = torch.as_tensor(scale)
 
         try:
             data = torch.broadcast_tensors(loc, scale)
         except RuntimeError as e:
             raise ValueError(f"loc and scale must have compatible shapes: {e}")
 
-        shape = data[0].shape
-        device = data[0].device
+        # Store the parameters in annotated attributes before calling super().__init__()
+        # This is required because super().__init__() calls self.dist() which needs these attributes
+        self._loc = data[0]
+        self._scale = data[1]
+
+        if torch.any(self._scale <= 0):
+            raise ValueError("scale must be positive")
+
+        shape = self._loc.shape
+        device = self._loc.device
 
         super().__init__(shape, device)
 
     @classmethod
     def _unflatten_distribution(
-        cls,
-        tensor_attributes: Dict[str, TDCompatible],
-        meta_attributes: Dict[str, Any],
+        cls, attributes: Dict[str, Any]
     ) -> TensorLogNormal:
         """Reconstruct distribution from tensor attributes."""
         return cls(
-            loc=tensor_attributes.get("_loc"),  # type: ignore
-            scale=tensor_attributes.get("_scale"),  # type: ignore
+            loc=attributes.get("_loc"),  # type: ignore
+            scale=attributes.get("_scale"),  # type: ignore
         )
 
     def dist(self) -> LogNormal:

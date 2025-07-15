@@ -1,53 +1,89 @@
 from __future__ import annotations
 
+from typing import Any, Dict
+
 import torch
 from torch import Tensor
 from torch.distributions import Distribution, MultivariateNormal
+from typing import Any, Dict, cast
 
 from .base import TensorDistribution
 
 
 class TensorMultivariateNormal(TensorDistribution):
-    loc: Tensor
-    covariance_matrix: Tensor
+    _loc: Tensor
+    _covariance_matrix: Tensor | None = None
+    _precision_matrix: Tensor | None = None
+    _scale_tril: Tensor | None = None
     reinterpreted_batch_ndims: int = 0
 
-    def __post_init__(self):
-        super().__post_init__()
-
-        # Validate that loc and covariance_matrix have compatible shapes
-        if self.loc.shape[-1] != self.covariance_matrix.shape[-1]:
+    def __init__(
+        self,
+        loc: Tensor,
+        covariance_matrix: Tensor | None = None,
+        precision_matrix: Tensor | None = None,
+        scale_tril: Tensor | None = None,
+        reinterpreted_batch_ndims: int = 0,
+    ):
+        num_params = sum(
+            p is not None
+            for p in [covariance_matrix, precision_matrix, scale_tril]
+        )
+        if num_params != 1:
             raise ValueError(
-                f"loc and covariance_matrix must have compatible shapes: "
-                f"loc.shape={self.loc.shape}, covariance_matrix.shape={self.covariance_matrix.shape}"
+                "Expected exactly one of `covariance_matrix`, `precision_matrix`, "
+                f"`scale_tril` to be specified, but got {num_params}."
             )
 
-        if self.covariance_matrix.shape[-2] != self.covariance_matrix.shape[-1]:
-            raise ValueError("covariance_matrix must be square")
+        self._loc = loc
+        self._covariance_matrix = covariance_matrix
+        self._precision_matrix = precision_matrix
+        self._scale_tril = scale_tril
+        self.reinterpreted_batch_ndims = reinterpreted_batch_ndims
+        super().__init__(loc.shape, loc.device) # Call super().__init__ here
 
-        # Validate that covariance matrix is positive definite
-        try:
-            torch.linalg.cholesky(self.covariance_matrix)
-        except RuntimeError:
-            raise ValueError("covariance_matrix must be positive definite")
-
-    def dist(self) -> Distribution:
+    def dist(self) -> MultivariateNormal:
         return MultivariateNormal(
-            loc=self.loc,
-            covariance_matrix=self.covariance_matrix,
+            loc=self._loc,
+            covariance_matrix=self._covariance_matrix,
+            precision_matrix=self._precision_matrix,
+            scale_tril=self._scale_tril,
         )
+
+    @classmethod
+    def _unflatten_distribution(
+        cls, attributes: Dict[str, Any]
+    ) -> TensorMultivariateNormal:
+        return cls(
+            loc=attributes["_loc"],
+            covariance_matrix=attributes.get("_covariance_matrix"),
+            precision_matrix=attributes.get("_precision_matrix"),
+            scale_tril=attributes.get("_scale_tril"),
+            reinterpreted_batch_ndims=attributes["reinterpreted_batch_ndims"],
+        )
+
+    @property
+    def loc(self) -> Tensor:
+        return self._loc
+
+    @property
+    def covariance_matrix(self) -> Tensor:
+        return self.dist().covariance_matrix
+
+    @property
+    def precision_matrix(self) -> Tensor:
+        return self.dist().precision_matrix
+
+    @property
+    def scale_tril(self) -> Tensor:
+        return self.dist().scale_tril
 
     @property
     def batch_shape(self) -> torch.Size:
         """Returns the batch shape of the distribution."""
-        return self.loc.shape[:-1]
+        return self._loc.shape[:-1]
 
     @property
     def event_shape(self) -> torch.Size:
         """Returns the event shape of the distribution."""
-        return self.loc.shape[-1:]
-
-    @property
-    def variance(self) -> Tensor:
-        """Returns the variance of the MultivariateNormal distribution."""
-        return torch.diagonal(self.covariance_matrix, dim1=-2, dim2=-1)
+        return self._loc.shape[-1:]

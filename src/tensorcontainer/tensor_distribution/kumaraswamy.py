@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Union
 
+import torch
 from torch import Tensor
 from torch.distributions import Kumaraswamy as TorchKumaraswamy
 
@@ -14,36 +15,37 @@ class TensorKumaraswamy(TensorDistribution):
     """Tensor-aware Kumaraswamy distribution."""
 
     # Annotated tensor parameters
-    _concentration1: Optional[Tensor]
-    _concentration0: Optional[Tensor]
+    _concentration1: Tensor
+    _concentration0: Tensor
 
-    def __init__(self, concentration1: Optional[Tensor], concentration0: Optional[Tensor]):
-        # Parameter validation
-        if concentration1 is None or concentration0 is None:
-            raise RuntimeError(
-                "Both 'concentration1' and 'concentration0' must be provided."
-            )
-
+    def __init__(self, concentration1: Union[float, Tensor], concentration0: Union[float, Tensor]):
         # Store the parameters in annotated attributes before calling super().__init__()
         # This is required because super().__init__() calls self.dist() which needs these attributes
-        self._concentration1 = concentration1
-        self._concentration0 = concentration0
+        self._concentration1 = (
+            concentration1
+            if isinstance(concentration1, Tensor)
+            else torch.tensor(concentration1)
+        )
+        self._concentration0 = (
+            concentration0
+            if isinstance(concentration0, Tensor)
+            else torch.tensor(concentration0)
+        )
 
-        shape = concentration1.shape
-        device = concentration1.device
+        shape = self._concentration1.shape
+        device = self._concentration1.device
 
         super().__init__(shape, device)
 
     @classmethod
     def _unflatten_distribution(
         cls,
-        tensor_attributes: Dict[str, TDCompatible],
-        meta_attributes: Dict[str, Any],
+        attributes: Dict[str, TDCompatible],
     ) -> "TensorKumaraswamy":
         """Reconstruct distribution from tensor attributes."""
         return cls(
-            concentration1=tensor_attributes["_concentration1"],  # type: ignore
-            concentration0=tensor_attributes["_concentration0"],  # type: ignore
+            concentration1=attributes["_concentration1"],  # type: ignore
+            concentration0=attributes["_concentration0"],  # type: ignore
         )
 
     def dist(self) -> TorchKumaraswamy:

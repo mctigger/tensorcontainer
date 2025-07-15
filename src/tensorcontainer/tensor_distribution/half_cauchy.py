@@ -2,10 +2,9 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
-from torch import Size, Tensor
+import torch
+from torch import Tensor
 from torch.distributions import HalfCauchy as TorchHalfCauchy
-
-from tensorcontainer.tensor_annotated import TDCompatible
 
 from .base import TensorDistribution
 
@@ -16,7 +15,10 @@ class TensorHalfCauchy(TensorDistribution):
     # Annotated tensor parameters
     _scale: Tensor
 
-    def __init__(self, scale: Tensor):
+    def __init__(self, scale: float | Tensor):
+        if isinstance(scale, (float, int)):
+            scale = torch.tensor(scale)
+
         # Parameter validation occurs in super().__init__(), but we need an early
         # check here to safely derive shape and device from the data tensor
         # before calling the parent constructor
@@ -35,16 +37,15 @@ class TensorHalfCauchy(TensorDistribution):
     @classmethod
     def _unflatten_distribution(
         cls,
-        tensor_attributes: Dict[str, TDCompatible],
-        meta_attributes: Dict[str, Any],
+        attributes: Dict[str, Any],
     ) -> TensorHalfCauchy:
         """Reconstruct distribution from tensor attributes."""
         return cls(
-            scale=tensor_attributes["_scale"],
+            scale=attributes["_scale"],
         )
 
     def dist(self) -> TorchHalfCauchy:
-        return TorchHalfCauchy(scale=self._scale)
+        return TorchHalfCauchy(scale=self._scale, validate_args=False)
 
     def log_prob(self, value: Tensor) -> Tensor:
         return self.dist().log_prob(value)
@@ -54,7 +55,3 @@ class TensorHalfCauchy(TensorDistribution):
         """Returns the scale used to initialize the distribution."""
         return self.dist().scale
 
-    @property
-    def param_shape(self) -> Size:
-        """Returns the shape of the underlying parameter."""
-        return self.dist().param_shape

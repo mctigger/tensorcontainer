@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Any, Dict, Optional
+import torch
 
 from torch import Tensor
 from torch.distributions import Poisson
@@ -14,13 +15,7 @@ class TensorPoisson(TensorDistribution):
     # Annotated tensor parameters
     _rate: Optional[Tensor] = None
 
-    def __init__(self, rate: Tensor):
-        # Parameter validation occurs in super().__init__(), but we need an early
-        # check here to safely derive shape and device from the data tensor
-        # before calling the parent constructor
-        if rate is None:
-            raise RuntimeError("'rate' must be provided.")
-        
+    def __init__(self, rate: torch.Tensor, validate_args: Optional[bool] = None):
         # Store the parameters in annotated attributes before calling super().__init__()
         # This is required because super().__init__() calls self.dist() which needs these attributes
         self._rate = rate
@@ -32,13 +27,11 @@ class TensorPoisson(TensorDistribution):
 
     @classmethod
     def _unflatten_distribution(
-        cls,
-        tensor_attributes: Dict[str, TDCompatible],
-        meta_attributes: Dict[str, Any],
+        cls, attributes: Dict[str, Any]
     ) -> TensorPoisson:
         """Reconstruct distribution from tensor attributes."""
         return cls(
-            rate=tensor_attributes.get("_rate"),  # type: ignore
+            rate=attributes.get("_rate"),  # type: ignore
         )
 
     def dist(self) -> Poisson:

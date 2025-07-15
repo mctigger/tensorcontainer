@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Union
 
 import torch
 from torch import Size, Tensor
@@ -21,10 +21,14 @@ class TensorNegativeBinomial(TensorDistribution):
 
     def __init__(
         self,
-        total_count: Tensor,
+        total_count: Union[int, Tensor],
         probs: Optional[Tensor] = None,
         logits: Optional[Tensor] = None,
+        validate_args: Optional[bool] = None,  # This will be ignored
     ):
+        if isinstance(total_count, int):
+            total_count = torch.tensor(float(total_count))
+
         # Parameter validation
         if torch.any(total_count <= 0):
             raise ValueError("total_count must be positive")
@@ -45,28 +49,27 @@ class TensorNegativeBinomial(TensorDistribution):
                 f"total_count and probs/logits must have compatible shapes: {e}"
             )
 
-        # Store the parameters in annotated attributes before calling super().__init__()
-        self._total_count = total_count
-        self._probs = probs
-        self._logits = logits
-
         # Derive shape and device from the parameters
         shape = torch.broadcast_shapes(total_count.shape, param.shape)
         device = total_count.device
+
+        # Store the parameters in annotated attributes before calling super().__init__()
+        # Ensure total_count is expanded to the broadcasted shape
+        self._total_count = total_count.expand(shape)
+        self._probs = probs
+        self._logits = logits
 
         super().__init__(shape, device)
 
     @classmethod
     def _unflatten_distribution(
-        cls,
-        tensor_attributes: Dict[str, TDCompatible],
-        meta_attributes: Dict[str, Any],
+        cls, attributes: Dict[str, Any]
     ) -> TensorNegativeBinomial:
         """Reconstruct distribution from tensor attributes."""
         return cls(
-            total_count=tensor_attributes["_total_count"],  # type: ignore
-            probs=tensor_attributes.get("_probs"),  # type: ignore
-            logits=tensor_attributes.get("_logits"),  # type: ignore
+            total_count=attributes["_total_count"],  # type: ignore
+            probs=attributes.get("_probs"),  # type: ignore
+            logits=attributes.get("_logits"),  # type: ignore
         )
 
     def dist(self) -> NegativeBinomial:

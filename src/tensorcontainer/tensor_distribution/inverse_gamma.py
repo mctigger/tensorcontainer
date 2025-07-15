@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any, Dict, Union
 
+import torch
 from torch import Tensor
 from torch.distributions import InverseGamma as TorchInverseGamma
 
@@ -17,27 +18,26 @@ class TensorInverseGamma(TensorDistribution):
     _concentration: Tensor
     _rate: Tensor
 
-    def __init__(self, concentration: Tensor, rate: Tensor):
+    def __init__(self, concentration: Union[float, Tensor], rate: Union[float, Tensor]):
         # Store the parameters in annotated attributes before calling super().__init__()
         # This is required because super().__init__() calls self.dist() which needs these attributes
-        self._concentration = concentration
-        self._rate = rate
+        self._concentration = concentration if isinstance(concentration, Tensor) else torch.tensor(concentration)
+        self._rate = rate if isinstance(rate, Tensor) else torch.tensor(rate)
 
-        shape = concentration.shape
-        device = concentration.device
+        shape = self._concentration.shape
+        device = self._concentration.device
 
         super().__init__(shape, device)
 
     @classmethod
     def _unflatten_distribution(
         cls,
-        tensor_attributes: Dict[str, TDCompatible],
-        meta_attributes: Dict[str, Any],
+        attributes: Dict[str, Any],
     ) -> TensorInverseGamma:
         """Reconstruct distribution from tensor attributes."""
         return cls(
-            concentration=tensor_attributes["_concentration"],  # type: ignore
-            rate=tensor_attributes["_rate"],  # type: ignore
+            concentration=attributes["_concentration"],
+            rate=attributes["_rate"],
         )
 
     def dist(self) -> TorchInverseGamma:
