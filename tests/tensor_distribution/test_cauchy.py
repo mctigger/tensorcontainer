@@ -23,26 +23,44 @@ from tests.tensor_distribution.conftest import (
 
 
 class TestTensorCauchyInitialization:
-    def test_init_no_params_raises_error(self):
-        """A ValueError should be raised when neither loc nor scale are provided."""
-        with pytest.raises(
-            RuntimeError, match="Both 'loc' and 'scale' must be provided."
-        ):
-            TensorCauchy(loc=None, scale=None)
+    @pytest.mark.parametrize(
+        "loc, scale",
+        [
+            (0.0, 1.0),
+            (torch.tensor([0.0]), torch.tensor([1.0])),
+            (torch.tensor([0.0, 1.0]), torch.tensor([1.0, 2.0])),
+            (torch.tensor([0.0]), torch.tensor([1.0, 2.0])),
+            (torch.tensor([0.0, 1.0]), torch.tensor([1.0])),
+        ],
+    )
+    def test_valid_initialization(self, loc, scale):
+        """Test valid initializations."""
+        dist = TensorCauchy(loc=loc, scale=scale)
+        assert isinstance(dist, TensorCauchy)
+        assert dist.loc is not None
+        assert dist.scale is not None
 
-    def test_init_missing_loc_raises_error(self):
-        """A ValueError should be raised when loc is missing."""
-        with pytest.raises(
-            RuntimeError, match="Both 'loc' and 'scale' must be provided."
-        ):
-            TensorCauchy(loc=None, scale=torch.tensor(1.0))
-
-    def test_init_missing_scale_raises_error(self):
-        """A ValueError should be raised when scale is missing."""
-        with pytest.raises(
-            RuntimeError, match="Both 'loc' and 'scale' must be provided."
-        ):
-            TensorCauchy(loc=torch.tensor(0.0), scale=None)
+    @pytest.mark.parametrize(
+        "loc, scale, error_type, error_match",
+        [
+            (
+                torch.tensor([0.0]),
+                torch.tensor([-1.0]),
+                ValueError,
+                "(?s)Expected parameter scale.*to satisfy the constraint GreaterThan\\(lower_bound=0\\.0\\).*",
+            ),
+            (
+                torch.tensor([0.0]),
+                torch.tensor([0.0]),
+                ValueError,
+                "(?s)Expected parameter scale.*to satisfy the constraint GreaterThan\\(lower_bound=0\\.0\\).*",
+            ),
+        ],
+    )
+    def test_invalid_initialization(self, loc, scale, error_type, error_match):
+        """Test invalid initializations."""
+        with pytest.raises(error_type, match=error_match):
+            TensorCauchy(loc=loc, scale=scale)
 
 
 class TestTensorCauchyTensorContainerIntegration:

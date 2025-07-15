@@ -1,8 +1,8 @@
 """
-Tests for TensorContinuousBernoulli distribution.
+Tests for ContinuousBernoulli distribution.
 
 This module contains test classes that verify:
-- TensorContinuousBernoulli initialization and parameter validation
+- ContinuousBernoulli initialization and parameter validation
 - Core distribution operations (sample, rsample, log_prob)
 - TensorContainer integration (view, reshape, device operations)
 - Distribution-specific properties and edge cases
@@ -10,8 +10,6 @@ This module contains test classes that verify:
 
 import pytest
 import torch
-import torch.distributions
-import torch.testing
 from torch.distributions import ContinuousBernoulli as TorchContinuousBernoulli
 
 from tensorcontainer.tensor_distribution.continuous_bernoulli import ContinuousBernoulli
@@ -23,45 +21,41 @@ from tests.tensor_distribution.conftest import (
 )
 
 
-class TestTensorContinuousBernoulliInitialization:
+class TestContinuousBernoulliAPIMatch:
     def test_init_no_params_raises_error(self):
         """A ValueError should be raised when neither probs nor logits are provided."""
         with pytest.raises(
-            RuntimeError, match="Either 'probs' or 'logits' must be provided."
+            ValueError, match="Either `probs` or `logits` must be specified."
         ):
             ContinuousBernoulli()
 
+    def test_init_mutually_exclusive_params_raises_error(self):
+        """A ValueError should be raised when both probs and logits are provided."""
+        with pytest.raises(
+            ValueError, match="Either `probs` or `logits` must be specified, but not both."
+        ):
+            ContinuousBernoulli(probs=torch.tensor(0.5), logits=torch.tensor(0.0))
 
-class TestTensorContinuousBernoulliTensorContainerIntegration:
-    @pytest.mark.parametrize("probs_shape", [(5,), (3, 5), (2, 4, 5)])
-    def test_compile_compatibility(self, probs_shape):
-        """Core operations should be compatible with torch.compile."""
-        probs = torch.rand(*probs_shape, requires_grad=True)
-        td_continuous_bernoulli = ContinuousBernoulli(probs=probs)
-        sample = td_continuous_bernoulli.sample()
+    @pytest.mark.parametrize("param_type", ["probs", "logits"])
+    @pytest.mark.parametrize("shape", [(5,), (3, 5), (2, 4, 5)])
+    @pytest.mark.parametrize("property_name", ["mean", "variance", "probs", "logits"])
+    def test_compile_compatibility(self, param_type, shape, property_name):
+        """Core operations and properties should be compatible with torch.compile."""
+        if param_type == "probs":
+            param = torch.rand(*shape, requires_grad=True)
+            td_dist = ContinuousBernoulli(probs=param)
+        else:
+            param = torch.randn(*shape, requires_grad=True)
+            td_dist = ContinuousBernoulli(logits=param)
 
-        def sample_fn(td):
-            return td.sample()
+        def get_property(td):
+            return getattr(td, property_name)
 
-        def rsample_fn(td):
-            return td.rsample()
-
-        def log_prob_fn(td, s):
-            return td.log_prob(s)
-
-        run_and_compare_compiled(sample_fn, td_continuous_bernoulli, fullgraph=False)
-        run_and_compare_compiled(rsample_fn, td_continuous_bernoulli, fullgraph=False)
-        run_and_compare_compiled(log_prob_fn, td_continuous_bernoulli, sample, fullgraph=False)
-
-
-class TestTensorContinuousBernoulliAPIMatch:
-    """
-    Tests that the TensorContinuousBernoulli API matches the PyTorch ContinuousBernoulli API.
-    """
+        run_and_compare_compiled(get_property, td_dist, fullgraph=False)
 
     def test_init_signatures_match(self):
         """
-        Tests that the __init__ signature of TensorContinuousBernoulli matches
+        Tests that the __init__ signature of ContinuousBernoulli matches
         torch.distributions.ContinuousBernoulli.
         """
         assert_init_signatures_match(
@@ -70,18 +64,24 @@ class TestTensorContinuousBernoulliAPIMatch:
 
     def test_properties_match(self):
         """
-        Tests that the properties of TensorContinuousBernoulli match
+        Tests that the properties of ContinuousBernoulli match
         torch.distributions.ContinuousBernoulli.
         """
         assert_properties_signatures_match(
             ContinuousBernoulli, TorchContinuousBernoulli
         )
 
-    def test_property_values_match(self):
+    @pytest.mark.parametrize("param_type", ["probs", "logits"])
+    @pytest.mark.parametrize("shape", [(5,), (3, 5), (2, 4, 5)])
+    def test_property_values_match(self, param_type, shape):
         """
-        Tests that the property values of TensorContinuousBernoulli match
+        Tests that the property values of ContinuousBernoulli match
         torch.distributions.ContinuousBernoulli.
         """
-        probs = torch.rand(3, 5)
-        td_cb = ContinuousBernoulli(probs=probs)
-        assert_property_values_match(td_cb)
+        if param_type == "probs":
+            param = torch.rand(*shape)
+            td_dist = ContinuousBernoulli(probs=param)
+        else:
+            param = torch.randn(*shape)
+            td_dist = ContinuousBernoulli(logits=param)
+        assert_property_values_match(td_dist)

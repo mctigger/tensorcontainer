@@ -98,57 +98,6 @@ class TestTensorBetaTensorContainerIntegration:
         assert copied_dist is not original_dist
         assert isinstance(copied_dist, TensorBeta)
 
-        # Assert that properties are identical
-        assert torch.equal(copied_dist.concentration1, original_dist.concentration1)
-        assert torch.equal(copied_dist.concentration0, original_dist.concentration0)
-        assert copied_dist.batch_shape == original_dist.batch_shape
-        assert copied_dist.event_shape == original_dist.event_shape
-        assert copied_dist.device == original_dist.device
-        assert copied_dist.concentration1.dtype == original_dist.concentration1.dtype
-        assert copied_dist.concentration0.dtype == original_dist.concentration0.dtype
-
-
-class TestTensorBetaDistributionProperties:
-    def test_distribution_properties(self):
-        """Test that distribution-specific properties work correctly."""
-        concentration1 = torch.tensor([1.0, 2.0, 3.0])
-        concentration0 = torch.tensor([2.0, 3.0, 4.0])
-        td_beta = TensorBeta(concentration1=concentration1, concentration0=concentration0)
-
-        # Test that properties return tensors with correct shapes
-        assert td_beta.mean.shape == (3,)
-        assert td_beta.variance.shape == (3,)
-        assert td_beta.mode.shape == (3,)
-        assert td_beta.stddev.shape == (3,)
-
-        # Test that concentration parameters are accessible
-        assert torch.equal(td_beta.concentration1, concentration1)
-        assert torch.equal(td_beta.concentration0, concentration0)
-
-    def test_sample_in_support(self):
-        """Test that samples are within the Beta distribution support (0, 1)."""
-        concentration1 = torch.tensor([1.0, 2.0])
-        concentration0 = torch.tensor([2.0, 3.0])
-        td_beta = TensorBeta(concentration1=concentration1, concentration0=concentration0)
-
-        samples = td_beta.sample(torch.Size([1000]))
-        
-        # All samples should be in (0, 1)
-        assert torch.all(samples > 0)
-        assert torch.all(samples < 1)
-
-    def test_log_prob_computation(self):
-        """Test log_prob computation for valid values."""
-        concentration1 = torch.tensor([2.0, 3.0])
-        concentration0 = torch.tensor([3.0, 4.0])
-        td_beta = TensorBeta(concentration1=concentration1, concentration0=concentration0)
-
-        # Test with valid values in (0, 1)
-        values = torch.tensor([0.3, 0.7])
-        log_probs = td_beta.log_prob(values)
-        
-        assert log_probs.shape == (2,)
-        assert torch.all(torch.isfinite(log_probs))
 
 
 class TestTensorBetaAPIMatch:

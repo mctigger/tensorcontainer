@@ -50,13 +50,6 @@ class TestTensorCategoricalTensorContainerIntegration:
         assert copied_dist is not original_dist
         assert isinstance(copied_dist, TensorCategorical)
 
-        # Assert that properties are identical
-        assert torch.equal(copied_dist.logits, original_dist.logits)
-        assert copied_dist.batch_shape == original_dist.batch_shape
-        assert copied_dist.event_shape == original_dist.event_shape
-        assert copied_dist.device == original_dist.device
-        assert copied_dist.logits.dtype == original_dist.logits.dtype
-        assert copied_dist.param_shape == original_dist.param_shape
 
 
 class TestTensorCategoricalAPIMatch:

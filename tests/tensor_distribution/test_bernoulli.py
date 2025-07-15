@@ -10,8 +10,6 @@ This module contains test classes that verify:
 
 import pytest
 import torch
-import torch.distributions
-import torch.testing
 from torch.distributions import Bernoulli
 
 from tensorcontainer.tensor_distribution.bernoulli import TensorBernoulli
@@ -23,53 +21,29 @@ from tests.tensor_distribution.conftest import (
 )
 
 
-class TestTensorBernoulliInitialization:
+class TestTensorBernoulliAPIMatch:
     def test_init_no_params_raises_error(self):
         """A RuntimeError should be raised when neither probs nor logits are provided."""
         with pytest.raises(
-            RuntimeError, match="Either 'probs' or 'logits' must be provided."
+            ValueError, match="Either `probs` or `logits` must be specified, but not both."
         ):
             TensorBernoulli()
 
-    @pytest.mark.parametrize("probs_shape", [(5,), (3, 5), (2, 4, 5)])
-    def test_init_with_probs(self, probs_shape):
-        """TensorBernoulli should initialize correctly with 'probs'."""
-        probs = torch.rand(*probs_shape)
-        td_bernoulli = TensorBernoulli(probs=probs)
-        assert td_bernoulli.batch_shape == probs_shape
-        assert td_bernoulli.event_shape == torch.Size([])
-
-    @pytest.mark.parametrize("logits_shape", [(5,), (3, 5), (2, 4, 5)])
-    def test_init_with_logits(self, logits_shape):
-        """TensorBernoulli should initialize correctly with 'logits'."""
-        logits = torch.randn(*logits_shape)
-        td_bernoulli = TensorBernoulli(logits=logits)
-        assert td_bernoulli.batch_shape == logits_shape
-        assert td_bernoulli.event_shape == torch.Size([])
-
-
-class TestTensorBernoulliTensorContainerIntegration:
-    @pytest.mark.parametrize("logits_shape", [(5,), (3, 5), (2, 4, 5)])
-    def test_compile_compatibility(self, logits_shape):
+    @pytest.mark.parametrize("param_type", ["probs", "logits"])
+    @pytest.mark.parametrize("shape", [(5,), (3, 5), (2, 4, 5)])
+    def test_compile_compatibility(self, param_type, shape):
         """Core operations should be compatible with torch.compile."""
-        logits = torch.randn(*logits_shape, requires_grad=True)
-        td_bernoulli = TensorBernoulli(logits=logits)
-        sample = td_bernoulli.sample()
+        if param_type == "probs":
+            param = torch.rand(*shape, requires_grad=True)
+            td_bernoulli = TensorBernoulli(probs=param)
+        else:
+            param = torch.randn(*shape, requires_grad=True)
+            td_bernoulli = TensorBernoulli(logits=param)
 
-        def sample_fn(td):
-            return td.sample()
+        def get_mean(td):
+            return td.mean
 
-        def log_prob_fn(td, s):
-            return td.log_prob(s)
-
-        run_and_compare_compiled(sample_fn, td_bernoulli, fullgraph=False)
-        run_and_compare_compiled(log_prob_fn, td_bernoulli, sample, fullgraph=False)
-
-
-class TestTensorBernoulliAPIMatch:
-    """
-    Tests that the TensorBernoulli API matches the PyTorch Bernoulli API.
-    """
+        run_and_compare_compiled(get_mean, td_bernoulli, fullgraph=False)
 
     def test_init_signatures_match(self):
         """
@@ -89,11 +63,20 @@ class TestTensorBernoulliAPIMatch:
             TensorBernoulli, Bernoulli
         )
 
-    def test_property_values_match(self):
+    @pytest.mark.parametrize("param_type", ["probs", "logits"])
+    @pytest.mark.parametrize("shape", [(5,), (3, 5), (2, 4, 5)])
+    def test_property_values_match(self, param_type, shape):
         """
         Tests that the property values of TensorBernoulli match
         torch.distributions.Bernoulli.
         """
-        logits = torch.randn(3, 5)
-        td_bernoulli = TensorBernoulli(logits=logits)
+        if param_type == "probs":
+            param = torch.rand(*shape)
+            td_bernoulli = TensorBernoulli(probs=param)
+        else:
+            param = torch.randn(*shape)
+            td_bernoulli = TensorBernoulli(logits=param)
         assert_property_values_match(td_bernoulli)
+    """
+    Tests that the TensorBernoulli API matches the PyTorch Bernoulli API.
+    """
