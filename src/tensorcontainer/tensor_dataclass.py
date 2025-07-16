@@ -226,11 +226,8 @@ class TensorDataClass(TensorAnnotated, TensorDataclassTransform):
             if issubclass(base, TensorDataClass):
                 base_annotations = {k:v for k,v in base_annotations.items() if k not in ["device", "shape"]}
 
-            print("Using", base.__name__, base_annotations)
             annotations.update(base_annotations)
 
-
-        print("Annotations", annotations)
 
         # Programmatically prepend `shape` and `device` to the class annotations.
         # Dataclasses use the order of `__annotations__` to generate the `__init__`
@@ -249,7 +246,6 @@ class TensorDataClass(TensorAnnotated, TensorDataclassTransform):
             **annotations,
         }
 
-        print("Final Annotation for class", cls.__name__, cls.__annotations__)
 
         dc_kwargs = {}
         for k in list(kwargs.keys()):
