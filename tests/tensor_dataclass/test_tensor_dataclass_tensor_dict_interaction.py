@@ -235,7 +235,6 @@ class TestView:
         TensorDataClass.
         """
         tdc = _make_tdc_with_td(batch_size, device)
-        print(self._perform_view_operation(tdc, new_shape).device)
         _run_and_verify_tdc_operation(
             self._perform_view_operation,
             tdc,
