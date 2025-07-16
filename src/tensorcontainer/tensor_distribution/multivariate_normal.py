@@ -14,15 +14,12 @@ class TensorMultivariateNormal(TensorDistribution):
     _covariance_matrix: Tensor | None = None
     _precision_matrix: Tensor | None = None
     _scale_tril: Tensor | None = None
-    reinterpreted_batch_ndims: int = 0
-
     def __init__(
         self,
         loc: Tensor,
         covariance_matrix: Tensor | None = None,
         precision_matrix: Tensor | None = None,
         scale_tril: Tensor | None = None,
-        reinterpreted_batch_ndims: int = 0,
     ):
         num_params = sum(
             p is not None for p in [covariance_matrix, precision_matrix, scale_tril]
@@ -37,7 +34,6 @@ class TensorMultivariateNormal(TensorDistribution):
         self._covariance_matrix = covariance_matrix
         self._precision_matrix = precision_matrix
         self._scale_tril = scale_tril
-        self.reinterpreted_batch_ndims = reinterpreted_batch_ndims
         super().__init__(loc.shape, loc.device)  # Call super().__init__ here
 
     def dist(self) -> MultivariateNormal:
@@ -52,13 +48,13 @@ class TensorMultivariateNormal(TensorDistribution):
     def _unflatten_distribution(
         cls, attributes: Dict[str, Any]
     ) -> TensorMultivariateNormal:
-        return cls(
+        instance = cls(
             loc=attributes["_loc"],
             covariance_matrix=attributes.get("_covariance_matrix"),
             precision_matrix=attributes.get("_precision_matrix"),
             scale_tril=attributes.get("_scale_tril"),
-            reinterpreted_batch_ndims=attributes["reinterpreted_batch_ndims"],
         )
+        return instance
 
     @property
     def loc(self) -> Tensor:
