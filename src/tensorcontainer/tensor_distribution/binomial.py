@@ -35,7 +35,9 @@ class TensorBinomial(TensorDistribution):
         logits: Optional[Tensor] = None,
     ):
         if (probs is None) == (logits is None):
-            raise ValueError("Either `probs` or `logits` must be specified, but not both.")
+            raise ValueError(
+                "Either `probs` or `logits` must be specified, but not both."
+            )
 
         if probs is not None:
             self._total_count, self._probs = broadcast_all(total_count, probs)
@@ -82,16 +84,18 @@ class TensorBinomial(TensorDistribution):
             # Convert int total_count to a tensor with the correct device and dtype
             # The device and dtype should match the probs/logits tensor
             if self._probs is not None:
-                total_count = torch.tensor(total_count, device=self._probs.device, dtype=self._probs.dtype)
+                total_count = torch.tensor(
+                    total_count, device=self._probs.device, dtype=self._probs.dtype
+                )
             elif self._logits is not None:
-                total_count = torch.tensor(total_count, device=self._logits.device, dtype=self._logits.dtype)
+                total_count = torch.tensor(
+                    total_count, device=self._logits.device, dtype=self._logits.dtype
+                )
             else:
                 # Fallback if neither probs nor logits are set (should not happen with current init logic)
                 total_count = torch.tensor(total_count)
 
-        return Binomial(
-            total_count=total_count, probs=self._probs, logits=self._logits
-        )
+        return Binomial(total_count=total_count, probs=self._probs, logits=self._logits)
 
     def log_prob(self, value: Tensor) -> Tensor:
         return self.dist().log_prob(value)

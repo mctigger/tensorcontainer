@@ -29,21 +29,21 @@ class TensorGeometric(TensorDistribution):
 
         if probs is not None:
             self._probs = probs
-            data = probs
         else:
             self._logits = logits
-            data = logits
 
         # Create a temporary distribution to get the batch_shape and device
         # Create a temporary distribution to get the batch_shape and device
         temp_dist = Geometric(probs=probs, logits=logits)
-        
+
         # Determine the device based on which parameter is used
         if logits is not None:
-            device = logits.device if isinstance(logits, Tensor) else torch.device("cpu")
+            device = (
+                logits.device if isinstance(logits, Tensor) else torch.device("cpu")
+            )
         else:
             device = probs.device if isinstance(probs, Tensor) else torch.device("cpu")
-            
+
         super().__init__(temp_dist.batch_shape, device)
 
     @classmethod
@@ -126,4 +126,3 @@ class TensorGeometric(TensorDistribution):
     def _validate_args(self) -> bool:
         """Returns True if the distribution validates arguments."""
         return self.dist()._validate_args
-

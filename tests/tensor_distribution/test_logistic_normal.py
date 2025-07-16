@@ -69,4 +69,6 @@ class TestTensorLogisticNormalAPIMatch:
             return td.log_prob(s)
 
         run_and_compare_compiled(sample_fn, td_logistic_normal, fullgraph=False)
-        run_and_compare_compiled(log_prob_fn, td_logistic_normal, sample, fullgraph=False)
+        run_and_compare_compiled(
+            log_prob_fn, td_logistic_normal, sample, fullgraph=False
+        )

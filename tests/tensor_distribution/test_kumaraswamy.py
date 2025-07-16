@@ -21,7 +21,9 @@ class TestTensorKumaraswamyInitialization:
         ],
     )
     def test_init(self, concentration1, concentration0):
-        td_kumaraswamy = TensorKumaraswamy(concentration1=concentration1, concentration0=concentration0)
+        td_kumaraswamy = TensorKumaraswamy(
+            concentration1=concentration1, concentration0=concentration0
+        )
         assert isinstance(td_kumaraswamy, TensorKumaraswamy)
         assert isinstance(td_kumaraswamy.dist(), Kumaraswamy)
 
@@ -35,7 +37,9 @@ class TestTensorKumaraswamyTensorContainerIntegration:
     )
     def test_compile_compatibility(self, concentration1, concentration0):
         """Core operations should be compatible with torch.compile."""
-        td_kumaraswamy = TensorKumaraswamy(concentration1=concentration1, concentration0=concentration0)
+        td_kumaraswamy = TensorKumaraswamy(
+            concentration1=concentration1, concentration0=concentration0
+        )
 
         sample = td_kumaraswamy.sample()
 
@@ -79,5 +83,7 @@ class TestTensorKumaraswamyAPIMatch:
         """
         concentration1 = torch.randn(3, 5).exp()
         concentration0 = torch.randn(3, 5).exp()
-        td_kumaraswamy = TensorKumaraswamy(concentration1=concentration1, concentration0=concentration0)
+        td_kumaraswamy = TensorKumaraswamy(
+            concentration1=concentration1, concentration0=concentration0
+        )
         assert_property_values_match(td_kumaraswamy)

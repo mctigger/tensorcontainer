@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Union
+from typing import Dict, Union
 
 import torch
 from torch import Tensor
@@ -18,7 +18,9 @@ class TensorKumaraswamy(TensorDistribution):
     _concentration1: Tensor
     _concentration0: Tensor
 
-    def __init__(self, concentration1: Union[float, Tensor], concentration0: Union[float, Tensor]):
+    def __init__(
+        self, concentration1: Union[float, Tensor], concentration0: Union[float, Tensor]
+    ):
         # Store the parameters in annotated attributes before calling super().__init__()
         # This is required because super().__init__() calls self.dist() which needs these attributes
         self._concentration1 = (
@@ -69,4 +71,3 @@ class TensorKumaraswamy(TensorDistribution):
     def concentration0(self) -> Tensor:
         """Returns the concentration0 parameter of the distribution."""
         return self.dist().concentration0
-

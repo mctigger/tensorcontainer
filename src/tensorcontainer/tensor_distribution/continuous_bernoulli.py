@@ -20,9 +20,11 @@ class ContinuousBernoulli(TensorDistribution):
         lims: Tuple[float, float] = (0.499, 0.501),
     ) -> None:
         self._lims = lims
-        
+
         if probs is not None and logits is not None:
-            raise ValueError("Either `probs` or `logits` must be specified, but not both.")
+            raise ValueError(
+                "Either `probs` or `logits` must be specified, but not both."
+            )
         elif probs is None and logits is None:
             raise ValueError("Either `probs` or `logits` must be specified.")
 

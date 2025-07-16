@@ -6,7 +6,6 @@ import torch
 from torch import Size, Tensor
 from torch.distributions import LogNormal
 
-from tensorcontainer.tensor_annotated import TDCompatible
 
 from .base import TensorDistribution
 
@@ -42,9 +41,7 @@ class TensorLogNormal(TensorDistribution):
         super().__init__(shape, device)
 
     @classmethod
-    def _unflatten_distribution(
-        cls, attributes: Dict[str, Any]
-    ) -> TensorLogNormal:
+    def _unflatten_distribution(cls, attributes: Dict[str, Any]) -> TensorLogNormal:
         """Reconstruct distribution from tensor attributes."""
         return cls(
             loc=attributes.get("_loc"),  # type: ignore

@@ -5,7 +5,6 @@ from typing import Any, Dict, Union
 from torch import Tensor
 from torch.distributions import Pareto as TorchPareto
 
-from tensorcontainer.tensor_annotated import TDCompatible
 
 from .base import TensorDistribution
 
@@ -23,7 +22,9 @@ class TensorPareto(TensorDistribution):
     _scale: Tensor
     _alpha: Tensor
 
-    def __init__(self, scale: Union[float, Tensor], alpha: Union[float, Tensor]) -> None:
+    def __init__(
+        self, scale: Union[float, Tensor], alpha: Union[float, Tensor]
+    ) -> None:
         if isinstance(scale, (float, int)):
             scale = Tensor([scale])
         if isinstance(alpha, (float, int)):
@@ -43,9 +44,7 @@ class TensorPareto(TensorDistribution):
         super().__init__(shape, device)
 
     @classmethod
-    def _unflatten_distribution(
-        cls, attributes: Dict[str, Any]
-    ) -> TensorPareto:
+    def _unflatten_distribution(cls, attributes: Dict[str, Any]) -> TensorPareto:
         """Reconstruct distribution from tensor attributes."""
         return cls(
             scale=attributes["_scale"],  # type: ignore
@@ -73,4 +72,3 @@ class TensorPareto(TensorDistribution):
     def alpha(self) -> Tensor:
         """Returns the alpha parameter of the distribution."""
         return self.dist().alpha
-

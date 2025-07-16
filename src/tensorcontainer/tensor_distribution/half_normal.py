@@ -16,7 +16,9 @@ class TensorHalfNormal(TensorDistribution):
     _scale: Union[Tensor, float]
     _validate_args: Optional[bool] = None
 
-    def __init__(self, scale: Union[Tensor, float], validate_args: Optional[bool] = None):
+    def __init__(
+        self, scale: Union[Tensor, float], validate_args: Optional[bool] = None
+    ):
         # Store the parameters in annotated attributes before calling super().__init__()
         # This is required because super().__init__() calls self.dist() which needs these attributes
         self._scale = scale
@@ -32,9 +34,7 @@ class TensorHalfNormal(TensorDistribution):
         super().__init__(shape, device)
 
     @classmethod
-    def _unflatten_distribution(
-        cls, attributes: Dict[str, Any]
-    ) -> TensorHalfNormal:
+    def _unflatten_distribution(cls, attributes: Dict[str, Any]) -> TensorHalfNormal:
         """Reconstruct distribution from tensor attributes."""
         return cls(
             scale=cast(Union[Tensor, float], attributes.get("_scale")),

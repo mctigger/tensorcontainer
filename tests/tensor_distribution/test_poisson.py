@@ -38,18 +38,14 @@ class TestTensorPoissonAPIMatch:
         Tests that the __init__ signature of TensorPoisson matches
         torch.distributions.Poisson.
         """
-        assert_init_signatures_match(
-            TensorPoisson, Poisson
-        )
+        assert_init_signatures_match(TensorPoisson, Poisson)
 
     def test_properties_match(self):
         """
         Tests that the properties of TensorPoisson match
         torch.distributions.Poisson.
         """
-        assert_properties_signatures_match(
-            TensorPoisson, Poisson
-        )
+        assert_properties_signatures_match(TensorPoisson, Poisson)
 
     @pytest.mark.parametrize("shape", [(1,), (3, 1), (2, 4, 1)])
     def test_property_values_match(self, shape):

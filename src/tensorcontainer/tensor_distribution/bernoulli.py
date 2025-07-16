@@ -23,7 +23,9 @@ class TensorBernoulli(TensorDistribution):
         logits: Optional[Union[Number, Tensor]] = None,
     ):
         if (probs is None) == (logits is None):
-            raise ValueError("Either `probs` or `logits` must be specified, but not both.")
+            raise ValueError(
+                "Either `probs` or `logits` must be specified, but not both."
+            )
 
         if probs is not None:
             (self._probs,) = broadcast_all(probs)
@@ -63,7 +65,6 @@ class TensorBernoulli(TensorDistribution):
     @property
     def mode(self) -> Tensor:
         return self.dist().mode
-
 
     @property
     def logits(self) -> Tensor:

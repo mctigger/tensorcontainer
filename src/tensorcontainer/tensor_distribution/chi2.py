@@ -19,7 +19,7 @@ class TensorChi2(TensorDistribution):
     _df: Tensor
 
     def __init__(self, df: Union[float, Tensor]):
-        if isinstance(df, (float, int)): # Handle both float and int
+        if isinstance(df, (float, int)):  # Handle both float and int
             df = torch.tensor(df, dtype=torch.float32)
 
         self._df = df

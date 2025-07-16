@@ -12,7 +12,9 @@ import pytest
 import torch
 from torch.distributions import MultivariateNormal
 
-from tensorcontainer.tensor_distribution.multivariate_normal import TensorMultivariateNormal
+from tensorcontainer.tensor_distribution.multivariate_normal import (
+    TensorMultivariateNormal,
+)
 from tests.compile_utils import run_and_compare_compiled
 from tests.tensor_distribution.conftest import (
     assert_init_signatures_match,

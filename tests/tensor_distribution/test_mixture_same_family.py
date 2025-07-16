@@ -1,9 +1,11 @@
 import pytest
 import torch
-from torch.distributions import Categorical, MixtureSameFamily, Normal
+from torch.distributions import MixtureSameFamily
 
 from tensorcontainer.tensor_distribution.categorical import TensorCategorical
-from tensorcontainer.tensor_distribution.mixture_same_family import TensorMixtureSameFamily
+from tensorcontainer.tensor_distribution.mixture_same_family import (
+    TensorMixtureSameFamily,
+)
 from tensorcontainer.tensor_distribution.normal import TensorNormal
 from tests.compile_utils import run_and_compare_compiled
 from tests.tensor_distribution.conftest import (

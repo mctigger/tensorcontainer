@@ -2,11 +2,9 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional, Union
 
-import torch  # Add this import
 from torch import Size, Tensor
 from torch.distributions import Multinomial
 
-from tensorcontainer.tensor_annotated import TDCompatible
 
 from .base import TensorDistribution
 
@@ -20,7 +18,10 @@ class TensorMultinomial(TensorDistribution):
     _logits: Optional[Tensor] = None
 
     def __init__(
-        self, total_count: Union[int, Tensor] = 1, probs: Optional[Tensor] = None, logits: Optional[Tensor] = None
+        self,
+        total_count: Union[int, Tensor] = 1,
+        probs: Optional[Tensor] = None,
+        logits: Optional[Tensor] = None,
     ):
         if probs is None and logits is None:
             raise RuntimeError("Either 'probs' or 'logits' must be provided.")
@@ -28,7 +29,9 @@ class TensorMultinomial(TensorDistribution):
             raise RuntimeError("Only one of 'probs' or 'logits' can be provided.")
 
         data = probs if probs is not None else logits
-        if data is None: # This case is already handled by the above checks, but for mypy
+        if (
+            data is None
+        ):  # This case is already handled by the above checks, but for mypy
             raise RuntimeError("Internal error: data tensor is None.")
 
         # Store the parameters in annotated attributes before calling super().__init__()
@@ -57,8 +60,8 @@ class TensorMultinomial(TensorDistribution):
             logits=attributes.get("_logits"),
         )
 
-    def dist(self) -> Multinomial: # Changed return type
-        return Multinomial( # Removed Independent wrapper
+    def dist(self) -> Multinomial:  # Changed return type
+        return Multinomial(  # Removed Independent wrapper
             total_count=self._total_count, probs=self._probs, logits=self._logits
         )
 
@@ -73,12 +76,13 @@ class TensorMultinomial(TensorDistribution):
     @property
     def logits(self) -> Optional[Tensor]:
         """Returns the logits used to initialize the distribution."""
-        return self.dist().logits # Access directly
+        return self.dist().logits  # Access directly
 
     @property
     def probs(self) -> Optional[Tensor]:
         """Returns the probabilities used to initialize the distribution."""
-        return self.dist().probs # Access directly
+        return self.dist().probs  # Access directly
+
     @property
     def param_shape(self) -> Size:
         """Returns the shape of the underlying parameter."""

@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
+import torch
 from torch import Tensor
 from torch.distributions import RelaxedOneHotCategorical as TorchRelaxedCategorical
 
-from tensorcontainer.tensor_annotated import TDCompatible
 
 from .base import TensorDistribution
 
@@ -20,7 +20,7 @@ class TensorRelaxedCategorical(TensorDistribution):
 
     def __init__(
         self,
-        temperature: Tensor,
+        temperature: Optional[Tensor],
         probs: Optional[Tensor] = None,
         logits: Optional[Tensor] = None,
     ):
@@ -30,26 +30,36 @@ class TensorRelaxedCategorical(TensorDistribution):
         if temperature is None:
             raise RuntimeError("'temperature' must be provided.")
 
+        # Convert temperature to a tensor if it's a float or int
+        if isinstance(temperature, (float, int)):
+            temperature = torch.tensor(
+                temperature, dtype=data.dtype, device=data.device
+            )
+
+        # After this point, temperature is guaranteed to be a Tensor due to the checks above
+        # and the initial type hint being Optional[Tensor]
+        assert temperature is not None  # For mypy
+
+        # Determine shape and device from data (probs or logits)
+        shape = data.shape[:-1]
+        device = data.device
+
         self._temperature = temperature
         self._probs = probs
         self._logits = logits
-
-        shape = data.shape[:-1]
-        device = data.device
 
         super().__init__(shape, device)
 
     @classmethod
     def _unflatten_distribution(
         cls,
-        tensor_attributes: Dict[str, TDCompatible],
-        meta_attributes: Dict[str, Any],
+        attributes: Dict[str, Any],
     ) -> "TensorRelaxedCategorical":
         """Reconstruct distribution from tensor attributes."""
         return cls(
-            temperature=tensor_attributes["_temperature"],  # type: ignore
-            probs=tensor_attributes.get("_probs"),  # type: ignore
-            logits=tensor_attributes.get("_logits"),  # type: ignore
+            temperature=attributes["_temperature"],  # type: ignore
+            probs=attributes.get("_probs"),  # type: ignore
+            logits=attributes.get("_logits"),  # type: ignore
         )
 
     def dist(self) -> TorchRelaxedCategorical:
@@ -76,4 +86,3 @@ class TensorRelaxedCategorical(TensorDistribution):
     def probs(self) -> Optional[Tensor]:
         """Returns the probabilities used to initialize the distribution."""
         return self.dist().probs
-

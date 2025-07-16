@@ -4,8 +4,7 @@ from typing import Any, Dict
 
 import torch
 from torch import Tensor
-from torch.distributions import Distribution, MultivariateNormal
-from typing import Any, Dict, cast
+from torch.distributions import MultivariateNormal
 
 from .base import TensorDistribution
 
@@ -26,8 +25,7 @@ class TensorMultivariateNormal(TensorDistribution):
         reinterpreted_batch_ndims: int = 0,
     ):
         num_params = sum(
-            p is not None
-            for p in [covariance_matrix, precision_matrix, scale_tril]
+            p is not None for p in [covariance_matrix, precision_matrix, scale_tril]
         )
         if num_params != 1:
             raise ValueError(
@@ -40,7 +38,7 @@ class TensorMultivariateNormal(TensorDistribution):
         self._precision_matrix = precision_matrix
         self._scale_tril = scale_tril
         self.reinterpreted_batch_ndims = reinterpreted_batch_ndims
-        super().__init__(loc.shape, loc.device) # Call super().__init__ here
+        super().__init__(loc.shape, loc.device)  # Call super().__init__ here
 
     def dist(self) -> MultivariateNormal:
         return MultivariateNormal(

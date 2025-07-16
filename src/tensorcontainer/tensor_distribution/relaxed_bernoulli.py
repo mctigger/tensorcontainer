@@ -5,7 +5,6 @@ from typing import Any, Dict, Optional
 from torch import Tensor
 from torch.distributions import RelaxedBernoulli as TorchRelaxedBernoulli
 
-from tensorcontainer.tensor_annotated import TDCompatible
 
 from .base import TensorDistribution
 
@@ -64,4 +63,3 @@ class TensorRelaxedBernoulli(TensorDistribution):
     def probs(self) -> Optional[Tensor]:
         """Returns the probabilities used to initialize the distribution."""
         return self.dist().probs
-

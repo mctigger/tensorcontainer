@@ -29,7 +29,9 @@ class TensorBeta(TensorDistribution):
     _concentration0: Tensor
 
     def __init__(self, concentration1: Tensor, concentration0: Tensor):
-        self._concentration1, self._concentration0 = broadcast_all(concentration1, concentration0)
+        self._concentration1, self._concentration0 = broadcast_all(
+            concentration1, concentration0
+        )
 
         if isinstance(concentration1, Number) and isinstance(concentration0, Number):
             shape = tuple()

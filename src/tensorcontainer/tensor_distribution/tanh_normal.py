@@ -9,8 +9,10 @@ from torch.distributions import (
     TransformedDistribution,
     constraints,
 )
+from torch.distributions.utils import broadcast_all
+from torch.types import Number
+from typing import Any, Dict, Optional
 
-from tensorcontainer.distributions.sampling import SamplingDistribution
 from .base import TensorDistribution
 
 
@@ -46,28 +48,62 @@ class ClampedTanhTransform(torch.distributions.transforms.Transform):
 
 
 class TensorTanhNormal(TensorDistribution):
-    loc: Tensor
-    scale: Tensor
-    reinterpreted_batch_ndims: int = 1
+    _loc: Tensor
+    _scale: Tensor
+    _reinterpreted_batch_ndims: int
+
+    def __init__(
+        self,
+        loc: Tensor,
+        scale: Tensor,
+        reinterpreted_batch_ndims: Optional[int] = None,
+    ):
+        self._loc, self._scale = broadcast_all(loc, scale)
+
+        if reinterpreted_batch_ndims is None:
+            self._reinterpreted_batch_ndims = 0
+            if self._loc.ndim > 0:
+                self._reinterpreted_batch_ndims = 1
+        else:
+            self._reinterpreted_batch_ndims = reinterpreted_batch_ndims
+
+        if isinstance(loc, Number) and isinstance(scale, Number):
+            shape = tuple()
+        else:
+            shape = self._loc.shape
+
+        device = self._loc.device
+
+        super().__init__(shape, device)
+
+    @classmethod
+    def _unflatten_distribution(
+        cls,
+        attributes: Dict[str, Any],
+    ) -> TensorTanhNormal:
+        """Reconstruct distribution from tensor attributes."""
+        return cls(
+            loc=attributes.get("_loc"),  # type: ignore
+            scale=attributes.get("_scale"),  # type: ignore
+            reinterpreted_batch_ndims=attributes.get("_reinterpreted_batch_ndims"),  # type: ignore
+        )
 
     def dist(self) -> Distribution:
         return Independent(
-            SamplingDistribution(
-                TransformedDistribution(
-                    Normal(self.loc.float(), self.scale.float()),
-                    [
-                        ClampedTanhTransform(),
-                    ],
-                ),
+            TransformedDistribution(
+                Normal(self._loc.float(), self._scale.float(), validate_args=False),
+                [
+                    ClampedTanhTransform(),
+                ],
+                validate_args=False,
             ),
-            self.reinterpreted_batch_ndims,
+            self._reinterpreted_batch_ndims,
         )
 
-    def copy(self):
-        return TensorTanhNormal(
-            loc=self.loc,
-            scale=self.scale,
-            reinterpreted_batch_ndims=self.reinterpreted_batch_ndims,
-            shape=self.shape,
-            device=self.device,
-        )
+    @property
+    def loc(self) -> Tensor:
+        return self._loc
+
+    @property
+    def scale(self) -> Tensor:
+        return self._scale

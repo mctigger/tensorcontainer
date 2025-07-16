@@ -26,7 +26,7 @@ class TensorNormal(TensorDistribution):
 
     # Annotated tensor parameters
     _loc: Tensor
-    _scale: Tensor 
+    _scale: Tensor
 
     def __init__(self, loc: Tensor, scale: Tensor):
         self._loc, self._scale = broadcast_all(loc, scale)

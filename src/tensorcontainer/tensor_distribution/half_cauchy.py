@@ -54,4 +54,3 @@ class TensorHalfCauchy(TensorDistribution):
     def scale(self) -> Tensor:
         """Returns the scale used to initialize the distribution."""
         return self.dist().scale
-

@@ -29,9 +29,7 @@ class TestTensorNegativeBinomialAPIMatch:
             total_count = 0
         else:
             total_count = torch.tensor(0.0)
-        with pytest.raises(
-            ValueError, match="total_count must be positive"
-        ):
+        with pytest.raises(ValueError, match="total_count must be positive"):
             TensorNegativeBinomial(total_count=total_count, probs=torch.rand(5))
 
     def test_init_both_params_raises_error(self):
@@ -39,7 +37,9 @@ class TestTensorNegativeBinomialAPIMatch:
         with pytest.raises(
             ValueError, match="Only one of 'probs' or 'logits' can be specified."
         ):
-            TensorNegativeBinomial(total_count=1, probs=torch.rand(5), logits=torch.randn(5))
+            TensorNegativeBinomial(
+                total_count=1, probs=torch.rand(5), logits=torch.randn(5)
+            )
 
     def test_init_no_params_raises_error(self):
         """A ValueError should be raised when neither probs nor logits are provided."""
@@ -55,10 +55,14 @@ class TestTensorNegativeBinomialAPIMatch:
         """Core operations should be compatible with torch.compile."""
         if param_type == "probs":
             param = torch.rand(*shape, requires_grad=True)
-            td_negative_binomial = TensorNegativeBinomial(total_count=total_count, probs=param)
+            td_negative_binomial = TensorNegativeBinomial(
+                total_count=total_count, probs=param
+            )
         else:
             param = torch.randn(*shape, requires_grad=True)
-            td_negative_binomial = TensorNegativeBinomial(total_count=total_count, logits=param)
+            td_negative_binomial = TensorNegativeBinomial(
+                total_count=total_count, logits=param
+            )
 
         def get_mean(td):
             return td.mean
@@ -70,18 +74,14 @@ class TestTensorNegativeBinomialAPIMatch:
         Tests that the __init__ signature of TensorNegativeBinomial matches
         torch.distributions.NegativeBinomial.
         """
-        assert_init_signatures_match(
-            TensorNegativeBinomial, NegativeBinomial
-        )
+        assert_init_signatures_match(TensorNegativeBinomial, NegativeBinomial)
 
     def test_properties_match(self):
         """
         Tests that the properties of TensorNegativeBinomial match
         torch.distributions.NegativeBinomial.
         """
-        assert_properties_signatures_match(
-            TensorNegativeBinomial, NegativeBinomial
-        )
+        assert_properties_signatures_match(TensorNegativeBinomial, NegativeBinomial)
 
     @pytest.mark.parametrize("param_type", ["probs", "logits"])
     @pytest.mark.parametrize("shape", [(5,), (3, 5), (2, 4, 5)])
@@ -93,8 +93,12 @@ class TestTensorNegativeBinomialAPIMatch:
         """
         if param_type == "probs":
             param = torch.rand(*shape)
-            td_negative_binomial = TensorNegativeBinomial(total_count=total_count, probs=param)
+            td_negative_binomial = TensorNegativeBinomial(
+                total_count=total_count, probs=param
+            )
         else:
             param = torch.randn(*shape)
-            td_negative_binomial = TensorNegativeBinomial(total_count=total_count, logits=param)
+            td_negative_binomial = TensorNegativeBinomial(
+                total_count=total_count, logits=param
+            )
         assert_property_values_match(td_negative_binomial)

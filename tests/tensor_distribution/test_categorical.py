@@ -51,7 +51,6 @@ class TestTensorCategoricalTensorContainerIntegration:
         assert isinstance(copied_dist, TensorCategorical)
 
 
-
 class TestTensorCategoricalAPIMatch:
     """
     Tests that the TensorCategorical API matches the PyTorch OneHotCategoricalStraightThrough API.

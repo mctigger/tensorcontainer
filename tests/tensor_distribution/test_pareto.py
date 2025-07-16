@@ -39,18 +39,14 @@ class TestTensorParetoAPIMatch:
         Tests that the __init__ signature of TensorPareto matches
         torch.distributions.Pareto.
         """
-        assert_init_signatures_match(
-            TensorPareto, Pareto
-        )
+        assert_init_signatures_match(TensorPareto, Pareto)
 
     def test_properties_match(self):
         """
         Tests that the properties of TensorPareto match
         torch.distributions.Pareto.
         """
-        assert_properties_signatures_match(
-            TensorPareto, Pareto
-        )
+        assert_properties_signatures_match(TensorPareto, Pareto)
 
     @pytest.mark.parametrize("shape", [(1,), (3, 1), (2, 4, 1)])
     def test_property_values_match(self, shape):

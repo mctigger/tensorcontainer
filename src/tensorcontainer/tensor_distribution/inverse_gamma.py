@@ -6,7 +6,6 @@ import torch
 from torch import Tensor
 from torch.distributions import InverseGamma as TorchInverseGamma
 
-from tensorcontainer.tensor_annotated import TDCompatible
 
 from .base import TensorDistribution
 
@@ -21,7 +20,11 @@ class TensorInverseGamma(TensorDistribution):
     def __init__(self, concentration: Union[float, Tensor], rate: Union[float, Tensor]):
         # Store the parameters in annotated attributes before calling super().__init__()
         # This is required because super().__init__() calls self.dist() which needs these attributes
-        self._concentration = concentration if isinstance(concentration, Tensor) else torch.tensor(concentration)
+        self._concentration = (
+            concentration
+            if isinstance(concentration, Tensor)
+            else torch.tensor(concentration)
+        )
         self._rate = rate if isinstance(rate, Tensor) else torch.tensor(rate)
 
         shape = self._concentration.shape

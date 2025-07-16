@@ -6,7 +6,6 @@ import torch
 from torch import Size, Tensor
 from torch.distributions import NegativeBinomial
 
-from tensorcontainer.tensor_annotated import TDCompatible
 
 from .base import TensorDistribution
 

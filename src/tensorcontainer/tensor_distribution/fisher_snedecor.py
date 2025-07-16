@@ -9,7 +9,9 @@ from .base import TensorDistribution
 
 
 class TensorFisherSnedecor(TensorDistribution):
-    def __init__(self, df1: Tensor, df2: Tensor, *, validate_args: Optional[bool] = None):
+    def __init__(
+        self, df1: Tensor, df2: Tensor, *, validate_args: Optional[bool] = None
+    ):
         self._df1: Tensor
         self._df2: Tensor
         self._df1, self._df2 = broadcast_all(df1, df2)
@@ -20,7 +22,9 @@ class TensorFisherSnedecor(TensorDistribution):
         return TorchFisherSnedecor(self._df1, self._df2)
 
     @classmethod
-    def _unflatten_distribution(cls, attributes: Dict[str, Any]) -> "TensorFisherSnedecor":
+    def _unflatten_distribution(
+        cls, attributes: Dict[str, Any]
+    ) -> "TensorFisherSnedecor":
         return cls(
             df1=attributes["_df1"],
             df2=attributes["_df2"],
@@ -49,8 +53,6 @@ class TensorFisherSnedecor(TensorDistribution):
 
     def entropy(self) -> Tensor:
         return self.dist().entropy()
-
-
 
     def log_prob(self, value: Tensor) -> Tensor:
         return self.dist().log_prob(value)

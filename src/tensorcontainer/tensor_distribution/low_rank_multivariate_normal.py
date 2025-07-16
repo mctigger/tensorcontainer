@@ -2,14 +2,11 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
-import torch
-from torch import Size, Tensor
+from torch import Tensor
 from torch.distributions import (
     LowRankMultivariateNormal as TorchLowRankMultivariateNormal,
 )
-from torch.distributions.distribution import Distribution
 
-from tensorcontainer.tensor_dict import TensorDict
 from tensorcontainer.tensor_distribution.base import TensorDistribution
 
 

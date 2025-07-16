@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import torch
 import torch.distributions
+from torch import Tensor
 
 
 class TruncatedNormal(torch.distributions.Normal):
-    def __init__(self, loc, scale, low=-1.0, high=1.0, eps=1e-6):
+    def __init__(self, loc: Tensor, scale: Tensor, low: Tensor, high: Tensor, eps: float = 1e-6):
         super().__init__(loc, scale)
         self.low = low
         self.high = high

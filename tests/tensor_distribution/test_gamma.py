@@ -25,9 +25,13 @@ class TestTensorGammaInitialization:
             ((2, 4, 5), (2, 4, 5), (2, 4, 5)),
         ],
     )
-    def test_broadcasting_shapes(self, concentration_shape, rate_shape, expected_batch_shape):
+    def test_broadcasting_shapes(
+        self, concentration_shape, rate_shape, expected_batch_shape
+    ):
         """Test that batch_shape is correctly determined by broadcasting."""
-        concentration = torch.rand(concentration_shape).exp()  # concentration must be positive
+        concentration = torch.rand(
+            concentration_shape
+        ).exp()  # concentration must be positive
         rate = torch.rand(rate_shape).exp()  # rate must be positive
         td_gamma = TensorGamma(concentration=concentration, rate=rate)
         assert td_gamma.batch_shape == expected_batch_shape
@@ -40,6 +44,7 @@ class TestTensorGammaInitialization:
         td_gamma = TensorGamma(concentration=concentration, rate=rate)
         assert td_gamma.batch_shape == ()
         assert td_gamma.device == concentration.device
+
 
 class TestTensorGammaTensorContainerIntegration:
     @pytest.mark.parametrize("param_shape", [(5,), (3, 5), (2, 4, 5)])

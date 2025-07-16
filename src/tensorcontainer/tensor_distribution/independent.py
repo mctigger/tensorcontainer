@@ -2,6 +2,10 @@ from __future__ import annotations
 
 from torch.distributions import Independent
 
+from typing import Any, Dict
+
+from torch import Size
+
 from tensorcontainer.tensor_distribution.base import TensorDistribution
 
 
@@ -16,11 +20,18 @@ class TensorIndependent(TensorDistribution):
         self.reinterpreted_batch_ndims = reinterpreted_batch_ndims
 
         super().__init__(
-            base_distribution.shape[:-reinterpreted_batch_ndims],
+            Size(base_distribution.shape[:-reinterpreted_batch_ndims]),
             base_distribution.device,
         )
 
     def dist(self):
         return Independent(
             self.base_distribution.dist(), self.reinterpreted_batch_ndims
+        )
+
+    @classmethod
+    def _unflatten_distribution(cls, attributes: Dict[str, Any]):
+        return cls(
+            base_distribution=attributes["base_distribution"],
+            reinterpreted_batch_ndims=attributes["reinterpreted_batch_ndims"],
         )

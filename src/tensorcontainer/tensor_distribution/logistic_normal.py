@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
-import torch # Added import torch
+import torch  # Added import torch
 
 from torch import Tensor
 from torch.distributions import LogisticNormal as TorchLogisticNormal
@@ -22,8 +22,8 @@ class TensorLogisticNormal(TensorDistribution):
 
         if isinstance(loc, Number) and isinstance(scale, Number):
             shape = torch.Size([1])
-            self._loc = self._loc.unsqueeze(0) # Unsqueeze for scalar inputs
-            self._scale = self._scale.unsqueeze(0) # Unsqueeze for scalar inputs
+            self._loc = self._loc.unsqueeze(0)  # Unsqueeze for scalar inputs
+            self._scale = self._scale.unsqueeze(0)  # Unsqueeze for scalar inputs
         else:
             shape = self._loc.shape
 

@@ -32,7 +32,8 @@ class TestContinuousBernoulliAPIMatch:
     def test_init_mutually_exclusive_params_raises_error(self):
         """A ValueError should be raised when both probs and logits are provided."""
         with pytest.raises(
-            ValueError, match="Either `probs` or `logits` must be specified, but not both."
+            ValueError,
+            match="Either `probs` or `logits` must be specified, but not both.",
         ):
             ContinuousBernoulli(probs=torch.tensor(0.5), logits=torch.tensor(0.0))
 
@@ -58,9 +59,7 @@ class TestContinuousBernoulliAPIMatch:
         Tests that the __init__ signature of ContinuousBernoulli matches
         torch.distributions.ContinuousBernoulli.
         """
-        assert_init_signatures_match(
-            ContinuousBernoulli, TorchContinuousBernoulli
-        )
+        assert_init_signatures_match(ContinuousBernoulli, TorchContinuousBernoulli)
 
     def test_properties_match(self):
         """

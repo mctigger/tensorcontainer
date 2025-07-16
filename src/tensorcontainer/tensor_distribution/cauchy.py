@@ -12,33 +12,32 @@ from .base import TensorDistribution
 
 class TensorCauchy(TensorDistribution):
     """Tensor-aware Cauchy distribution.
-    
+
     Creates a Cauchy distribution parameterized by `loc` (location) and `scale` parameters.
     The Cauchy distribution is a continuous probability distribution with heavy tails.
-    
+
     Args:
         loc (float or Tensor): mode or median of the distribution.
         scale (float or Tensor): half width at half maximum.
-        
+
     Note:
         The Cauchy distribution has no finite mean or variance. These properties
         are not implemented as they would return undefined values.
     """
-    
+
     # Annotated tensor parameters
     _loc: Union[Tensor, float]
     _scale: Union[Tensor, float]
 
     def __init__(self, loc: Union[Tensor, float], scale: Union[Tensor, float]):
         self._loc, self._scale = broadcast_all(loc, scale)
-        
+
         if isinstance(loc, (float, int)) and isinstance(scale, (float, int)):
             batch_shape = torch.Size()
             device = None
         else:
             batch_shape = self._loc.size()
             device = self._loc.device
-
 
         super().__init__(batch_shape, device)
 

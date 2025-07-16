@@ -42,10 +42,7 @@ class TestTensorChi2:
     @pytest.mark.parametrize(
         "batch_shape, df_shape",
         TEST_CASES,
-        ids=[
-            f"batch={bs},df={dfs}"
-            for bs, dfs in TEST_CASES
-        ],
+        ids=[f"batch={bs},df={dfs}" for bs, dfs in TEST_CASES],
     )
     def test_property_values_match(self, batch_shape, df_shape):
         df_val = _generate_params(batch_shape, df_shape, "cpu")
@@ -55,20 +52,13 @@ class TestTensorChi2:
     @pytest.mark.parametrize(
         "batch_shape, df_shape",
         TEST_CASES,
-        ids=[
-            f"batch={bs},df={dfs}"
-            for bs, dfs in TEST_CASES
-        ],
+        ids=[f"batch={bs},df={dfs}" for bs, dfs in TEST_CASES],
     )
-    def test_dist_property_and_compilation(
-        self, batch_shape, df_shape
-    ):
+    def test_dist_property_and_compilation(self, batch_shape, df_shape):
         """
         Tests the .dist() property and its compatibility with torch.compile.
         """
-        df_val = _generate_params(
-            batch_shape, df_shape, "cpu"
-        )
+        df_val = _generate_params(batch_shape, df_shape, "cpu")
 
         td_dist = TensorChi2(df=df_val)
 
@@ -82,10 +72,16 @@ class TestTensorChi2:
         # Test compilation of .dist()
         def get_dist_attributes(td):
             dist_instance = td.dist()
-            return (dist_instance.df, dist_instance.batch_shape, dist_instance.event_shape)
+            return (
+                dist_instance.df,
+                dist_instance.batch_shape,
+                dist_instance.event_shape,
+            )
 
-        eager_attrs, compiled_attrs = run_and_compare_compiled(get_dist_attributes, td_dist, fullgraph=False)
-        
+        eager_attrs, compiled_attrs = run_and_compare_compiled(
+            get_dist_attributes, td_dist, fullgraph=False
+        )
+
         # Unpack the attributes
         eager_df, eager_batch_shape, eager_event_shape = eager_attrs
         compiled_df, compiled_batch_shape, compiled_event_shape = compiled_attrs
@@ -97,48 +93,40 @@ class TestTensorChi2:
     @pytest.mark.parametrize(
         "batch_shape, df_shape",
         TEST_CASES,
-        ids=[
-            f"batch={bs},df={dfs}"
-            for bs, dfs in TEST_CASES
-        ],
+        ids=[f"batch={bs},df={dfs}" for bs, dfs in TEST_CASES],
     )
-    def test_log_prob_matches_torch_distribution(
-        self, batch_shape, df_shape
-    ):
+    def test_log_prob_matches_torch_distribution(self, batch_shape, df_shape):
         df_val = _generate_params(batch_shape, df_shape, "cpu")
         td_dist = TensorChi2(df=df_val)
-        
+
         # Generate a value within the support of Chi2 (positive)
         value = td_dist.sample() + 0.1
-        
+
         assert_close(td_dist.log_prob(value), td_dist.dist().log_prob(value))
 
     @pytest.mark.parametrize(
         "batch_shape, df_shape",
         TEST_CASES,
-        ids=[
-            f"batch={bs},df={dfs}"
-            for bs, dfs in TEST_CASES
-        ],
+        ids=[f"batch={bs},df={dfs}" for bs, dfs in TEST_CASES],
     )
-    def test_log_prob_compilation(
-        self, batch_shape, df_shape
-    ):
+    def test_log_prob_compilation(self, batch_shape, df_shape):
         df_val = _generate_params(batch_shape, df_shape, "cpu")
         td_dist = TensorChi2(df=df_val)
         value = td_dist.sample() + 0.1
 
         def log_prob_fn(dist, val):
             return dist.log_prob(val)
-        
-        eager_log_prob, compiled_log_prob = run_and_compare_compiled(log_prob_fn, td_dist, value, fullgraph=False)
+
+        eager_log_prob, compiled_log_prob = run_and_compare_compiled(
+            log_prob_fn, td_dist, value, fullgraph=False
+        )
         assert_close(eager_log_prob, compiled_log_prob)
 
     @pytest.mark.parametrize(
         "df_val",
         [
             torch.tensor([-0.1]),  # Invalid df (non-positive)
-            torch.tensor([0.0]),   # Invalid df (non-positive)
+            torch.tensor([0.0]),  # Invalid df (non-positive)
         ],
     )
     def test_invalid_parameter_values_raises_error(self, df_val):

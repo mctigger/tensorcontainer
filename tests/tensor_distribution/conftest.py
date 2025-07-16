@@ -8,6 +8,108 @@ from torch.distributions import Distribution
 from tensorcontainer.tensor_distribution import TensorDistribution
 
 
+compile_args = [
+    {"fullgraph": True, "dynamic": True},
+    {"fullgraph": True, "dynamic": False},
+    {"fullgraph": False, "dynamic": True},
+    {"fullgraph": False, "dynamic": False},
+]
+
+
+def assert_tensor_dist_api_matches_torch_dist_api(
+    tdist: TensorDistribution, torch_dist: Distribution
+) -> None:
+    """
+    Asserts that the API of a TensorDistribution instance matches its corresponding
+    torch.distributions.Distribution instance.
+
+    This function compares various methods and properties (sample, log_prob, mean, variance, etc.)
+    between the two distribution instances to ensure consistency.
+
+    Args:
+        tdist (TensorDistribution): The TensorDistribution instance.
+        torch_dist (Distribution): The corresponding torch.distributions.Distribution instance.
+    """
+    # Test sample method
+    sample_shape = torch.Size([2, 3])
+    td_sample = tdist.sample(sample_shape)
+    torch_sample = torch_dist.sample(sample_shape)
+    assert td_sample.shape == torch_sample.shape
+    assert td_sample.dtype == torch_sample.dtype
+    assert td_sample.device == torch_sample.device
+
+    # Test log_prob method
+    # For Wishart, the sample is a matrix, so we need to ensure the sample has the correct event shape
+    if tdist.event_shape:  # Check if event_shape is not empty
+        # Create a dummy value with the correct event shape and batch shape for log_prob
+        # This might need to be more sophisticated for complex distributions
+        value_shape = sample_shape + tdist.event_shape
+        value = torch.randn(value_shape, dtype=tdist.dtype, device=tdist.device)
+    else:
+        value = torch.randn(sample_shape, dtype=tdist.dtype, device=tdist.device)
+
+    td_log_prob = tdist.log_prob(value)
+    torch_log_prob = torch_dist.log_prob(value)
+    assert td_log_prob.shape == torch_log_prob.shape
+    assert td_log_prob.dtype == torch_log_prob.dtype
+    assert td_log_prob.device == torch_log_prob.device
+    # Check if values are close, as log_prob can have numerical differences
+    torch.testing.assert_close(td_log_prob, torch_log_prob, rtol=1e-4, atol=1e-4)
+
+    # Test mean property
+    td_mean = tdist.mean
+    torch_mean = torch_dist.mean
+    assert td_mean.shape == torch_mean.shape
+    assert td_mean.dtype == torch_mean.dtype
+    assert td_mean.device == torch_mean.device
+    torch.testing.assert_close(td_mean, torch_mean, rtol=1e-4, atol=1e-4)
+
+    # Test variance property
+    td_variance = tdist.variance
+    torch_variance = torch_dist.variance
+    assert td_variance.shape == torch_variance.shape
+    assert td_variance.dtype == torch_variance.dtype
+    assert td_variance.device == torch_variance.device
+    torch.testing.assert_close(td_variance, torch_variance, rtol=1e-4, atol=1e-4)
+
+    # Test batch_shape and event_shape properties
+    assert tdist.batch_shape == torch_dist.batch_shape
+    assert tdist.event_shape == torch_dist.event_shape
+
+    # Test has_rsample property
+    assert tdist.has_rsample == torch_dist.has_rsample
+
+    # Test entropy method (if supported)
+    if hasattr(torch_dist, "entropy"):
+        td_entropy = tdist.entropy()
+        torch_entropy = torch_dist.entropy()
+        assert td_entropy.shape == torch_entropy.shape
+        assert td_entropy.dtype == torch_entropy.dtype
+        assert td_entropy.device == torch_entropy.device
+        torch.testing.assert_close(td_entropy, torch_entropy, rtol=1e-4, atol=1e-4)
+
+    # Test cdf method (if supported)
+    if hasattr(torch_dist, "cdf"):
+        td_cdf = tdist.cdf(value)
+        torch_cdf = torch_dist.cdf(value)
+        assert td_cdf.shape == torch_cdf.shape
+        assert td_cdf.dtype == torch_cdf.dtype
+        assert td_cdf.device == torch_cdf.device
+        torch.testing.assert_close(td_cdf, torch_cdf, rtol=1e-4, atol=1e-4)
+
+    # Test icdf method (if supported)
+    if hasattr(torch_dist, "icdf"):
+        # Create a dummy probability value for icdf
+        prob_shape = sample_shape + tdist.event_shape
+        prob = torch.rand(prob_shape, dtype=tdist.dtype, device=tdist.device)
+        td_icdf = tdist.icdf(prob)
+        torch_icdf = torch_dist.icdf(prob)
+        assert td_icdf.shape == torch_icdf.shape
+        assert td_icdf.dtype == torch_icdf.dtype
+        assert td_icdf.device == torch_icdf.device
+        torch.testing.assert_close(td_icdf, torch_icdf, rtol=1e-4, atol=1e-4)
+
+
 @pytest.fixture(autouse=True)
 def deterministic_seed():
     torch.manual_seed(0)
@@ -87,7 +189,7 @@ def assert_init_signatures_match(
     torch_params = [
         p.replace(annotation=inspect.Parameter.empty)
         for p in torch_sig.parameters.values()
-        if p.name not in ("self", "validate_args")
+        if p.name not in ("self", "validate_args", "eps")
     ]
 
     td_sig_compare = td_sig.replace(parameters=td_params)
@@ -99,9 +201,14 @@ def assert_init_signatures_match(
 
     # Create new signatures with empty return annotations for comparison
     td_sig_no_return = td_sig_compare.replace(return_annotation=inspect.Signature.empty)
-    torch_sig_no_return = torch_sig_compare.replace(return_annotation=inspect.Signature.empty)
+    torch_sig_no_return = torch_sig_compare.replace(
+        return_annotation=inspect.Signature.empty
+    )
 
-    assert td_sig_no_return == torch_sig_no_return and td_return_annotation_str == torch_return_annotation_str, (
+    assert (
+        td_sig_no_return == torch_sig_no_return
+        and td_return_annotation_str == torch_return_annotation_str
+    ), (
         f"__init__ signatures do not match between {td_class.__name__} and "
         f"{torch_dist_class.__name__}.\n"
         f"Got:      {td_class.__name__}{td_sig_compare}\n"
@@ -126,12 +233,12 @@ def _get_torch_dist_properties(
     subclass_properties = inspect.getmembers(
         torch_dist_class, predicate=lambda x: isinstance(x, property)
     )
-    
+
     # Get all properties from the base Distribution class
     base_properties = inspect.getmembers(
         Distribution, predicate=lambda x: isinstance(x, property)
     )
-    
+
     # Create a set of base class property names for efficient lookup
     base_property_names = {name for name, _ in base_properties}
 
@@ -145,7 +252,7 @@ def _get_torch_dist_properties(
         # Skip properties that are defined in the base Distribution class
         if name in base_property_names:
             continue
-            
+
         properties.append((name, prop))
     return properties
 
@@ -171,22 +278,22 @@ def assert_properties_signatures_match(
     # Iterate over all public properties found in the torch.distribution class.
     for name, prop in dist_properties:
         # Check if the TensorDistribution class has the same property.
-        assert hasattr(
-            td_class, name
-        ), f"{td_class.__name__} is missing property '{name}' from {torch_dist_class.__name__}"
+        assert hasattr(td_class, name), (
+            f"{td_class.__name__} is missing property '{name}' from {torch_dist_class.__name__}"
+        )
         td_prop = getattr(td_class, name)
-        assert isinstance(
-            td_prop, property
-        ), f"Attribute '{name}' in {td_class.__name__} is not a property"
+        assert isinstance(td_prop, property), (
+            f"Attribute '{name}' in {td_class.__name__} is not a property"
+        )
 
         # If the torch distribution property has no getter, skip it.
         if prop.fget is None:
             continue
 
         # Access the getter method (fget) for both the TensorDistribution and torch.distribution properties.
-        assert (
-            td_prop.fget is not None
-        ), f"Property '{name}' in {td_class.__name__} is missing a getter"
+        assert td_prop.fget is not None, (
+            f"Property '{name}' in {td_class.__name__} is missing a getter"
+        )
 
         # Retrieve the signatures of the getter methods using inspect.signature.
         td_getter_sig = inspect.signature(td_prop.fget)
@@ -270,9 +377,15 @@ def assert_property_values_match(td: TensorDistribution) -> None:
                     dist_param = getattr(dist_dist, param_name)
 
                     if isinstance(td_param, torch.Tensor):
-                        torch.testing.assert_close(td_param, dist_param, msg=f"Parameter '{param_name}' mismatch for property '{name}'")
+                        torch.testing.assert_close(
+                            td_param,
+                            dist_param,
+                            msg=f"Parameter '{param_name}' mismatch for property '{name}'",
+                        )
                     else:
-                        assert td_param == dist_param, f"Parameter '{param_name}' mismatch for property '{name}'"
+                        assert td_param == dist_param, (
+                            f"Parameter '{param_name}' mismatch for property '{name}'"
+                        )
             else:
                 # For other non-tensor values, use direct equality check
                 assert td_value == dist_value, (

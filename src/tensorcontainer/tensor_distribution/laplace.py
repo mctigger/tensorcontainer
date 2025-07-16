@@ -6,7 +6,6 @@ import torch
 from torch import Tensor
 from torch.distributions import Laplace
 
-from tensorcontainer.tensor_annotated import TDCompatible
 
 from .base import TensorDistribution
 
@@ -37,9 +36,7 @@ class TensorLaplace(TensorDistribution):
         super().__init__(shape, device)
 
     @classmethod
-    def _unflatten_distribution(
-        cls, attributes: Dict[str, Any]
-    ) -> TensorLaplace:
+    def _unflatten_distribution(cls, attributes: Dict[str, Any]) -> TensorLaplace:
         """Reconstruct distribution from tensor attributes."""
         return cls(
             loc=attributes["_loc"],
@@ -70,4 +67,3 @@ class TensorLaplace(TensorDistribution):
         """Returns the variance of the Laplace distribution."""
         assert self._scale is not None
         return self.dist().variance
-

@@ -1,6 +1,8 @@
 import pytest
 import torch
-from torch.distributions import LowRankMultivariateNormal as TorchLowRankMultivariateNormal
+from torch.distributions import (
+    LowRankMultivariateNormal as TorchLowRankMultivariateNormal,
+)
 
 from tensorcontainer.tensor_distribution.low_rank_multivariate_normal import (
     TensorLowRankMultivariateNormal,

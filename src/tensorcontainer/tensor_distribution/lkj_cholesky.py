@@ -53,9 +53,7 @@ class TensorLKJCholesky(TensorDistribution):
         )
 
     @classmethod
-    def _unflatten_distribution(
-        cls, attributes: Dict[str, Any]
-    ) -> TensorLKJCholesky:
+    def _unflatten_distribution(cls, attributes: Dict[str, Any]) -> TensorLKJCholesky:
         return cls(
             dim=attributes["_dim"],
             concentration=attributes["_concentration"],

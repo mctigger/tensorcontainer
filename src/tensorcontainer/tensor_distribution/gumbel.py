@@ -39,9 +39,7 @@ class TensorGumbel(TensorDistribution):
         super().__init__(shape, device)
 
     @classmethod
-    def _unflatten_distribution(
-        cls, attributes: Dict[str, Any]
-    ) -> TensorGumbel:
+    def _unflatten_distribution(cls, attributes: Dict[str, Any]) -> TensorGumbel:
         """Reconstruct distribution from tensor attributes."""
         loc = attributes["_loc"]
         scale = attributes["_scale"]
@@ -75,4 +73,3 @@ class TensorGumbel(TensorDistribution):
     def scale(self) -> Union[Tensor, float]:
         """Returns the scale used to initialize the distribution."""
         return self._scale
-

@@ -6,7 +6,6 @@ import torch
 from torch import Tensor
 from torch.distributions import Poisson
 
-from tensorcontainer.tensor_annotated import TDCompatible
 
 from .base import TensorDistribution
 
@@ -19,16 +18,14 @@ class TensorPoisson(TensorDistribution):
         # Store the parameters in annotated attributes before calling super().__init__()
         # This is required because super().__init__() calls self.dist() which needs these attributes
         self._rate = rate
-        
+
         shape = rate.shape
         device = rate.device
 
         super().__init__(shape, device)
 
     @classmethod
-    def _unflatten_distribution(
-        cls, attributes: Dict[str, Any]
-    ) -> TensorPoisson:
+    def _unflatten_distribution(cls, attributes: Dict[str, Any]) -> TensorPoisson:
         """Reconstruct distribution from tensor attributes."""
         return cls(
             rate=attributes.get("_rate"),  # type: ignore

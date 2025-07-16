@@ -51,18 +51,14 @@ class TestTensorMultinomialAPIMatch:
         Tests that the __init__ signature of TensorMultinomial matches
         torch.distributions.Multinomial.
         """
-        assert_init_signatures_match(
-            TensorMultinomial, Multinomial
-        )
+        assert_init_signatures_match(TensorMultinomial, Multinomial)
 
     def test_properties_match(self):
         """
         Tests that the properties of TensorMultinomial match
         torch.distributions.Multinomial.
         """
-        assert_properties_signatures_match(
-            TensorMultinomial, Multinomial
-        )
+        assert_properties_signatures_match(TensorMultinomial, Multinomial)
 
     @pytest.mark.parametrize("param_type", ["probs", "logits"])
     @pytest.mark.parametrize("shape", [(5,), (3, 5), (2, 4, 5)])

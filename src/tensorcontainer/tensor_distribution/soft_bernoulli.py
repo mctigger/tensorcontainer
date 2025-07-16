@@ -1,46 +1,54 @@
 from __future__ import annotations
 
+from __future__ import annotations
+
 from typing import Any, Dict, Optional
 
 import torch
+from torch import Tensor
 from torch.distributions import Independent
 
 from tensorcontainer.distributions.soft_bernoulli import SoftBernoulli
-from tensorcontainer.tensor_dict import TDCompatible
 
 from .base import TensorDistribution
 
 
 class TensorSoftBernoulli(TensorDistribution):
+    _probs: Optional[Tensor] = None
+    _logits: Optional[Tensor] = None
+    _validate_args: Optional[bool] = None
+
     def __init__(
         self,
-        logits: Optional[torch.Tensor] = None,
-        probs: Optional[torch.Tensor] = None,
+        probs: Optional[Tensor] = None,
+        logits: Optional[Tensor] = None,
+        validate_args: Optional[bool] = None,
     ):
+        self._validate_args = validate_args
         if (probs is None) == (logits is None):
             raise ValueError(
                 "Either `probs` or `logits` must be specified, but not both."
             )
+
         if probs is not None:
-            assert probs is not None
-            shape = probs.shape
+            batch_shape = probs.shape
             device = probs.device
         else:
             assert logits is not None
-            shape = logits.shape
+            batch_shape = logits.shape
             device = logits.device
 
-        super().__init__(shape, device)
         self._probs = probs
         self._logits = logits
+        self._validate_args = validate_args
+        super().__init__(shape=batch_shape, device=device)
 
     @classmethod
-    def _unflatten_distribution(
-        cls, tensor_attributes: Dict[str, TDCompatible], meta_attributes: Dict[str, Any]
-    ):
+    def _unflatten_distribution(cls, attributes: Dict[str, Any]):
         return cls(
-            probs=tensor_attributes.get("_probs"),
-            logits=tensor_attributes.get("_logits"),
+            probs=attributes.get("_probs"),
+            logits=attributes.get("_logits"),
+            validate_args=attributes.get("_validate_args"),
         )
 
     @property
@@ -69,11 +77,16 @@ class TensorSoftBernoulli(TensorDistribution):
         if value is not None:
             self._probs = None
 
+    @property
+    def param_shape(self):
+        return self.batch_shape
+
     def dist(self):
         if self._probs is not None:
             return Independent(
                 SoftBernoulli(
                     probs=self._probs,
+                    validate_args=self._validate_args,
                 ),
                 0,
             )
@@ -81,6 +94,7 @@ class TensorSoftBernoulli(TensorDistribution):
             return Independent(
                 SoftBernoulli(
                     logits=self._logits,
+                    validate_args=self._validate_args,
                 ),
                 0,
             )

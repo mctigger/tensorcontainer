@@ -25,7 +25,8 @@ class TestTensorBernoulliAPIMatch:
     def test_init_no_params_raises_error(self):
         """A RuntimeError should be raised when neither probs nor logits are provided."""
         with pytest.raises(
-            ValueError, match="Either `probs` or `logits` must be specified, but not both."
+            ValueError,
+            match="Either `probs` or `logits` must be specified, but not both.",
         ):
             TensorBernoulli()
 
@@ -50,18 +51,14 @@ class TestTensorBernoulliAPIMatch:
         Tests that the __init__ signature of TensorBernoulli matches
         torch.distributions.Bernoulli.
         """
-        assert_init_signatures_match(
-            TensorBernoulli, Bernoulli
-        )
+        assert_init_signatures_match(TensorBernoulli, Bernoulli)
 
     def test_properties_match(self):
         """
         Tests that the properties of TensorBernoulli match
         torch.distributions.Bernoulli.
         """
-        assert_properties_signatures_match(
-            TensorBernoulli, Bernoulli
-        )
+        assert_properties_signatures_match(TensorBernoulli, Bernoulli)
 
     @pytest.mark.parametrize("param_type", ["probs", "logits"])
     @pytest.mark.parametrize("shape", [(5,), (3, 5), (2, 4, 5)])
@@ -77,6 +74,7 @@ class TestTensorBernoulliAPIMatch:
             param = torch.randn(*shape)
             td_bernoulli = TensorBernoulli(logits=param)
         assert_property_values_match(td_bernoulli)
+
     """
     Tests that the TensorBernoulli API matches the PyTorch Bernoulli API.
     """

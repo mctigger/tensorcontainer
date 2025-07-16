@@ -33,10 +33,12 @@ class TestTensorExponentialInitialization:
         "rate_val",
         [
             torch.tensor([-0.1]),  # Invalid rate (non-positive)
-            torch.tensor([0.0]),   # Invalid rate (non-positive)
+            torch.tensor([0.0]),  # Invalid rate (non-positive)
         ],
     )
-    def test_invalid_parameter_values_raises_error(self, rate_val, with_distributions_validation):
+    def test_invalid_parameter_values_raises_error(
+        self, rate_val, with_distributions_validation
+    ):
         """Test that invalid rate values raise an error when validation is enabled."""
         with pytest.raises(ValueError, match="Expected parameter rate"):
             TensorExponential(rate=rate_val)
@@ -67,19 +69,25 @@ class TestTensorExponentialReferenceComparison:
         def get_dist_rate(td):
             return td.dist().rate
 
-        compiled_rate, _ = run_and_compare_compiled(get_dist_rate, td_dist, fullgraph=False)
+        compiled_rate, _ = run_and_compare_compiled(
+            get_dist_rate, td_dist, fullgraph=False
+        )
         assert_close(compiled_rate, td_dist.rate)
 
         def get_dist_batch_shape(td):
             return td.dist().batch_shape
 
-        compiled_batch_shape, _ = run_and_compare_compiled(get_dist_batch_shape, td_dist, fullgraph=False)
+        compiled_batch_shape, _ = run_and_compare_compiled(
+            get_dist_batch_shape, td_dist, fullgraph=False
+        )
         assert compiled_batch_shape == td_dist.batch_shape
 
         def get_dist_event_shape(td):
             return td.dist().event_shape
 
-        compiled_event_shape, _ = run_and_compare_compiled(get_dist_event_shape, td_dist, fullgraph=False)
+        compiled_event_shape, _ = run_and_compare_compiled(
+            get_dist_event_shape, td_dist, fullgraph=False
+        )
         assert compiled_event_shape == td_dist.event_shape
 
     @pytest.mark.parametrize(
@@ -94,7 +102,7 @@ class TestTensorExponentialReferenceComparison:
     def test_log_prob_matches_torch_distribution(self, rate_val):
         """Tests that log_prob matches the underlying torch distribution."""
         td_dist = TensorExponential(rate=rate_val)
-        value = td_dist.sample() + 0.1 # Ensure value is within support (positive)
+        value = td_dist.sample() + 0.1  # Ensure value is within support (positive)
         assert_close(td_dist.log_prob(value), td_dist.dist().log_prob(value))
 
     @pytest.mark.parametrize(
@@ -113,8 +121,10 @@ class TestTensorExponentialReferenceComparison:
 
         def log_prob_fn(dist, val):
             return dist.log_prob(val)
-        
-        eager_log_prob, compiled_log_prob = run_and_compare_compiled(log_prob_fn, td_dist, value, fullgraph=False)
+
+        eager_log_prob, compiled_log_prob = run_and_compare_compiled(
+            log_prob_fn, td_dist, value, fullgraph=False
+        )
         assert_close(eager_log_prob, compiled_log_prob)
 
 

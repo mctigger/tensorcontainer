@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Dict, Optional, Union
 
 import torch
 from torch import Tensor
@@ -21,39 +21,47 @@ class TensorStudentT(TensorDistribution):
 
     def __init__(
         self,
-        df: Tensor,
-        loc: float = 0.0,
-        scale: float = 1.0,
+        df: Union[float, Tensor],
+        loc: Union[float, Tensor] = 0.0,
+        scale: Union[float, Tensor] = 1.0,
+        validate_args: Optional[bool] = None,
     ):
-        # Store the parameters in annotated attributes before calling super().__init__()
-        # This is required because super().__init__() calls self.dist() which needs these attributes
-        self._df = df
-        self._loc = torch.as_tensor(loc, dtype=df.dtype, device=df.device)
-        self._scale = torch.as_tensor(scale, dtype=df.dtype, device=df.device)
+        # Convert to tensors and ensure compatible shapes
+        if isinstance(df, (float, int)):
+            df = torch.as_tensor(df)
+        if isinstance(loc, (float, int)):
+            loc = torch.as_tensor(loc, dtype=df.dtype, device=df.device)
+        if isinstance(scale, (float, int)):
+            scale = torch.as_tensor(scale, dtype=df.dtype, device=df.device)
+
+        # Determine the common batch_shape
+        try:
+            batch_shape = torch.broadcast_shapes(df.shape, loc.shape, scale.shape)
+        except RuntimeError as e:
+            raise ValueError(f"df, loc, and scale must have compatible shapes: {e}")
+
+        # Expand parameters to the common batch_shape
+        self._df = df.expand(batch_shape)
+        self._loc = loc.expand(batch_shape)
+        self._scale = scale.expand(batch_shape)
 
         if torch.any(self._df <= 0):
             raise ValueError("df must be positive")
         if torch.any(self._scale <= 0):
             raise ValueError("scale must be positive")
 
-        try:
-            batch_shape = torch.broadcast_shapes(self._df.shape, self._loc.shape, self._scale.shape)
-        except RuntimeError as e:
-            raise ValueError(f"df, loc, and scale must have compatible shapes: {e}")
-
         super().__init__(batch_shape, self._df.device)
 
     @classmethod
     def _unflatten_distribution(
         cls,
-        tensor_attributes: Dict[str, TDCompatible],
-        meta_attributes: Dict[str, Any],
+        attributes: Dict[str, TDCompatible],
     ) -> "TensorStudentT":
         """Reconstruct distribution from tensor attributes."""
         return cls(
-            df=torch.as_tensor(tensor_attributes["_df"]),
-            loc=float(torch.as_tensor(tensor_attributes["_loc"])),
-            scale=float(torch.as_tensor(tensor_attributes["_scale"])),
+            df=torch.as_tensor(attributes["_df"]),
+            loc=torch.as_tensor(attributes["_loc"]),
+            scale=torch.as_tensor(attributes["_scale"]),
         )
 
     def dist(self) -> StudentT:

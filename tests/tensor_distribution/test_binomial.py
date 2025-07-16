@@ -26,7 +26,8 @@ class TestTensorBinomialInitialization:
     def test_init_no_params_raises_error(self):
         """A ValueError should be raised when neither probs nor logits are provided."""
         with pytest.raises(
-            ValueError, match="Either `probs` or `logits` must be specified, but not both."
+            ValueError,
+            match="Either `probs` or `logits` must be specified, but not both.",
         ):
             TensorBinomial(total_count=10)
 
@@ -77,7 +78,7 @@ class TestTensorBinomialTensorContainerIntegration:
         else:
             param = torch.randn(*param_shape, requires_grad=True)
             td_binomial = TensorBinomial(total_count=total_count, logits=param)
-        
+
         sample = td_binomial.sample()
 
         def sample_fn(td):
@@ -105,16 +106,18 @@ class TestTensorBinomialTensorContainerIntegration:
         else:
             param = torch.randn(3, 5)
             td_binomial = TensorBinomial(total_count=total_count, logits=param)
-        
+
         td_binomial_copy = td_binomial.copy()
 
         assert isinstance(td_binomial_copy, TensorBinomial)
-        torch.testing.assert_close(td_binomial.total_count, td_binomial_copy.total_count)
+        torch.testing.assert_close(
+            td_binomial.total_count, td_binomial_copy.total_count
+        )
         if param_type == "probs":
             torch.testing.assert_close(td_binomial.probs, td_binomial_copy.probs)
         else:
             torch.testing.assert_close(td_binomial.logits, td_binomial_copy.logits)
-        
+
         # Ensure they are different objects
         assert td_binomial is not td_binomial_copy
         assert td_binomial.total_count is not td_binomial_copy.total_count
@@ -134,18 +137,14 @@ class TestTensorBinomialAPIMatch:
         Tests that the __init__ signature of TensorBinomial matches
         torch.distributions.Binomial.
         """
-        assert_init_signatures_match(
-            TensorBinomial, torch.distributions.Binomial
-        )
+        assert_init_signatures_match(TensorBinomial, torch.distributions.Binomial)
 
     def test_properties_match(self):
         """
         Tests that the properties of TensorBinomial match
         torch.distributions.Binomial.
         """
-        assert_properties_signatures_match(
-            TensorBinomial, torch.distributions.Binomial
-        )
+        assert_properties_signatures_match(TensorBinomial, torch.distributions.Binomial)
 
     @pytest.mark.parametrize("total_count_type", ["int", "tensor"])
     @pytest.mark.parametrize("param_type", ["probs", "logits"])
