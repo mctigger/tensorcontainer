@@ -31,7 +31,8 @@ class TensorAnnotated(TensorContainer, PytreeRegistered):
         # to ensure subclasses inherit field definitions from parent classes
         annotations = {}
         for base in reversed(type(self).__mro__):
-            if base is not TensorAnnotated and base is not object and hasattr(base, '__dict__'):
+            # Only consider annotations from TensorAnnotated subclasses
+            if issubclass(base, TensorAnnotated) and base is not TensorAnnotated and hasattr(base, '__dict__'):
                 base_annotations = base.__dict__.get("__annotations__", {})
                 annotations.update(base_annotations)
 
@@ -50,7 +51,8 @@ class TensorAnnotated(TensorContainer, PytreeRegistered):
         # to ensure subclasses inherit field definitions from parent classes
         annotations = {}
         for base in reversed(type(self).__mro__):
-            if base is not TensorAnnotated and base is not object and hasattr(base, '__dict__'):
+            # Only consider annotations from TensorAnnotated subclasses
+            if issubclass(base, TensorAnnotated) and base is not TensorAnnotated and hasattr(base, '__dict__'):
                 base_annotations = base.__dict__.get("__annotations__", {})
                 annotations.update(base_annotations)
 
