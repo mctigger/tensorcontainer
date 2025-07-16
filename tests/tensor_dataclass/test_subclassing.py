@@ -1,139 +1,94 @@
 import inspect
 
 import torch
+from typing import Optional
 
 from tensorcontainer.tensor_dataclass import TensorDataClass
+import pytest
+
+
+def _assert_init_signature(cls, expected_fields):
+    actual_signature = inspect.signature(cls.__init__)
+
+    parameters = [
+        inspect.Parameter("self", inspect.Parameter.POSITIONAL_OR_KEYWORD),
+        inspect.Parameter(
+            "shape",
+            inspect.Parameter.POSITIONAL_OR_KEYWORD,
+            annotation=torch.Size,
+        ),
+        inspect.Parameter(
+            "device",
+            inspect.Parameter.POSITIONAL_OR_KEYWORD,
+            annotation=Optional[torch.device],
+        ),
+    ]
+    for field_name, field_type in expected_fields.items():
+        parameters.append(
+            inspect.Parameter(
+                field_name, inspect.Parameter.POSITIONAL_OR_KEYWORD, annotation=field_type
+            )
+        )
+    expected_signature = inspect.Signature(parameters, return_annotation=None)
+    assert actual_signature == expected_signature
+
+
+@pytest.fixture
+def single_parent_class():
+    class A(TensorDataClass):
+        x: torch.Tensor
+
+    class B(A):
+        y: str
+    return B
+
+
+@pytest.fixture
+def multiple_tensor_data_class_parents():
+    class A(TensorDataClass):
+        x: torch.Tensor
+
+    class B(TensorDataClass):
+        y: str
+
+    class C(B, A):
+        z: int
+    return C
+
+
+@pytest.fixture
+def single_tensor_data_class_parent():
+    class A(TensorDataClass):
+        x: torch.Tensor
+
+    class B:
+        y: str
+
+    class C(A, B):
+        z: int
+    return C
 
 
 class TestInitSignature:
-    def test_single_parent_class(self):
-        class A(TensorDataClass):
-            x: torch.Tensor
-
-        class B(A):
-            y: str
-
-        # 1. Test __init__ signature
-        actual_signature = inspect.signature(B.__init__)
-
-        # Create expected signature with proper parameters and type annotations
-        from typing import Optional
-
-        expected_signature = inspect.Signature(
-            [
-                inspect.Parameter("self", inspect.Parameter.POSITIONAL_OR_KEYWORD),
-                inspect.Parameter(
-                    "shape",
-                    inspect.Parameter.POSITIONAL_OR_KEYWORD,
-                    annotation=torch.Size,
-                ),
-                inspect.Parameter(
-                    "device",
-                    inspect.Parameter.POSITIONAL_OR_KEYWORD,
-                    annotation=Optional[torch.device],
-                ),
-                inspect.Parameter(
-                    "x",
-                    inspect.Parameter.POSITIONAL_OR_KEYWORD,
-                    annotation=torch.Tensor,
-                ),
-                inspect.Parameter(
-                    "y", inspect.Parameter.POSITIONAL_OR_KEYWORD, annotation=str
-                ),
-            ],
-            return_annotation=None,
+    def test_single_parent_class(self, single_parent_class):
+        _assert_init_signature(
+            single_parent_class, {"x": torch.Tensor, "y": str}
         )
 
-        assert actual_signature == expected_signature
-
-    def test_multiple_parent_classes_multiple_tensor_data_class(self):
-        class A(TensorDataClass):
-            x: torch.Tensor
-
-        class B(TensorDataClass):
-            y: str
-
-        class C(B, A):
-            z: int
-
-        # 1. Test __init__ signature
-        actual_signature = inspect.signature(C.__init__)
-
-        # Create expected signature with proper parameters and type annotations
-        from typing import Optional
-
-        expected_signature = inspect.Signature(
-            [
-                inspect.Parameter("self", inspect.Parameter.POSITIONAL_OR_KEYWORD),
-                inspect.Parameter(
-                    "shape",
-                    inspect.Parameter.POSITIONAL_OR_KEYWORD,
-                    annotation=torch.Size,
-                ),
-                inspect.Parameter(
-                    "device",
-                    inspect.Parameter.POSITIONAL_OR_KEYWORD,
-                    annotation=Optional[torch.device],
-                ),
-                inspect.Parameter(
-                    "x",
-                    inspect.Parameter.POSITIONAL_OR_KEYWORD,
-                    annotation=torch.Tensor,
-                ),
-                inspect.Parameter(
-                    "y", inspect.Parameter.POSITIONAL_OR_KEYWORD, annotation=str
-                ),
-                inspect.Parameter(
-                    "z", inspect.Parameter.POSITIONAL_OR_KEYWORD, annotation=int
-                ),
-            ],
-            return_annotation=None,
+    def test_multiple_parent_classes_multiple_tensor_data_class(
+        self, multiple_tensor_data_class_parents
+    ):
+        _assert_init_signature(
+            multiple_tensor_data_class_parents,
+            {"x": torch.Tensor, "y": str, "z": int},
         )
 
-        assert actual_signature == expected_signature
-
-    def test_multiple_parent_classes_single_tensor_data_class(self):
-        class A(TensorDataClass):
-            x: torch.Tensor
-
-        class B:
-            y: str
-
-        class C(A, B):
-            z: int
-
-        # 1. Test __init__ signature
-        actual_signature = inspect.signature(C.__init__)
-
-        # Create expected signature with proper parameters and type annotations
-        from typing import Optional
-
-        expected_signature = inspect.Signature(
-            [
-                inspect.Parameter("self", inspect.Parameter.POSITIONAL_OR_KEYWORD),
-                inspect.Parameter(
-                    "shape",
-                    inspect.Parameter.POSITIONAL_OR_KEYWORD,
-                    annotation=torch.Size,
-                ),
-                inspect.Parameter(
-                    "device",
-                    inspect.Parameter.POSITIONAL_OR_KEYWORD,
-                    annotation=Optional[torch.device],
-                ),
-                inspect.Parameter(
-                    "x",
-                    inspect.Parameter.POSITIONAL_OR_KEYWORD,
-                    annotation=torch.Tensor,
-                ),
-                inspect.Parameter(
-                    "z", inspect.Parameter.POSITIONAL_OR_KEYWORD, annotation=int
-                ),
-            ],
-            return_annotation=None,
+    def test_multiple_parent_classes_single_tensor_data_class(
+        self, single_tensor_data_class_parent
+    ):
+        _assert_init_signature(
+            single_tensor_data_class_parent, {"x": torch.Tensor, "z": int}
         )
-
-        assert actual_signature == expected_signature
 
 
 class TestProperties:
@@ -161,14 +116,8 @@ class TestProperties:
         actual_signature = inspect.signature(A.__init__)
         assert "y" not in actual_signature.parameters
 
-    def test_single_parent_class_instantiation(self):
-        class A(TensorDataClass):
-            x: torch.Tensor
-
-        class B(A):
-            y: str
-
-        instance = B(
+    def test_single_parent_class_instantiation(self, single_parent_class):
+        instance = single_parent_class(
             x=torch.ones(1),
             y="hello",
             shape=torch.Size([1]),
@@ -177,20 +126,13 @@ class TestProperties:
         assert torch.equal(instance.x, torch.ones(1))
         assert instance.y == "hello"
 
-    def test_multiple_parent_classes_multiple_tensor_data_class_instantiation(self):
-        class A(TensorDataClass):
-            x: torch.Tensor
-
-        class B(TensorDataClass):
-            y: str
-
-        class C(B, A):
-            z: int
-
+    def test_multiple_parent_classes_multiple_tensor_data_class_instantiation(
+        self, multiple_tensor_data_class_parents
+    ):
         x = torch.ones(1)
         y = "world"
         z = 123
-        instance = C(
+        instance = multiple_tensor_data_class_parents(
             x=x,
             y=y,
             z=z,
@@ -201,19 +143,12 @@ class TestProperties:
         assert instance.y == y
         assert instance.z == z
 
-    def test_multiple_parent_classes_single_tensor_data_class_instantiation(self):
-        class A(TensorDataClass):
-            x: torch.Tensor
-
-        class B:
-            y: str
-
-        class C(A, B):
-            z: int
-
+    def test_multiple_parent_classes_single_tensor_data_class_instantiation(
+        self, single_tensor_data_class_parent
+    ):
         x = torch.ones(1)
         z = 123
-        instance = C(
+        instance = single_tensor_data_class_parent(
             x=x,
             z=z,
             shape=torch.Size([1]),

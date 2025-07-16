@@ -16,6 +16,32 @@ DATACLASS_ARGS = {"init", "repr", "eq", "order", "unsafe_hash", "frozen", "slots
 T_TensorAnnotated = TypeVar("T_TensorAnnotated", bound="TensorAnnotated")
 
 
+def _get_annotations(cls, base_cls):
+    annotations = {}
+
+    mro = list(reversed(cls.__mro__))
+    mro_excluding_tensor_base = mro[mro.index(base_cls) +1:]
+    for base in mro_excluding_tensor_base:
+        base_annotations = base.__dict__.get("__annotations__", {})
+
+        if issubclass(base, base_cls):
+            base_annotations = {k:v for k,v in base_annotations.items() if k not in ["device", "shape"]}
+
+        annotations.update(base_annotations)
+
+
+    # Programmatically prepend `shape` and `device` to the class annotations.
+    # Dataclasses use the order of `__annotations__` to generate the `__init__`
+    # method signature. We place `shape` and `device` first because they are
+    # non-default arguments required by `__post_init__`. This prevents errors
+    # if subclasses define fields with default values.
+    if "shape" in annotations or "device" in annotations:
+        raise TypeError(
+            f"Cannot define reserved fields in {cls.__name__}."
+        )
+        
+    return annotations
+
 class TensorAnnotated(TensorContainer, PytreeRegistered):
     def __init__(
         self,
@@ -24,17 +50,9 @@ class TensorAnnotated(TensorContainer, PytreeRegistered):
     ):
         super().__init__(shape, device, True)
 
+
     def _get_tensor_attributes(self):
-        # In Python 3.9 __annotations__ also includes parent class
-        # annotations, which is regarded a bug and changed from Python 3.10+
-        # We collect annotations from all parent classes in MRO (except TensorAnnotated itself)
-        # to ensure subclasses inherit field definitions from parent classes
-        annotations = {}
-        for base in reversed(type(self).__mro__):
-            # Only consider annotations from TensorAnnotated subclasses
-            if issubclass(base, TensorAnnotated) and base is not TensorAnnotated and hasattr(base, '__dict__'):
-                base_annotations = base.__dict__.get("__annotations__", {})
-                annotations.update(base_annotations)
+        annotations = _get_annotations(type(self), TensorAnnotated)
 
         tensor_attributes = {
             k: getattr(self, k)
@@ -45,16 +63,7 @@ class TensorAnnotated(TensorContainer, PytreeRegistered):
         return tensor_attributes
 
     def _get_meta_attributes(self):
-        # In Python 3.9 __annotations__ also includes parent class
-        # annotations, which is regarded a bug and changed from Python 3.10+
-        # We collect annotations from all parent classes in MRO (except TensorAnnotated itself)
-        # to ensure subclasses inherit field definitions from parent classes
-        annotations = {}
-        for base in reversed(type(self).__mro__):
-            # Only consider annotations from TensorAnnotated subclasses
-            if issubclass(base, TensorAnnotated) and base is not TensorAnnotated and hasattr(base, '__dict__'):
-                base_annotations = base.__dict__.get("__annotations__", {})
-                annotations.update(base_annotations)
+        annotations = _get_annotations(type(self), TensorAnnotated)
 
         meta_attributes = {
             k: getattr(self, k)

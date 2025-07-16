@@ -9,7 +9,7 @@ import torch
 from torch import Tensor
 from typing_extensions import dataclass_transform
 
-from tensorcontainer.tensor_annotated import TensorAnnotated
+from tensorcontainer.tensor_annotated import TensorAnnotated, _get_annotations
 from tensorcontainer.tensor_container import ShapeType, TensorContainer
 
 TDCompatible = Union[Tensor, TensorContainer]
@@ -216,29 +216,7 @@ class TensorDataClass(TensorAnnotated, TensorDataclassTransform):
         # annotations, which is regarded a bug and changed from Python 3.10+
         # We collect annotations from all parent classes in MRO (except TensorDataClass itself)
         # to ensure subclasses inherit field definitions from parent TensorDataClass instances
-        annotations = {}
-
-        mro = list(reversed(cls.__mro__))
-        mro_excluding_tensor_base = mro[mro.index(TensorDataClass) +1:]
-        for base in mro_excluding_tensor_base:
-            base_annotations = base.__dict__.get("__annotations__", {})
-
-            if issubclass(base, TensorDataClass):
-                base_annotations = {k:v for k,v in base_annotations.items() if k not in ["device", "shape"]}
-
-            annotations.update(base_annotations)
-
-
-        # Programmatically prepend `shape` and `device` to the class annotations.
-        # Dataclasses use the order of `__annotations__` to generate the `__init__`
-        # method signature. We place `shape` and `device` first because they are
-        # non-default arguments required by `__post_init__`. This prevents errors
-        # if subclasses define fields with default values.
-        if "shape" in annotations or "device" in annotations:
-            raise TypeError(
-                f"Cannot define reserved fields in {cls.__name__}. "
-                f"'shape' and 'device' are automatically provided by TensorDataClass."
-            )
+        annotations = _get_annotations(cls, TensorDataClass)
 
         cls.__annotations__ = {
             "shape": torch.Size,
