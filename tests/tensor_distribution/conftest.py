@@ -184,7 +184,7 @@ def assert_init_signatures_match(
     td_params = [
         p.replace(annotation=inspect.Parameter.empty)
         for p in td_sig.parameters.values()
-        if p.name not in ("self", "validate_args", "reinterpreted_batch_ndims")
+        if p.name not in ("self", "validate_args")
     ]
     torch_params = [
         p.replace(annotation=inspect.Parameter.empty)

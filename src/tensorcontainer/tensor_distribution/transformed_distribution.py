@@ -21,6 +21,11 @@ class TransformedDistribution(TensorDistribution):
     base_distribution: TensorDistribution
     transforms: List[Transform]
 
+    def __init__(self, base_distribution: TensorDistribution, transforms: List[Transform]):
+        self.base_distribution = base_distribution
+        self.transforms = transforms
+        super().__init__(base_distribution.batch_shape, base_distribution.device)
+
     def dist(self) -> Distribution:
         """
         Returns the underlying torch.distributions.Distribution instance.
