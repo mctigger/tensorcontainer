@@ -27,9 +27,13 @@ class TensorAnnotated(TensorContainer, PytreeRegistered):
     def _get_tensor_attributes(self):
         # In Python 3.9 __annotations__ also includes parent class
         # annotations, which is regarded a bug and changed from Python 3.10+
-        # We use the following line to be backwards compatible for 3.9
-        # In Python 3.10+ we could simply use cls.__annotations__.
-        annotations = type(self).__dict__.get("__annotations__", {})
+        # We collect annotations from all parent classes in MRO (except TensorAnnotated itself)
+        # to ensure subclasses inherit field definitions from parent classes
+        annotations = {}
+        for base in reversed(type(self).__mro__):
+            if base is not TensorAnnotated and base is not object and hasattr(base, '__dict__'):
+                base_annotations = base.__dict__.get("__annotations__", {})
+                annotations.update(base_annotations)
 
         tensor_attributes = {
             k: getattr(self, k)
@@ -42,9 +46,13 @@ class TensorAnnotated(TensorContainer, PytreeRegistered):
     def _get_meta_attributes(self):
         # In Python 3.9 __annotations__ also includes parent class
         # annotations, which is regarded a bug and changed from Python 3.10+
-        # We use the following line to be backwards compatible for 3.9
-        # In Python 3.10+ we could simply use cls.__annotations__.
-        annotations = type(self).__dict__.get("__annotations__", {})
+        # We collect annotations from all parent classes in MRO (except TensorAnnotated itself)
+        # to ensure subclasses inherit field definitions from parent classes
+        annotations = {}
+        for base in reversed(type(self).__mro__):
+            if base is not TensorAnnotated and base is not object and hasattr(base, '__dict__'):
+                base_annotations = base.__dict__.get("__annotations__", {})
+                annotations.update(base_annotations)
 
         meta_attributes = {
             k: getattr(self, k)
@@ -129,3 +137,4 @@ class TensorAnnotated(TensorContainer, PytreeRegistered):
         shape,
     ):
         return cls(**tensor_attributes, **meta_attributes, device=device, shape=shape)
+

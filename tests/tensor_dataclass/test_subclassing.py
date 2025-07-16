@@ -1,11 +1,80 @@
 import torch
+import inspect
 
 from tensorcontainer.tensor_dataclass import TensorDataClass
 from tests.conftest import skipif_no_cuda
 
 
+
+class TestBasicSubClassing:
+    def test_subclassing(self):
+        class A(TensorDataClass):
+            x: torch.Tensor
+
+        class B(A):
+            y: str
+
+        # 1. Test __init__ signature
+        signature = inspect.signature(B.__init__)
+        params = list(signature.parameters.keys())
+        # Expected: ['self', 'shape', 'device', 'x', 'y']
+        # The order is determined by __init_subclass__ in TensorDataClass
+        assert params == ["self", "shape", "device", "x", "y"]
+
+        # 2. Test instance properties
+        x_tensor = torch.randn(2, 3)
+        b_instance = B(shape=(2, 3), device="cpu", x=x_tensor, y="hello")
+
+        assert b_instance.shape == (2, 3)
+        assert b_instance.device == torch.device("cpu")
+        assert torch.equal(b_instance.x, x_tensor)
+        assert b_instance.y == "hello"
+        assert hasattr(b_instance, "x")
+        assert hasattr(b_instance, "y")
+
+    def test_subclassing_multiple_inheritance(self):
+        class A(TensorDataClass):
+            x: torch.Tensor
+
+        class B(TensorDataClass):
+            y: str
+
+
+        class C(A, B):
+            z: int
+
+
+        # 1. Test __init__ signature
+        signature = inspect.signature(C.__init__)
+        params = list(signature.parameters.keys())
+        # Expected: ['self', 'shape', 'device', 'x', 'y']
+        # The order is determined by __init_subclass__ in TensorDataClass
+        assert params == ["self", "shape", "device", "x", "y", "z"]
+
+    def test_subclassing_multiple_inheritance_partial(self):
+        class A(TensorDataClass):
+            x: torch.Tensor
+
+        class B:
+            y: str
+
+
+        class C(A, B):
+            z: int
+
+
+        # 1. Test __init__ signature
+        signature = inspect.signature(C.__init__)
+        params = list(signature.parameters.keys())
+        # Expected: ['self', 'shape', 'device', 'x', 'y']
+        # The order is determined by __init_subclass__ in TensorDataClass
+        assert params == ["self", "shape", "device", "x", "y", "z"]
+
+        
+
 class TestSubclassing:
     """Test subclassing functionality of TensorDataclass."""
+
 
     def test_subclassing_of_subclass(self):
         """Test that subclasses of TensorDataclass subclasses work correctly."""
@@ -94,3 +163,4 @@ class TestSubclassing:
         assert to_cuda_b.device is not None and to_cuda_b.device.type == "cuda"
         assert to_cuda_b.x.device.type == "cuda"
         assert to_cuda_b.y.device.type == "cuda"
+

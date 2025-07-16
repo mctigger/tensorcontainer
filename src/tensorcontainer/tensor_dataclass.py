@@ -214,9 +214,23 @@ class TensorDataClass(TensorAnnotated, TensorDataclassTransform):
 
         # In Python 3.9 __annotations__ also includes parent class
         # annotations, which is regarded a bug and changed from Python 3.10+
-        # We use the following line to be backwards compatible for 3.9
-        # In Python 3.10+ we could simply use cls.__annotations__.
-        annotations = cls.__dict__.get("__annotations__", {})
+        # We collect annotations from all parent classes in MRO (except TensorDataClass itself)
+        # to ensure subclasses inherit field definitions from parent TensorDataClass instances
+        annotations = {}
+
+        mro = list(reversed(cls.__mro__))
+        mro_excluding_tensor_base = mro[mro.index(TensorDataClass) +1:]
+        for base in mro_excluding_tensor_base:
+            base_annotations = base.__dict__.get("__annotations__", {})
+
+            if issubclass(base, TensorDataClass):
+                base_annotations = {k:v for k,v in base_annotations.items() if k not in ["device", "shape"]}
+
+            print("Using", base.__name__, base_annotations)
+            annotations.update(base_annotations)
+
+
+        print("Annotations", annotations)
 
         # Programmatically prepend `shape` and `device` to the class annotations.
         # Dataclasses use the order of `__annotations__` to generate the `__init__`
@@ -234,6 +248,8 @@ class TensorDataClass(TensorAnnotated, TensorDataclassTransform):
             "device": Optional[torch.device],
             **annotations,
         }
+
+        print("Final Annotation for class", cls.__name__, cls.__annotations__)
 
         dc_kwargs = {}
         for k in list(kwargs.keys()):
