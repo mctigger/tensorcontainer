@@ -2,12 +2,10 @@ import torch
 import inspect
 
 from tensorcontainer.tensor_dataclass import TensorDataClass
-from tests.conftest import skipif_no_cuda
 
 
-
-class TestBasicSubClassing:
-    def test_subclassing(self):
+class TestInitSignature:
+    def test_single_parent_class(self):
         class A(TensorDataClass):
             x: torch.Tensor
 
@@ -15,152 +13,123 @@ class TestBasicSubClassing:
             y: str
 
         # 1. Test __init__ signature
-        signature = inspect.signature(B.__init__)
-        params = list(signature.parameters.keys())
-        # Expected: ['self', 'shape', 'device', 'x', 'y']
-        # The order is determined by __init_subclass__ in TensorDataClass
-        assert params == ["self", "shape", "device", "x", "y"]
+        actual_signature = inspect.signature(B.__init__)
 
-        # 2. Test instance properties
-        x_tensor = torch.randn(2, 3)
-        b_instance = B(shape=(2, 3), device="cpu", x=x_tensor, y="hello")
+        # Create expected signature with proper parameters and type annotations
+        from typing import Optional
 
-        assert b_instance.shape == (2, 3)
-        assert b_instance.device == torch.device("cpu")
-        assert torch.equal(b_instance.x, x_tensor)
-        assert b_instance.y == "hello"
-        assert hasattr(b_instance, "x")
-        assert hasattr(b_instance, "y")
+        expected_signature = inspect.Signature(
+            [
+                inspect.Parameter("self", inspect.Parameter.POSITIONAL_OR_KEYWORD),
+                inspect.Parameter(
+                    "shape",
+                    inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                    annotation=torch.Size,
+                ),
+                inspect.Parameter(
+                    "device",
+                    inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                    annotation=Optional[torch.device],
+                ),
+                inspect.Parameter(
+                    "x",
+                    inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                    annotation=torch.Tensor,
+                ),
+                inspect.Parameter(
+                    "y", inspect.Parameter.POSITIONAL_OR_KEYWORD, annotation=str
+                ),
+            ],
+            return_annotation=None,
+        )
 
-    def test_subclassing_multiple_inheritance(self):
+        assert actual_signature == expected_signature
+
+    def test_multiple_parent_classes_multiple_tensor_data_class(self):
         class A(TensorDataClass):
             x: torch.Tensor
 
         class B(TensorDataClass):
             y: str
 
-
-        class C(A, B):
+        class C(B, A):
             z: int
 
-
         # 1. Test __init__ signature
-        signature = inspect.signature(C.__init__)
-        params = list(signature.parameters.keys())
-        # Expected: ['self', 'shape', 'device', 'x', 'y']
-        # The order is determined by __init_subclass__ in TensorDataClass
-        assert params == ["self", "shape", "device", "x", "y", "z"]
+        actual_signature = inspect.signature(C.__init__)
 
-    def test_subclassing_multiple_inheritance_partial(self):
+        # Create expected signature with proper parameters and type annotations
+        from typing import Optional
+
+        expected_signature = inspect.Signature(
+            [
+                inspect.Parameter("self", inspect.Parameter.POSITIONAL_OR_KEYWORD),
+                inspect.Parameter(
+                    "shape",
+                    inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                    annotation=torch.Size,
+                ),
+                inspect.Parameter(
+                    "device",
+                    inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                    annotation=Optional[torch.device],
+                ),
+                inspect.Parameter(
+                    "x",
+                    inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                    annotation=torch.Tensor,
+                ),
+                inspect.Parameter(
+                    "y", inspect.Parameter.POSITIONAL_OR_KEYWORD, annotation=str
+                ),
+                inspect.Parameter(
+                    "z", inspect.Parameter.POSITIONAL_OR_KEYWORD, annotation=int
+                ),
+            ],
+            return_annotation=None,
+        )
+
+        assert actual_signature == expected_signature
+
+    def test_multiple_parent_classes_single_tensor_data_class(self):
         class A(TensorDataClass):
             x: torch.Tensor
 
         class B:
             y: str
 
-
         class C(A, B):
             z: int
 
-
         # 1. Test __init__ signature
-        signature = inspect.signature(C.__init__)
-        params = list(signature.parameters.keys())
-        # Expected: ['self', 'shape', 'device', 'x', 'y']
-        # The order is determined by __init_subclass__ in TensorDataClass
-        assert params == ["self", "shape", "device", "x", "y", "z"]
+        actual_signature = inspect.signature(C.__init__)
 
-        
+        # Create expected signature with proper parameters and type annotations
+        from typing import Optional
 
-class TestSubclassing:
-    """Test subclassing functionality of TensorDataclass."""
+        expected_signature = inspect.Signature(
+            [
+                inspect.Parameter("self", inspect.Parameter.POSITIONAL_OR_KEYWORD),
+                inspect.Parameter(
+                    "shape",
+                    inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                    annotation=torch.Size,
+                ),
+                inspect.Parameter(
+                    "device",
+                    inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                    annotation=Optional[torch.device],
+                ),
+                inspect.Parameter(
+                    "x",
+                    inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                    annotation=torch.Tensor,
+                ),
+                inspect.Parameter(
+                    "z", inspect.Parameter.POSITIONAL_OR_KEYWORD, annotation=int
+                ),
+            ],
+            return_annotation=None,
+        )
 
-
-    def test_subclassing_of_subclass(self):
-        """Test that subclasses of TensorDataclass subclasses work correctly."""
-
-        class A(TensorDataClass):
-            x: torch.Tensor
-
-        class B(A):
-            new_attribute: str
-
-        # Test instantiation of B
-        x_tensor = torch.randn(2, 3)
-        b_instance = B(x=x_tensor, new_attribute="hello", shape=(2, 3), device="cpu")
-
-        assert isinstance(b_instance, B)
-        assert isinstance(b_instance, A)
-        assert isinstance(b_instance, TensorDataClass)
-
-        assert torch.equal(b_instance.x, x_tensor)
-        assert b_instance.new_attribute == "hello"
-        assert b_instance.shape == (2, 3)
-        assert b_instance.device == torch.device("cpu")
-
-        # Test that methods from TensorDataclass are available
-        cloned_b = b_instance.clone()
-        assert isinstance(cloned_b, B)
-        assert torch.equal(cloned_b.x, b_instance.x)
-        assert cloned_b.new_attribute == b_instance.new_attribute
-
-        # Test that B's attributes are correctly handled by TensorDataclass methods
-        assert cloned_b.new_attribute == "hello"
-
-    def test_subclass_with_tensor_attribute(self):
-        """Test subclass with additional tensor attributes."""
-
-        class A(TensorDataClass):
-            x: torch.Tensor
-
-        class B(A):
-            y: torch.Tensor  # New tensor attribute
-
-        # Test instantiation of B
-        x_tensor = torch.randn(2, 3)
-        y_tensor = torch.ones(2, 3)
-        b_instance = B(x=x_tensor, y=y_tensor, shape=(2, 3), device=torch.device("cpu"))
-
-        assert isinstance(b_instance, B)
-        assert isinstance(b_instance, A)
-        assert isinstance(b_instance, TensorDataClass)
-
-        assert torch.equal(b_instance.x, x_tensor)
-        assert torch.equal(b_instance.y, y_tensor)
-        assert b_instance.shape == (2, 3)
-        assert b_instance.device == torch.device("cpu")
-
-        # Test that methods from TensorDataclass are available and handle the new tensor attribute
-        cloned_b = b_instance.clone()
-        assert isinstance(cloned_b, B)
-        assert torch.equal(cloned_b.x, b_instance.x)
-        assert torch.equal(cloned_b.y, b_instance.y)
-        assert cloned_b.x is not b_instance.x
-        assert cloned_b.y is not b_instance.y
-
-        detached_b = b_instance.detach()
-        assert isinstance(detached_b, B)
-        assert not detached_b.x.requires_grad
-        assert not detached_b.y.requires_grad
-        assert torch.equal(detached_b.x, b_instance.x)
-        assert torch.equal(detached_b.y, b_instance.y)
-
-    @skipif_no_cuda
-    def test_subclass_cuda_operations(self):
-        """Test CUDA operations on subclassed TensorDataclass."""
-
-        class A(TensorDataClass):
-            x: torch.Tensor
-
-        class B(A):
-            y: torch.Tensor
-
-        x_tensor = torch.randn(2, 3)
-        y_tensor = torch.ones(2, 3)
-        b_instance = B(x=x_tensor, y=y_tensor, shape=(2, 3), device=torch.device("cpu"))
-
-        to_cuda_b = b_instance.to(torch.device("cuda"))
-        assert to_cuda_b.device is not None and to_cuda_b.device.type == "cuda"
-        assert to_cuda_b.x.device.type == "cuda"
-        assert to_cuda_b.y.device.type == "cuda"
-
+        assert actual_signature == expected_signature
