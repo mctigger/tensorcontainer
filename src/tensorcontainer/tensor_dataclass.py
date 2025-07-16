@@ -9,7 +9,7 @@ import torch
 from torch import Tensor
 from typing_extensions import dataclass_transform
 
-from tensorcontainer.tensor_annotated import TensorAnnotated, _get_annotations
+from tensorcontainer.tensor_annotated import TensorAnnotated
 from tensorcontainer.tensor_container import ShapeType, TensorContainer
 
 TDCompatible = Union[Tensor, TensorContainer]
@@ -212,18 +212,13 @@ class TensorDataClass(TensorAnnotated, TensorDataclassTransform):
         if hasattr(cls, "__slots__"):
             return
 
-        # In Python 3.9 __annotations__ also includes parent class
-        # annotations, which is regarded a bug and changed from Python 3.10+
-        # We collect annotations from all parent classes in MRO (except TensorDataClass itself)
-        # to ensure subclasses inherit field definitions from parent TensorDataClass instances
-        annotations = _get_annotations(cls, TensorDataClass)
+        annotations = cls._get_annotations(TensorDataClass)
 
         cls.__annotations__ = {
             "shape": torch.Size,
             "device": Optional[torch.device],
             **annotations,
         }
-
 
         dc_kwargs = {}
         for k in list(kwargs.keys()):
