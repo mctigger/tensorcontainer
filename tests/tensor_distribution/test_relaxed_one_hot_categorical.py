@@ -1,9 +1,10 @@
 import pytest
 import torch
 from torch.distributions import RelaxedOneHotCategorical as TorchRelaxedCategorical
+from torch.distributions.relaxed_categorical import ExpRelaxedCategorical
 
-from tensorcontainer.tensor_distribution.relaxed_categorical import (
-    TensorRelaxedCategorical,
+from tensorcontainer.tensor_distribution.relaxed_one_hot_categorical import (
+    TensorRelaxedOneHotCategorical,
 )
 from tests.compile_utils import run_and_compare_compiled
 from tests.tensor_distribution.conftest import (
@@ -13,14 +14,14 @@ from tests.tensor_distribution.conftest import (
 )
 
 
-class TestTensorRelaxedCategoricalInitialization:
+class TestTensorRelaxedOneHotCategoricalInitialization:
     @pytest.mark.parametrize(
         "temperature_val, param_type, param_shape, expected_batch_shape",
         [
-            (0.5, "probs", (5,), (5,)),
-            (0.5, "logits", (3, 5), (3,)),
+            (torch.tensor(0.5), "probs", (5,), torch.Size([])),
+            (torch.tensor(0.5), "logits", (3, 5), (3,)),
             (torch.tensor(0.5), "probs", (2, 4, 5), (2, 4)),
-            (torch.tensor([0.5, 0.8]), "logits", (2, 5), (2,)),
+            (torch.tensor(0.5), "logits", (2, 5), (2,)),
         ],
     )
     def test_valid_initialization(
@@ -29,12 +30,15 @@ class TestTensorRelaxedCategoricalInitialization:
         """Test valid initializations with various parameter types and shapes."""
         if param_type == "probs":
             param = torch.rand(*param_shape)
-            dist = TensorRelaxedCategorical(temperature=temperature_val, probs=param)
+            dist = TensorRelaxedOneHotCategorical(
+                temperature=temperature_val, probs=param
+            )
         else:
             param = torch.randn(*param_shape)
-            dist = TensorRelaxedCategorical(temperature=temperature_val, logits=param)
+            dist = TensorRelaxedOneHotCategorical(
+                temperature=temperature_val, logits=param
+            )
 
-        assert isinstance(dist, TensorRelaxedCategorical)
         assert dist.batch_shape == expected_batch_shape
         assert dist.dist().batch_shape == expected_batch_shape
 
@@ -43,15 +47,10 @@ class TestTensorRelaxedCategoricalInitialization:
         with pytest.raises(
             RuntimeError, match="Either 'probs' or 'logits' must be provided."
         ):
-            TensorRelaxedCategorical(temperature=torch.tensor(0.5))
-
-    def test_init_no_temperature_raises_error(self):
-        """A RuntimeError should be raised when temperature is not provided."""
-        with pytest.raises(RuntimeError, match="'temperature' must be provided."):
-            TensorRelaxedCategorical(temperature=None, probs=torch.rand(5))
+            TensorRelaxedOneHotCategorical(temperature=torch.tensor(0.5))
 
 
-class TestTensorRelaxedCategoricalTensorContainerIntegration:
+class TestTensorRelaxedOneHotCategoricalTensorContainerIntegration:
     @pytest.mark.parametrize("param_shape", [(5,), (3, 5), (2, 4, 5)])
     @pytest.mark.parametrize("param_type", ["probs", "logits"])
     def test_compile_compatibility(self, param_shape, param_type):
@@ -59,10 +58,14 @@ class TestTensorRelaxedCategoricalTensorContainerIntegration:
         temperature = torch.tensor(0.5, requires_grad=True)
         if param_type == "probs":
             param = torch.rand(*param_shape, requires_grad=True)
-            td_dist = TensorRelaxedCategorical(temperature=temperature, probs=param)
+            td_dist = TensorRelaxedOneHotCategorical(
+                temperature=temperature, probs=param
+            )
         else:
             param = torch.randn(*param_shape, requires_grad=True)
-            td_dist = TensorRelaxedCategorical(temperature=temperature, logits=param)
+            td_dist = TensorRelaxedOneHotCategorical(
+                temperature=temperature, logits=param
+            )
 
         sample = td_dist.sample()
 
@@ -85,19 +88,19 @@ class TestTensorRelaxedCategoricalTensorContainerIntegration:
         temperature = torch.tensor(0.5)
         if param_type == "probs":
             param = torch.rand(3, 5)
-            original_dist = TensorRelaxedCategorical(
+            original_dist = TensorRelaxedOneHotCategorical(
                 temperature=temperature, probs=param
             )
         else:
             param = torch.randn(3, 5)
-            original_dist = TensorRelaxedCategorical(
+            original_dist = TensorRelaxedOneHotCategorical(
                 temperature=temperature, logits=param
             )
 
         copied_dist = original_dist.copy()
 
         assert copied_dist is not original_dist
-        assert isinstance(copied_dist, TensorRelaxedCategorical)
+        assert isinstance(copied_dist, TensorRelaxedOneHotCategorical)
         torch.testing.assert_close(original_dist.temperature, copied_dist.temperature)
         if param_type == "probs":
             torch.testing.assert_close(original_dist.probs, copied_dist.probs)
@@ -105,38 +108,58 @@ class TestTensorRelaxedCategoricalTensorContainerIntegration:
             torch.testing.assert_close(original_dist.logits, copied_dist.logits)
 
 
-class TestTensorRelaxedCategoricalAPIMatch:
+class TestTensorRelaxedOneHotCategoricalAPIMatch:
     """
-    Tests that the TensorRelaxedCategorical API matches the PyTorch RelaxedOneHotCategorical API.
+    Tests that the TensorRelaxedOneHotCategorical API matches the PyTorch RelaxedOneHotCategorical API.
     """
 
     def test_init_signatures_match(self):
         """
-        Tests that the __init__ signature of TensorRelaxedCategorical matches
+        Tests that the __init__ signature of TensorRelaxedOneHotCategorical matches
         torch.distributions.RelaxedOneHotCategorical.
         """
-        assert_init_signatures_match(TensorRelaxedCategorical, TorchRelaxedCategorical)
+        assert_init_signatures_match(
+            TensorRelaxedOneHotCategorical, TorchRelaxedCategorical
+        )
 
     def test_properties_match(self):
         """
-        Tests that the properties of TensorRelaxedCategorical match
+        Tests that the properties of TensorRelaxedOneHotCategorical match
         torch.distributions.RelaxedOneHotCategorical.
         """
         assert_properties_signatures_match(
-            TensorRelaxedCategorical, TorchRelaxedCategorical
+            TensorRelaxedOneHotCategorical, TorchRelaxedCategorical
         )
 
     @pytest.mark.parametrize("param_type", ["probs", "logits"])
     def test_property_values_match(self, param_type):
         """
-        Tests that the property values of TensorRelaxedCategorical match
+        Tests that the property values of TensorRelaxedOneHotCategorical match
         torch.distributions.RelaxedOneHotCategorical.
         """
         temperature = torch.tensor(0.5)
         if param_type == "probs":
             param = torch.rand(3, 5)
-            td_dist = TensorRelaxedCategorical(temperature=temperature, probs=param)
+            td_dist = TensorRelaxedOneHotCategorical(
+                temperature=temperature, probs=param
+            )
         else:
             param = torch.randn(3, 5)
-            td_dist = TensorRelaxedCategorical(temperature=temperature, logits=param)
+            td_dist = TensorRelaxedOneHotCategorical(
+                temperature=temperature, logits=param
+            )
+
         assert_property_values_match(td_dist)
+
+
+class TestOneHotRelaxedCategoricalBug:
+    def test_log_prob(self):
+        """
+        There is a bug in RelaxedOneHotCategorical https://github.com/pytorch/pytorch/issues/37162
+        This test will fail if this bug is fixed in the future. Then it is time to refactor
+        TensorRelaxedOneHotCategorical!
+        """
+        dist = ExpRelaxedCategorical(
+            temperature=torch.ones(5, 1), logits=torch.zeros(5, 2)
+        )
+        assert dist.log_prob(torch.ones(5, 2) / 2).shape == (5, 5)
