@@ -1,8 +1,10 @@
 import torch
 import pytest
 import copy
+from tests.conftest import skipif_no_compile
 
 
+@skipif_no_compile
 @pytest.mark.parametrize("mode", ["eager", "compile"])
 def test_tensor_dataclass_shallow_copy(copy_test_instance, mode):
     """Test shallow copy of TensorDataclass with non-tensor metadata."""
@@ -27,6 +29,7 @@ def test_tensor_dataclass_shallow_copy(copy_test_instance, mode):
     assert copied.metadata == [1, 2, 3, 4]
 
 
+@skipif_no_compile
 @pytest.mark.parametrize("mode", ["eager", "compile"])
 def test_tensor_dataclass_deep_copy(copy_test_instance, mode):
     """Test deep copy of TensorDataclass with non-tensor metadata."""

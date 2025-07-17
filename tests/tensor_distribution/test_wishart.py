@@ -3,6 +3,8 @@ import torch
 from _pytest.fixtures import FixtureRequest
 from torch.distributions import Wishart as TorchWishart
 
+from tests.conftest import skipif_no_compile
+
 from tensorcontainer.tensor_distribution.wishart import TensorWishart
 from tests.tensor_distribution.conftest import (
     assert_property_values_match,
@@ -63,6 +65,7 @@ class TestTensorWishart:
         assert torch.allclose(dist.precision_matrix, torch_dist.precision_matrix)
         assert torch.allclose(dist.scale_tril, torch_dist.scale_tril)
 
+    @skipif_no_compile
     @pytest.mark.parametrize("compile_args", compile_args)
     def test_compile(self, wishart_params, compile_args):
         # Mark expected failures for fullgraph=True with dynamic=True/False
