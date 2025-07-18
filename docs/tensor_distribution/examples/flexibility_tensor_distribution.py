@@ -1,25 +1,18 @@
-"""
-Example demonstrating the flexibility of TensorDistribution.
-
-This example shows how TensorDistribution simplifies operations that would
-require type-specific handling with standard torch.distributions.
-"""
 import torch
-
 from torch.distributions import kl_divergence
 
 from tensorcontainer.tensor_distribution import (
     TensorBernoulli,
     TensorCategorical,
-    TensorNormal,
     TensorDistribution,
+    TensorNormal,
 )
 
 
 def partially_detached_kl_divergence(p: TensorDistribution, q: TensorDistribution):
     """
     Compute KL divergence between p and a detached version of q.
-    
+
     With TensorDistribution, we can simply call .detach() on any distribution
     without needing to know its specific type or parameter names.
     """

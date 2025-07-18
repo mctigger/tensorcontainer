@@ -1,5 +1,5 @@
 import torch
-from torch.distributions import Normal, Bernoulli
+from torch.distributions import Bernoulli, Normal
 
 
 # Extract parameters, transform them, create new distribution
@@ -34,10 +34,10 @@ def chain(normal):
 
 
 # Create a for torch.distributions.Normal with one event dimension
-# For the purposes of this tutorial we do not use Independent, although it 
+# For the purposes of this tutorial we do not use Independent, although it
 # would make sense here. See the section on Independent.
-loc = torch.randn(2 * 3* 4)
-scale = torch.abs(torch.randn(2 * 3*4))
+loc = torch.randn(2 * 3 * 4)
+scale = torch.abs(torch.randn(2 * 3 * 4))
 normal = Normal(loc=loc, scale=scale)
 
 # Execute the chain for torch.distributions.Normal
@@ -45,5 +45,5 @@ chain(normal)
 
 # Try to execute the chain for torch.distributions.Bernoulli
 bernoulli = Bernoulli(logits=torch.randn(2, 3, 4))
-chain(bernoulli)
-# AttributeError: 'Bernoulli' object has no attribute 'loc'
+
+chain(bernoulli)  # AttributeError: 'Bernoulli' object has no attribute 'loc'

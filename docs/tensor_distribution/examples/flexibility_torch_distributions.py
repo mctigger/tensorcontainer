@@ -1,15 +1,9 @@
-"""
-Example showing the complexity of working with standard torch.distributions.
-
-This example demonstrates how standard torch.distributions require type-specific
-handling for operations that TensorDistribution can handle uniformly.
-"""
 import torch
 from torch.distributions import (
-    Normal,
-    Categorical,
     Bernoulli,
+    Categorical,
     Distribution,
+    Normal,
     kl_divergence,
 )
 
@@ -17,7 +11,7 @@ from torch.distributions import (
 def partially_detached_kl_divergence(p: Distribution, q: Distribution):
     """
     Compute KL divergence between p and a detached version of q.
-    
+
     With standard torch.distributions, we need type-specific handling
     because different distributions have different parameter names and structures.
     """

@@ -1,10 +1,10 @@
 import torch
-from torch.distributions import Normal, Independent
+from torch.distributions import Independent, Normal
 
 loc = torch.randn(2 * 3, 4)
 scale = torch.abs(torch.randn(2 * 3, 4))
 
-# Use Independent to create a Normal with one event dimension 
+# Use Independent to create a Normal with one event dimension
 normal = Independent(Normal(loc=loc, scale=scale), 1)
 
 # 1. Extract the base distribution
@@ -21,4 +21,3 @@ new_scale = scale.view(2, 3, 4)
 
 # 4. Create a new distribution
 new_normal = Independent(Normal(loc=new_loc, scale=new_scale), 1)
-
