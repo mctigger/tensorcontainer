@@ -23,7 +23,7 @@ def partially_detached_kl_divergence(p: TensorDistribution, q: TensorDistributio
     With TensorDistribution, we can simply call .detach() on any distribution
     without needing to know its specific type or parameter names.
     """
-    return kl_divergence(p.dist(), q.detach().dist())
+    return kl_divergence(p, q.detach())
 
 
 # Create different types of TensorDistributions with gradients
