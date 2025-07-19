@@ -4,12 +4,12 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tensorcontainer"
-version = "0.5.1"
+version = "0.6.0"
 description = "TensorDict-like functionality for PyTorch with PyTree compatibility and torch.compile support"
 authors = [{name="Tim Joseph", email="tim@mctigger.com"}]
 license = {text = "MIT"}
 dependencies = [
-    "torch"
+    "torch>=2.0.0"
 ]
 readme = "README.md"
 requires-python = ">=3.9"
@@ -21,7 +21,12 @@ classifiers = [
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
     "Development Status :: 4 - Beta",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Intended Audience :: Science/Research",
+    "Intended Audience :: Developers",
 ]
 
 [project.optional-dependencies]
@@ -29,7 +34,6 @@ dev = [
   "pytest>=7.2,<8.0",
   "pytest-cov",
   "ruff"
-
 ]
 
 
@@ -37,5 +41,27 @@ dev = [
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.coverage.run]
+source = ["src"]
+omit = ["*/tests/*", "*/__pycache__/*"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+]
+
 [tool.pytest.ini_options]
-addopts = "--strict-markers --cov=src"
+addopts = [
+    "--strict-markers",
+    "--cov=src",
+    "--cov-report=term-missing",
+    "--cov-report=html",
+    "--tb=short",
+]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
