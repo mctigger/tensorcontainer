@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any, Dict, get_args
 
 from torch import Tensor
 from torch.distributions import Beta
@@ -33,7 +33,7 @@ class TensorBeta(TensorDistribution):
             concentration1, concentration0
         )
 
-        if isinstance(concentration1, Number) and isinstance(concentration0, Number):
+        if isinstance(concentration1, get_args(Number)) and isinstance(concentration0, get_args(Number)):
             shape = tuple()
         else:
             shape = self._concentration1.shape

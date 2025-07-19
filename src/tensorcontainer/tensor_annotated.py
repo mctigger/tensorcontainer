@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Iterable, List, Self, Tuple, TypeVar, Union, get_args
+from typing import Any, Dict, Iterable, List, Tuple, TypeVar, Union, get_args
+from typing_extensions import Self
 
 import torch
 from torch import Tensor

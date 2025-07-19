@@ -1,4 +1,4 @@
-from typing import Optional, Tuple, Union
+from typing import Optional, Tuple, Union, get_args
 
 import torch
 from torch import Tensor
@@ -28,12 +28,12 @@ class ContinuousBernoulli(TensorDistribution):
         elif probs is None and logits is None:
             raise ValueError("Either `probs` or `logits` must be specified.")
 
-        if probs is not None and isinstance(probs, Number):
+        if probs is not None and isinstance(probs, get_args(Number)):
             self._probs = torch.tensor(probs)
         else:
             self._probs = probs
 
-        if logits is not None and isinstance(logits, Number):
+        if logits is not None and isinstance(logits, get_args(Number)):
             self._logits = torch.tensor(logits)
         else:
             self._logits = logits

@@ -11,7 +11,7 @@ from torch.distributions import (
 )
 from torch.distributions.utils import broadcast_all
 from torch.types import Number
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, get_args
 
 from .base import TensorDistribution
 
@@ -67,7 +67,7 @@ class TensorTanhNormal(TensorDistribution):
         else:
             self._reinterpreted_batch_ndims = reinterpreted_batch_ndims
 
-        if isinstance(loc, Number) and isinstance(scale, Number):
+        if isinstance(loc, get_args(Number)) and isinstance(scale, get_args(Number)):
             shape = tuple()
         else:
             shape = self._loc.shape

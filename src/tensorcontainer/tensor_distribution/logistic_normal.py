@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any, Dict, get_args
 
 import torch  # Added import torch
 
@@ -20,7 +20,7 @@ class TensorLogisticNormal(TensorDistribution):
     def __init__(self, loc: Tensor, scale: Tensor):
         self._loc, self._scale = broadcast_all(loc, scale)
 
-        if isinstance(loc, Number) and isinstance(scale, Number):
+        if isinstance(loc, get_args(Number)) and isinstance(scale, get_args(Number)):
             shape = torch.Size([1])
             self._loc = self._loc.unsqueeze(0)  # Unsqueeze for scalar inputs
             self._scale = self._scale.unsqueeze(0)  # Unsqueeze for scalar inputs

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any, Dict, get_args
 
 from torch import Tensor
 from torch.distributions import Normal
@@ -31,7 +31,7 @@ class TensorNormal(TensorDistribution):
     def __init__(self, loc: Tensor, scale: Tensor):
         self._loc, self._scale = broadcast_all(loc, scale)
 
-        if isinstance(loc, Number) and isinstance(scale, Number):
+        if isinstance(loc, get_args(Number)) and isinstance(scale, get_args(Number)):
             shape = tuple()
         else:
             shape = self._loc.shape
