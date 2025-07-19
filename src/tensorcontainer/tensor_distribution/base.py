@@ -319,7 +319,7 @@ class TensorDistribution(TensorAnnotated):
 
 
 @register_kl(TensorDistribution, TensorDistribution)
-def registerd_td_td(
+def register_td_td(
     td_a: TensorDistribution,
     td_b: TensorDistribution,
 ):
@@ -352,7 +352,7 @@ def register_td_d(td: TensorDistribution, d: Distribution):
 
 
 @register_kl(Distribution, TensorDistribution)
-def registerd_d_td(
+def register_d_td(
     d: Distribution,
     td: TensorDistribution,
 ):

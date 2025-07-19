@@ -8,7 +8,7 @@ from torch.types import Number
 from .base import TensorDistribution
 
 
-class ContinuousBernoulli(TensorDistribution):
+class TensorContinuousBernoulli(TensorDistribution):
     _probs: Optional[Tensor]
     _logits: Optional[Tensor]
     _lims: Tuple[float, float]
@@ -62,7 +62,7 @@ class ContinuousBernoulli(TensorDistribution):
     def _unflatten_distribution(
         cls,
         attributes: dict,
-    ) -> "ContinuousBernoulli":
+    ) -> "TensorContinuousBernoulli":
         return cls(
             probs=attributes.get("_probs"),
             logits=attributes.get("_logits"),

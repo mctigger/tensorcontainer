@@ -6,7 +6,7 @@ from .binomial import TensorBinomial
 from .categorical import TensorCategorical
 from .cauchy import TensorCauchy
 from .chi2 import TensorChi2
-from .continuous_bernoulli import ContinuousBernoulli
+from .continuous_bernoulli import TensorContinuousBernoulli
 from .dirichlet import TensorDirichlet
 from .exponential import TensorExponential
 from .fisher_snedecor import TensorFisherSnedecor
@@ -51,7 +51,7 @@ __all__ = [
     "TensorCategorical",
     "TensorCauchy",
     "TensorChi2",
-    "ContinuousBernoulli",
+    "TensorContinuousBernoulli",
     "TensorDirichlet",
     "TensorExponential",
     "TensorFisherSnedecor",
