@@ -2,7 +2,7 @@ name: Publish Nightly
 
 on:
   push:
-    branches: ["test-nightly"]
+    branches: ["main"]
 
 permissions:
   contents: read
@@ -24,10 +24,10 @@ jobs:
           # Extract the base version from pyproject.toml (e.g., "0.5.0")
           BASE_VERSION=$(cat pyproject.toml | grep -oP 'version = "\K[^"]+')
 
-          # Create a date-based suffix (e.g., ".dev20250707222204")
+          # Create a date-based suffix (e.g., ".dev20250719203543")
           NIGHTLY_SUFFIX=".dev$(date +'%Y%m%d%H%M%S')"
 
-          # Combine them into the full nightly version (e.g., "0.5.0.dev20250707222204")
+          # Combine them into the full nightly version (e.g., "0.5.0.dev20250719203543")
           NIGHTLY_VERSION="$BASE_VERSION$NIGHTLY_SUFFIX"
 
           echo "Setting package version to: $NIGHTLY_VERSION"
@@ -50,19 +50,13 @@ jobs:
     needs:
       - build
     permissions:
-      # This permission is mandatory for trusted publishing.
+      # This permission is mandatory for trusted publishing to PyPI.
       id-token: write
 
-    # Dedicated environments with protections for publishing are strongly recommended.
-    # For more information, see: https://docs.github.com/en/actions/deployment/targeting-different-environments/using-environments-for-deployment#deployment-protection-rules
+    # Using a dedicated environment for PyPI is a recommended security practice.
     environment:
-      name: testpypi
-      # OPTIONAL: uncomment and update to include your PyPI project URL in the deployment status:
-      # url: https://pypi.org/p/YOURPROJECT
-      #
-      # ALTERNATIVE: if your GitHub Release name is the PyPI project version string
-      # ALTERNATIVE: exactly, uncomment the following line instead:
-      # url: https://pypi.org/project/YOURPROJECT/${{ github.event.release.name }}
+      name: pypi
+      url: https://pypi.org/p/tensorcontainer
 
     steps:
       - name: Retrieve release distributions
@@ -75,4 +69,3 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: dist/
-          repository-url: https://test.pypi.org/legacy/

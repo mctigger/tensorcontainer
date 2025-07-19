@@ -27,11 +27,9 @@ jobs:
           pip install build
 
       - name: Build release distributions
-        run: |
-          python -m pip install build
-          python -m build
+        run: python -m build
 
-      - name: Upload distributions
+      - name: Upload distributions as an artifact
         uses: actions/upload-artifact@v4
         with:
           name: release-dists
@@ -47,8 +45,8 @@ jobs:
 
     # You must configure this environment in your repository settings.
     environment:
-      name: testpypi
-      url: https://test.pypi.org/p/tensorcontainer/${{ github.event.release.tag_name }} 
+      name: pypi
+      url: https://pypi.org/p/tensorcontainer/${{ github.event.release.tag_name }} 
 
     steps:
       - name: Retrieve release distributions from artifact
@@ -59,6 +57,3 @@ jobs:
 
       - name: Publish package to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          # This line directs the upload to TestPyPI
-          repository-url: https://test.pypi.org/legacy/
