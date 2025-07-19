@@ -437,20 +437,6 @@ class TensorContainer:
         return formatted_path
 
     def __repr__(self) -> str:
-        # Infer device for representation if not set (this part is unchanged)
-        device_repr = self.device
-        if device_repr is None:
-            try:
-                # Ensure there are leaves before trying to access device
-                # pytree.tree_leaves can return an empty list
-                leaves = pytree.tree_leaves(self)
-                if leaves:
-                    device_repr = leaves[0].device
-            except IndexError:  # Should not happen if leaves is checked
-                pass
-            except Exception:  # Catch any other pytree or attribute errors
-                pass
-
         # Use a consistent indent of 4 spaces, which is standard
         indent = "    "
 
@@ -480,7 +466,7 @@ class TensorContainer:
         return (
             f"{self.__class__.__name__}(\n"
             f"{indent}shape={str(self.shape)},\n"
-            f"{indent}device={device_repr},\n"
+            f"{indent}device={self.device},\n"
             f"{indent}items=\n{textwrap.indent(indented_items, indent)}\n{indent}\n"
             f")"
         )
@@ -622,8 +608,10 @@ class TensorContainer:
 
     def to(self: Self, *args, **kwargs) -> Self:
         with TensorContainer.unsafe_construction():
-            tc = TensorContainer._tree_map(lambda x: x.to(*args, **kwargs), self)
-
+            leaves, context = self._pytree_flatten()
+            leaves = [l.to(*args, **kwargs) for l in leaves]
+            tc = self._pytree_unflatten(leaves, context)
+            
         device = self.device
 
         is_device_in_args = len(args) > 0 and isinstance(args[0], (str, torch.device))
