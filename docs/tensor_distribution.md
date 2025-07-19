@@ -1,8 +1,53 @@
-# TensorDistribution User Guide
+# TensorDistribution
+TensorDistribution adds tensor-like properties to torch.distributions and enable application of torch operations like `torch.stack()` or `torch.cat()` for distributions.
 
-`TensorDistribution` is a wrapper for `torch.distributions.Distribution` that makes it compatible with the `tensorcontainer` ecosystem. It enables PyTorch distributions to be treated as `TensorDataClass` or `TensorDict` objects, allowing them to be seamlessly integrated into structured data pipelines and manipulated with batched, tensor-like operations (e.g., indexing, reshaping, device transfer).
+## Key Benefits
+- **🔄 Drop-in torch.distributions replacement**: tensorcontainer.tensor_distribution is API-compatible with torch.distributions
+- **🏗️ TensorContainer integration**: Seamlessly works with TensorDict and TensorDataClass structures
+- **⚡ Unified tensor operations**: Indexing, slicing, reshaping, and device transfer work on entire distributions
+- **📦 Efficient batching**: Batch operations across multiple samples with consistent shape handling
+- **🚀 torch.compile compatibility**: PyTree support enables torch.compile compatability
 
-This guide assumes you are an expert in `torch.distributions`. It focuses on what `TensorDistribution` adds, not on the basics of distributions themselves.
+To see the benefits in action, here are two examples:
+
+1. **Seamless Tensor Operations**: Apply `torch` operations like `view`, `permute`, and `detach` directly to `TensorDistribution` instances, simplifying batch and shape management.
+
+
+```python
+import torch
+
+from tensorcontainer.tensor_distribution import TensorNormal
+
+
+loc = torch.randn(2 * 3, 4)
+scale = torch.abs(torch.randn(2 * 3, 4))
+normal = TensorIndependent(TensorNormal(loc=loc, scale=scale))
+
+normal = normal.view(2, 3).permute(1, 0, 2).detach()
+```
+
+2. **Distribution-Agnostic Operations**: Implement generic functions that work with any `TensorDistribution` type, such as computing KL divergence, without needing type-specific parameter handling. This contrasts with `torch.distributions`, which often requires explicit checks for each distribution type.
+
+```python
+import torch
+from torch import nn
+from torch.distributions import kl_divergence
+
+
+class LossModule(nn.Module):
+    def __init__(self, weight):
+        self._weight = weight
+
+    def forward(self, p: TensorDistribution, q: TensorDistribution):
+        kl_p = kl_divergence(p, q.detach())
+        kl_q = kl_divergence(p.detach(), q)
+
+        return self._weight * kl_p + (1 - self._weight) * kl_q
+```
+
+---
+
+`TensorDistribution` extends PyTorch's `torch.distributions` with tensor-like operations and structured data support. Instead of manually managing distribution parameters across different devices, batch dimensions, and nested structures, TensorDistribution provides a unified interface that works just like regular tensors.
 
 ---
 
@@ -28,81 +73,32 @@ This is especially useful in areas like VAEs or RL, where models frequently prod
 
 ---
 
-## 2. Tutorial: Your First TensorDistribution
+## 2. Advantages of TensorDistribution over torch.distributions
 
-This tutorial demonstrates how to wrap a `torch.distributions.Distribution` and access its tensor-like features.
+This section demonstrates key advantages of using `TensorDistribution` compared to standard `torch.distributions`.
 
+### Unified API Across Distribution Types
 
-### Simplified Tensor Operations
+`TensorDistribution` provides a consistent interface for different distribution types, simplifying operations that would otherwise require type-specific handling with `torch.distributions`. This is particularly evident when performing operations like detaching parameters or applying transformations, where `TensorDistribution` abstracts away the underlying parameter structure.
 
-`TensorDistribution` allows common tensor operations to be applied directly to the distribution object, which can simplify code. This differs from how these operations are typically performed on a standard `torch.distributions.Distribution` instance.
-
-Methods like `.detach()` or `.view()` can be called directly on the `TensorDistribution` object, and these operations are applied uniformly to all underlying parameter tensors (e.g., `loc`, `scale`). Crucially, to apply these operations, you don't need to know the specific type of `TensorDistribution` (e.g., `TensorNormal`, `TensorCategorical`).
-
-Here is an example to showcase how using TensorDistribution leads to more readable and flexible code:
-
-```python
-import torch
-from torch.distributions import kl_divergence
-from tensorcontainer.tensor_distribution import (
-    TensorBernoulli,
-    TensorCategorical,
-    TensorNormal,
-    TensorDistribution,
-)
-
-
-def partially_detached_kl_divergence(p: TensorDistribution, q: TensorDistribution):
-    """
-    Compute KL divergence between p and a detached version of q.
-    
-    With TensorDistribution, we can simply call .detach() on any distribution
-    without needing to know its specific type or parameter names.
-    """
-    return kl_divergence(p.dist(), q.detach().dist())
-
-
-# Create different types of TensorDistributions with gradients
-normal = TensorNormal(
-    loc=torch.tensor([0.0, 1.0], requires_grad=True),
-    scale=torch.tensor([1.0, 0.5], requires_grad=True),
-)
-categorical = TensorCategorical(
-    logits=torch.tensor([[0.1, 0.9], [0.8, 0.2]], requires_grad=True)
-)
-bernoulli = TensorBernoulli(probs=torch.tensor([0.2, 0.8], requires_grad=True))
-
-# The same function works for all distribution types
-# No type-specific handling required!
-kl_normal = partially_detached_kl_divergence(normal, normal)
-kl_categorical = partially_detached_kl_divergence(categorical, categorical)
-kl_bernoulli = partially_detached_kl_divergence(bernoulli, bernoulli)
-```
-
-### Comparison with Standard torch.distributions
-In contrast, with a `torch.distributions.Distribution`, you would need to manually access each underlying parameter tensor (e.g., `loc`, `scale`), apply the operation to each one individually, and then create a new distribution instance with the modified parameters. This process can be complex, repetitive, and prone to errors, especially since parameter names vary between different distribution types (e.g., `Normal` has `loc` and `scale`, while `Categorical` has `probs` or `logits`). A function taking a standard `Distribution` object requires manual, type-specific handling of parameters.
-
-The following example demonstrates the complexity of working with standard `torch.distributions.Distribution` objects:
+Consider the task of computing the KL divergence between a distribution and its detached version. With `torch.distributions`, this requires explicit checks for each distribution type to access and detach its specific parameters:
 
 ```python
 import torch
 from torch.distributions import (
-    Normal,
-    Categorical,
     Bernoulli,
+    Categorical,
     Distribution,
+    Normal,
     kl_divergence,
 )
 
 
-def partially_detached_kl_divergence(p: Distribution, q: Distribution):
+def partially_detached_kl_divergence_torch(p: Distribution, q: Distribution):
     """
-    Compute KL divergence between p and a detached version of q.
-    
-    With standard torch.distributions, we need type-specific handling
-    because different distributions have different parameter names and structures.
+    Compute KL divergence between p and a detached version of q using torch.distributions.
+    Requires type-specific handling due to varying parameter names and structures.
     """
-    # Create detached version of q based on its type
     if isinstance(q, Normal):
         detached_q = Normal(loc=q.loc.detach(), scale=q.scale.detach())
     elif isinstance(q, Categorical):
@@ -113,25 +109,209 @@ def partially_detached_kl_divergence(p: Distribution, q: Distribution):
         raise RuntimeError(
             f"partially_detached_kl_divergence not implemented for distribution {type(q)}"
         )
-
     return kl_divergence(p, detached_q)
 
-
-# Create different types of distributions with gradients
-normal = Normal(
+# Example usage with torch.distributions
+normal_torch = Normal(
     loc=torch.tensor([0.0, 1.0], requires_grad=True),
     scale=torch.tensor([1.0, 0.5], requires_grad=True),
 )
-categorical = Categorical(
+categorical_torch = Categorical(
     logits=torch.tensor([[0.1, 0.9], [0.8, 0.2]], requires_grad=True)
 )
-bernoulli = Bernoulli(probs=torch.tensor([0.2, 0.8], requires_grad=True))
+bernoulli_torch = Bernoulli(probs=torch.tensor([0.2, 0.8], requires_grad=True))
 
-# Each distribution type requires the same function but with type-specific logic
-kl_normal = partially_detached_kl_divergence(normal, normal)
-kl_categorical = partially_detached_kl_divergence(categorical, categorical)
-kl_bernoulli = partially_detached_kl_divergence(bernoulli, bernoulli)
+kl_normal_torch = partially_detached_kl_divergence_torch(normal_torch, normal_torch)
+kl_categorical_torch = partially_detached_kl_divergence_torch(categorical_torch, categorical_torch)
+kl_bernoulli_torch = partially_detached_kl_divergence_torch(bernoulli_torch, bernoulli_torch)
 ```
+
+In contrast, `TensorDistribution` provides a unified `detach()` method that works seamlessly across all distribution types, eliminating the need for conditional logic:
+
+```python
+import torch
+from torch.distributions import kl_divergence
+
+from tensorcontainer.tensor_distribution import (
+    TensorBernoulli,
+    TensorCategorical,
+    TensorDistribution,
+    TensorNormal,
+)
+
+
+def partially_detached_kl_divergence_tensor(p: TensorDistribution, q: TensorDistribution):
+    """
+    Compute KL divergence between p and a detached version of q using TensorDistribution.
+    Simply calls .detach() on the distribution, regardless of its specific type.
+    """
+    return kl_divergence(p, q.detach())
+
+# Example usage with TensorDistribution
+normal_tensor = TensorNormal(
+    loc=torch.tensor([0.0, 1.0], requires_grad=True),
+    scale=torch.tensor([1.0, 0.5], requires_grad=True),
+)
+categorical_tensor = TensorCategorical(
+    logits=torch.tensor([[0.1, 0.9], [0.8, 0.2]], requires_grad=True)
+)
+bernoulli_tensor = TensorBernoulli(probs=torch.tensor([0.2, 0.8], requires_grad=True))
+
+kl_normal_tensor = partially_detached_kl_divergence_tensor(normal_tensor, normal_tensor)
+kl_categorical_tensor = partially_detached_kl_divergence_tensor(categorical_tensor, categorical_tensor)
+kl_bernoulli_tensor = partially_detached_kl_divergence_tensor(bernoulli_tensor, bernoulli_tensor)
+```
+
+This unified API significantly reduces boilerplate code and improves the maintainability and extensibility of your probabilistic models, as new distribution types can be integrated without modifying existing generic functions.
+
+### Operation Chaining
+
+TensorDistribution enables seamless chaining of tensor operations on distributions, allowing for cleaner and more readable code. This is particularly beneficial when working with complex tensor transformations that would otherwise require manual parameter extraction and re-instantiation for each operation.
+
+The following TensorDistribution example demonstrates how multiple tensor operations can be chained together in a single, unified function that works across different distribution types:
+
+```python
+import torch
+
+from tensorcontainer.tensor_distribution import (
+    TensorBernoulli,
+    TensorNormal,
+)
+from tensorcontainer.tensor_distribution.base import TensorDistribution
+
+
+def chain(distribution: TensorDistribution):
+    distribution = distribution.view(2, 3, 4)
+    distribution = distribution.permute(1, 0, 2)
+    distribution = distribution.detach()
+
+    return distribution
+
+
+# Create a TensorNormal
+loc = torch.randn(2 * 3 * 4)
+scale = torch.abs(torch.randn(2 * 3 * 4))
+normal = TensorNormal(loc=loc, scale=scale)
+
+# Execute the chain for TensorNormal
+chain(normal)
+
+# Execute the chain for TensorBernoulli
+bernoulli = TensorBernoulli(logits=torch.randn(2, 3, 4))
+
+chain(bernoulli)  # Works perfectly fine!
+```
+
+In contrast, the equivalent torch.distributions approach requires separate functions for each operation, with type-specific parameter handling. Each transformation must manually extract parameters, apply the transformation, and reconstruct the distribution:
+
+```python
+import torch
+from torch.distributions import Bernoulli, Normal
+
+
+# Extract parameters, transform them, create new distribution
+def view(normal):
+    # Careful! Do not change the event dimension!
+    viewed_loc = normal.loc.view(2, 3, 4)
+    viewed_scale = normal.scale.view(2, 3, 4)
+    return Normal(loc=viewed_loc, scale=viewed_scale)
+
+
+# Extract parameters, permute them, create new distribution
+def permute(normal):
+    # Careful! Do not change the event dimension!
+    permuted_loc = normal.loc.permute(1, 0, 2)
+    permuted_scale = normal.scale.permute(1, 0, 2)
+    return Normal(loc=permuted_loc, scale=permuted_scale)
+
+
+# Extract parameters, detach them, create new distribution
+def detach(normal):
+    detached_loc = normal.loc.detach()
+    detached_scale = normal.scale.detach()
+    return Normal(loc=detached_loc, scale=detached_scale)
+
+
+def chain(normal):
+    normal = view(normal)
+    normal = permute(normal)
+    normal = detach(normal)
+
+    return normal
+
+
+# Create a for torch.distributions.Normal with one event dimension
+# For the purposes of this tutorial we do not use Independent, although it
+# would make sense here. See the section on Independent.
+loc = torch.randn(2 * 3 * 4)
+scale = torch.abs(torch.randn(2 * 3 * 4))
+normal = Normal(loc=loc, scale=scale)
+
+# Execute the chain for torch.distributions.Normal
+chain(normal)
+
+# Try to execute the chain for torch.distributions.Bernoulli
+bernoulli = Bernoulli(logits=torch.randn(2, 3, 4))
+
+chain(bernoulli)  # AttributeError: 'Bernoulli' object has no attribute 'loc'
+```
+
+The torch.distributions approach requires distribution-specific functions because each distribution type has different parameter names (`loc`/`scale` for Normal vs `logits` for Bernoulli). This leads to verbose, error-prone code that breaks when applied to different distribution types.
+
+### Nested Distributions
+
+TensorDistribution simplifies working with nested distributions, such as those created using `Independent`. This is particularly useful when you need to apply tensor transformations to distributions that have both batch and event dimensions, as TensorDistribution automatically handles the complexity of preserving event dimensions while transforming batch dimensions.
+
+The following TensorDistribution example shows how nested distributions can be manipulated with a simple, direct interface:
+
+```python
+import torch
+
+from tensorcontainer.tensor_distribution.independent import TensorIndependent
+from tensorcontainer.tensor_distribution.normal import TensorNormal
+
+# Create a TensorNormal with one event dimension
+loc = torch.randn(2 * 3, 4)
+scale = torch.abs(torch.randn(2 * 3, 4))
+
+# Use TensorIndependent to create a TensorNormal with one event dimension
+independent_normal = TensorIndependent(TensorNormal(loc=loc, scale=scale), 1)
+
+# We do not need to care about Independent or even the type of distribution that
+# Independent wraps, it just works. The last dimension is an event dimension
+# so we must not pass it to .view()
+independent_normal = independent_normal.view(2, 3)
+```
+
+In contrast, the torch.distributions approach requires a multi-step process to achieve the same result. You must manually extract the base distribution, transform its parameters while carefully preserving event dimensions, and then reconstruct the nested structure:
+
+```python
+import torch
+from torch.distributions import Independent, Normal
+
+loc = torch.randn(2 * 3, 4)
+scale = torch.abs(torch.randn(2 * 3, 4))
+
+# Use Independent to create a Normal with one event dimension
+normal = Independent(Normal(loc=loc, scale=scale), 1)
+
+# 1. Extract the base distribution
+base_dist = normal.base_dist
+
+# 2. Extract the parameters
+loc = base_dist.loc
+scale = base_dist.scale
+
+# 3. Reshape the parameters
+# Note that we can't touch the event dimension, so we only reshape the batch dimensions
+new_loc = loc.view(2, 3, 4)
+new_scale = scale.view(2, 3, 4)
+
+# 4. Create a new distribution
+new_normal = Independent(Normal(loc=new_loc, scale=new_scale), 1)
+```
+
+The torch.distributions approach requires explicit knowledge of the nested structure and careful handling of batch versus event dimensions. Each step must be performed manually, making the code verbose and error-prone, especially when working with complex nested distribution hierarchies.
 
 ---
 
@@ -196,26 +376,14 @@ import torch
 from torch.distributions import Normal
 from tensorcontainer.tensor_distribution import TensorNormal
 
-means = torch.tensor([0.0, 1.0])
-std_devs = torch.tensor([1.0, 0.5])
-tdist = TensorNormal(loc=means, scale=std_devs)
+mean = torch.tensor([0.0, 1.0])
+stddev = torch.tensor([1.0, 0.5])
+tdist = TensorNormal(loc=mean, scale=stddev)
 
-# Clone the instance
+# Clone the parameter tensors
 cloned_tdist = tdist.clone()
-# cloned_tdist is a new TensorNormal instance with copied parameters
-
-# Transfer to a different device (e.g., CUDA if available, otherwise CPU)
-if torch.cuda.is_available():
-    cuda_tdist = tdist.to("cuda")
-    # cuda_tdist.device is torch.device('cuda:0')
-    # cuda_tdist.dist().loc.device is torch.device('cuda:0')
-else:
-    # CUDA not available. Skipping .to('cuda') example.
-    pass
-
-cpu_tdist = tdist.to("cpu")
-# cpu_tdist.device is torch.device('cpu')
-# cpu_tdist.dist().loc.device is torch.device('cpu')
+# Move parameter to GPU
+cuda_tdist = tdist.to("cuda")
 ```
 
 ### How to Index and Slice a TensorDistribution
