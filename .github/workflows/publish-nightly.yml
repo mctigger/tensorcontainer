@@ -10,6 +10,9 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      # Grant write permission ONLY to this job to modify pyproject.toml
+      contents: write
 
     steps:
       - uses: actions/checkout@v4
