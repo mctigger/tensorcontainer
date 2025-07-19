@@ -609,9 +609,9 @@ class TensorContainer:
     def to(self: Self, *args, **kwargs) -> Self:
         with TensorContainer.unsafe_construction():
             leaves, context = self._pytree_flatten()
-            leaves = [l.to(*args, **kwargs) for l in leaves]
+            leaves = [leaf.to(*args, **kwargs) for leaf in leaves]
             tc = self._pytree_unflatten(leaves, context)
-            
+
         device = self.device
 
         is_device_in_args = len(args) > 0 and isinstance(args[0], (str, torch.device))
