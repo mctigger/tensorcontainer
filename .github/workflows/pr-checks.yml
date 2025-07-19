@@ -54,7 +54,7 @@ jobs:
 
   build-check:
     runs-on: ubuntu-latest
-    needs: test # This job will only run if the 'test' job succeeds.
+    needs: pytest-check
 
     steps:
       - name: Checkout repository
