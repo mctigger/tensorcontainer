@@ -36,7 +36,6 @@ jobs:
           sed -i "s/version = \"$BASE_VERSION\"/version = \"$NIGHTLY_VERSION\"/" pyproject.toml
       - name: Build release distributions
         run: |
-          # NOTE: put your own distribution build steps here.
           python -m pip install build
           python -m build
 
