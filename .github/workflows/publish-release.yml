@@ -1,0 +1,59 @@
+name: Publish Release
+
+# This workflow runs when a new GitHub Release is published.
+on:
+  release:
+    types: [published]
+
+jobs:
+  # This job builds the package using the version defined in pyproject.toml.
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      # This permission is needed to check out the code.
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Install build dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install build
+
+      - name: Build release distributions
+        run: python -m build
+
+      - name: Upload distributions as an artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-dists
+          path: dist/
+
+  # This job publishes the official release to PyPI.
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      # This permission is mandatory for trusted publishing to PyPI.
+      id-token: write
+
+    # You must configure this environment in your repository settings.
+    environment:
+      name: pypi
+      url: https://pypi.org/p/tensorcontainer/${{ github.event.release.tag_name }} 
+
+    steps:
+      - name: Retrieve release distributions from artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: release-dists
+          path: dist/
+
+      - name: Publish package to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
