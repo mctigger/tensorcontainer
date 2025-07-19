@@ -1,4 +1,4 @@
-name: Publish Nightly Build to TestPyPI
+name: Publish Nightly
 
 on:
   push:
