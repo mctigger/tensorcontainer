@@ -1,7 +1,6 @@
 import pytest
 import torch
 
-from tensorcontainer.tensor_dataclass import TensorDataClass
 from tests.conftest import skipif_no_compile
 from tests.tensor_dataclass.conftest import (
     ShapeTestClass,

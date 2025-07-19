@@ -6,7 +6,6 @@ import torch
 from torch.distributions import VonMises as TorchVonMises
 from torch.distributions.utils import broadcast_all
 
-
 from .base import TensorDistribution
 
 

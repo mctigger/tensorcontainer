@@ -7,7 +7,6 @@ from torch.distributions import Distribution
 
 from tensorcontainer.tensor_distribution import TensorDistribution
 
-
 compile_args = [
     {"fullgraph": True, "dynamic": True},
     {"fullgraph": True, "dynamic": False},

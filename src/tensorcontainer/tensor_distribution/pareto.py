@@ -5,7 +5,6 @@ from typing import Any, Dict, Union
 from torch import Tensor
 from torch.distributions import Pareto as TorchPareto
 
-
 from .base import TensorDistribution
 
 

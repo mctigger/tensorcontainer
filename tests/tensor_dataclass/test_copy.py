@@ -1,6 +1,8 @@
-import torch
-import pytest
 import copy
+
+import pytest
+import torch
+
 from tests.conftest import skipif_no_compile
 
 

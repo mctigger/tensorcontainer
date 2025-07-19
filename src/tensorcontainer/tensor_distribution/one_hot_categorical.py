@@ -5,7 +5,6 @@ from typing import Any, Dict, Optional
 from torch import Size, Tensor
 from torch.distributions import OneHotCategorical as TorchOneHotCategorical
 
-
 from .base import TensorDistribution
 
 

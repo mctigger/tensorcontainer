@@ -6,7 +6,15 @@ from torch import Tensor
 
 
 class TruncatedNormal(torch.distributions.Normal):
-    def __init__(self, loc: Tensor, scale: Tensor, low: Tensor, high: Tensor, eps: float = 1e-6, validate_args=None):
+    def __init__(
+        self,
+        loc: Tensor,
+        scale: Tensor,
+        low: Tensor,
+        high: Tensor,
+        eps: float = 1e-6,
+        validate_args=None,
+    ):
         super().__init__(loc, scale, validate_args)
         self.low = low
         self.high = high

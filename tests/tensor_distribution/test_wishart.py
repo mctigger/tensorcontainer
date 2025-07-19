@@ -3,9 +3,8 @@ import torch
 from _pytest.fixtures import FixtureRequest
 from torch.distributions import Wishart as TorchWishart
 
-from tests.conftest import skipif_no_compile
-
 from tensorcontainer.tensor_distribution.wishart import TensorWishart
+from tests.conftest import skipif_no_compile
 from tests.tensor_distribution.conftest import (
     assert_property_values_match,
     compile_args,

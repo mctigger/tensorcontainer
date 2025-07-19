@@ -7,7 +7,6 @@ from torch.distributions import Normal
 from torch.distributions.utils import broadcast_all
 from torch.types import Number
 
-
 from .base import TensorDistribution
 
 

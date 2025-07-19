@@ -3,11 +3,10 @@ from __future__ import annotations
 from typing import Any, Dict, get_args
 
 import torch  # Added import torch
-
 from torch import Tensor
 from torch.distributions import LogisticNormal as TorchLogisticNormal
-from torch.distributions.utils import broadcast_all
 from torch.distributions.distribution import Distribution
+from torch.distributions.utils import broadcast_all
 from torch.types import Number
 
 from .base import TensorDistribution

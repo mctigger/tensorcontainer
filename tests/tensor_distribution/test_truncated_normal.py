@@ -10,9 +10,11 @@ This module contains test classes that verify:
 
 import pytest
 import torch
-from src.tensorcontainer.distributions.truncated_normal import TruncatedNormal
 
-from src.tensorcontainer.tensor_distribution.truncated_normal import TensorTruncatedNormal
+from src.tensorcontainer.distributions.truncated_normal import TruncatedNormal
+from src.tensorcontainer.tensor_distribution.truncated_normal import (
+    TensorTruncatedNormal,
+)
 from tests.compile_utils import run_and_compare_compiled
 from tests.tensor_distribution.conftest import (
     assert_init_signatures_match,
@@ -28,7 +30,9 @@ class TestTensorTruncatedNormalInitialization:
         # Ensure that the shapes are correctly handled for scalar tensors
         loc_param_shape = batch_shape + event_shape
         loc = torch.randn(loc_param_shape if loc_param_shape else (), device=device)
-        scale = torch.rand(loc_param_shape if loc_param_shape else (), device=device) + 1e-6
+        scale = (
+            torch.rand(loc_param_shape if loc_param_shape else (), device=device) + 1e-6
+        )
         low = torch.randn(loc_param_shape if loc_param_shape else (), device=device)
         high = (
             low
@@ -61,7 +65,9 @@ class TestTensorTruncatedNormalAPIMatch:
         scale = torch.rand(3, 5, device=device) + 1e-6
         low = torch.randn(3, 5, device=device)
         high = low + torch.rand(3, 5, device=device) + 1e-6
-        td_truncated_normal = TensorTruncatedNormal(loc=loc, scale=scale, low=low, high=high)
+        td_truncated_normal = TensorTruncatedNormal(
+            loc=loc, scale=scale, low=low, high=high
+        )
         assert_property_values_match(td_truncated_normal)
 
 
@@ -71,7 +77,9 @@ class TestTensorTruncatedNormalMethods:
     def test_truncated_normal_methods(self, batch_shape, event_shape, device):
         loc_param_shape = batch_shape + event_shape
         loc = torch.randn(loc_param_shape if loc_param_shape else (), device=device)
-        scale = torch.rand(loc_param_shape if loc_param_shape else (), device=device) + 1e-6
+        scale = (
+            torch.rand(loc_param_shape if loc_param_shape else (), device=device) + 1e-6
+        )
         low = torch.randn(loc_param_shape if loc_param_shape else (), device=device)
         high = (
             low
@@ -110,4 +118,6 @@ class TestTensorTruncatedNormalCompileCompatibility:
 
         run_and_compare_compiled(rsample_fn, td_truncated_normal, fullgraph=False)
         value = td_truncated_normal.rsample(torch.Size((1,)))
-        run_and_compare_compiled(log_prob_fn, td_truncated_normal, value, fullgraph=False)
+        run_and_compare_compiled(
+            log_prob_fn, td_truncated_normal, value, fullgraph=False
+        )

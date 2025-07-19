@@ -14,6 +14,7 @@ class TensorMultivariateNormal(TensorDistribution):
     _covariance_matrix: Tensor | None = None
     _precision_matrix: Tensor | None = None
     _scale_tril: Tensor | None = None
+
     def __init__(
         self,
         loc: Tensor,

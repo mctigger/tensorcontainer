@@ -12,7 +12,9 @@ import pytest
 import torch
 from torch.distributions import ContinuousBernoulli as TorchContinuousBernoulli
 
-from tensorcontainer.tensor_distribution.continuous_bernoulli import TensorContinuousBernoulli
+from tensorcontainer.tensor_distribution.continuous_bernoulli import (
+    TensorContinuousBernoulli,
+)
 from tests.compile_utils import run_and_compare_compiled
 from tests.tensor_distribution.conftest import (
     assert_init_signatures_match,
@@ -59,7 +61,9 @@ class TestContinuousBernoulliAPIMatch:
         Tests that the __init__ signature of ContinuousBernoulli matches
         torch.distributions.ContinuousBernoulli.
         """
-        assert_init_signatures_match(TensorContinuousBernoulli, TorchContinuousBernoulli)
+        assert_init_signatures_match(
+            TensorContinuousBernoulli, TorchContinuousBernoulli
+        )
 
     def test_properties_match(self):
         """

@@ -4,9 +4,9 @@ import pytest
 import torch
 
 from tensorcontainer.tensor_dict import TensorDict
+from tests.conftest import skipif_no_compile
 
 from .common import compare_nested_dict
-from tests.conftest import skipif_no_compile
 
 
 class TestTensorDictMathOps:

@@ -1,8 +1,9 @@
 import torch
 from torch.distributions import Normal, TransformedDistribution
+
 from src.tensorcontainer.tensor_distribution.tanh_normal import (
-    TensorTanhNormal,
     ClampedTanhTransform,
+    TensorTanhNormal,
 )
 from tests.compile_utils import run_and_compare_compiled
 

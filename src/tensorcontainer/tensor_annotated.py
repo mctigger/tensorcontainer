@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 from typing import Any, Dict, Iterable, List, Tuple, TypeVar, Union, get_args
-from typing_extensions import Self
 
 import torch
 from torch import Tensor
 from torch.utils import _pytree as pytree
+from typing_extensions import Self
 
 from tensorcontainer.tensor_container import TensorContainer
 from tensorcontainer.utils import PytreeRegistered

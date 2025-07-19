@@ -33,7 +33,9 @@ class TensorBeta(TensorDistribution):
             concentration1, concentration0
         )
 
-        if isinstance(concentration1, get_args(Number)) and isinstance(concentration0, get_args(Number)):
+        if isinstance(concentration1, get_args(Number)) and isinstance(
+            concentration0, get_args(Number)
+        ):
             shape = tuple()
         else:
             shape = self._concentration1.shape

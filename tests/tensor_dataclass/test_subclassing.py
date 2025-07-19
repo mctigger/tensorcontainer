@@ -1,10 +1,10 @@
 import inspect
-
-import torch
 from typing import Optional
 
-from tensorcontainer.tensor_dataclass import TensorDataClass
 import pytest
+import torch
+
+from tensorcontainer.tensor_dataclass import TensorDataClass
 
 
 def _assert_init_signature(cls, expected_fields):
@@ -26,7 +26,9 @@ def _assert_init_signature(cls, expected_fields):
     for field_name, field_type in expected_fields.items():
         parameters.append(
             inspect.Parameter(
-                field_name, inspect.Parameter.POSITIONAL_OR_KEYWORD, annotation=field_type
+                field_name,
+                inspect.Parameter.POSITIONAL_OR_KEYWORD,
+                annotation=field_type,
             )
         )
     expected_signature = inspect.Signature(parameters, return_annotation=None)
@@ -40,6 +42,7 @@ def single_parent_class():
 
     class B(A):
         y: str
+
     return B
 
 
@@ -53,6 +56,7 @@ def multiple_tensor_data_class_parents():
 
     class C(B, A):
         z: int
+
     return C
 
 
@@ -66,14 +70,13 @@ def single_tensor_data_class_parent():
 
     class C(A, B):
         z: int
+
     return C
 
 
 class TestInitSignature:
     def test_single_parent_class(self, single_parent_class):
-        _assert_init_signature(
-            single_parent_class, {"x": torch.Tensor, "y": str}
-        )
+        _assert_init_signature(single_parent_class, {"x": torch.Tensor, "y": str})
 
     def test_multiple_parent_classes_multiple_tensor_data_class(
         self, multiple_tensor_data_class_parents

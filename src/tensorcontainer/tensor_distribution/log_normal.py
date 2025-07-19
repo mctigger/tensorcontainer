@@ -6,7 +6,6 @@ import torch
 from torch import Size, Tensor
 from torch.distributions import LogNormal
 
-
 from .base import TensorDistribution
 
 

@@ -7,7 +7,6 @@ from torch.distributions import (
     Categorical,
 )
 
-
 from .base import TensorDistribution
 
 

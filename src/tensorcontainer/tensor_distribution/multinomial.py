@@ -5,7 +5,6 @@ from typing import Any, Dict, Optional, Union
 from torch import Size, Tensor
 from torch.distributions import Multinomial
 
-
 from .base import TensorDistribution
 
 

@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 from typing import Any, Dict, Optional
-import torch
 
+import torch
 from torch import Tensor
 from torch.distributions import Poisson
-
 
 from .base import TensorDistribution
 

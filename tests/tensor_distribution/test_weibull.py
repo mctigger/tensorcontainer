@@ -1,6 +1,7 @@
 import pytest
 import torch
 from torch.distributions import Weibull as TorchWeibull
+
 from tensorcontainer.tensor_distribution.weibull import TensorWeibull
 
 

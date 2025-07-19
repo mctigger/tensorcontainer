@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-from torch.distributions import Independent
-
 from typing import Any, Dict
 
 from torch import Size
+from torch.distributions import Independent
 
 from tensorcontainer.tensor_distribution.base import TensorDistribution
 

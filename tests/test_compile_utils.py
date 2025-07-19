@@ -1,14 +1,14 @@
-import torch
 import pytest
+import torch
 import torch._dynamo
 
-from tests.conftest import skipif_no_compile
 from tests.compile_utils import (
     get_graph_breaks_and_recompiles,
     run_and_compare_compiled,
-    run_and_count_recompiles,
     run_and_count_graph_breaks,
+    run_and_count_recompiles,
 )
+from tests.conftest import skipif_no_compile
 
 
 def no_break(x):

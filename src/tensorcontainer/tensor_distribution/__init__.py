@@ -1,5 +1,4 @@
 from .base import TensorDistribution
-
 from .bernoulli import TensorBernoulli
 from .beta import TensorBeta
 from .binomial import TensorBinomial

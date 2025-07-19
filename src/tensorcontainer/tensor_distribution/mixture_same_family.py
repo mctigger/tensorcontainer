@@ -2,11 +2,11 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
-from tensorcontainer.tensor_distribution.categorical import TensorCategorical
 from torch.distributions import MixtureSameFamily as TorchMixtureSameFamily
 from torch.distributions.distribution import Distribution
 
 from tensorcontainer.tensor_distribution.base import TensorDistribution
+from tensorcontainer.tensor_distribution.categorical import TensorCategorical
 
 
 class TensorMixtureSameFamily(TensorDistribution):

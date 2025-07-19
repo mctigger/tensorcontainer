@@ -5,7 +5,6 @@ from typing import Any, Dict, Optional
 from torch import Tensor
 from torch.distributions import RelaxedBernoulli as TorchRelaxedBernoulli
 
-
 from .base import TensorDistribution
 
 

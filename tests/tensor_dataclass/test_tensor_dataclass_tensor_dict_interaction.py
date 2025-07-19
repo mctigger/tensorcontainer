@@ -1,6 +1,7 @@
+from typing import Tuple
+
 import pytest
 import torch
-from typing import Tuple
 
 from tensorcontainer.tensor_dataclass import TensorDataClass
 from tensorcontainer.tensor_dict import TensorDict

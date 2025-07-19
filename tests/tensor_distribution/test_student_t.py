@@ -2,9 +2,8 @@ import pytest
 import torch
 from torch.distributions import StudentT
 
-from tests.compile_utils import run_and_compare_compiled
-
 from tensorcontainer.tensor_distribution.student_t import TensorStudentT
+from tests.compile_utils import run_and_compare_compiled
 
 
 @pytest.mark.parametrize("df_val", [1.0, torch.tensor(2.0)])

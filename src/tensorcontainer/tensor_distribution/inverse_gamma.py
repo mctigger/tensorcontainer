@@ -6,7 +6,6 @@ import torch
 from torch import Tensor
 from torch.distributions import InverseGamma as TorchInverseGamma
 
-
 from .base import TensorDistribution
 
 

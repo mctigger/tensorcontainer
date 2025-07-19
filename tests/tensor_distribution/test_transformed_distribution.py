@@ -1,14 +1,16 @@
 import pytest
 import torch
-from torch.distributions import Normal, TransformedDistribution as TorchTransformedDistribution
-from torch.distributions.transforms import ExpTransform, AffineTransform
+from torch.distributions import (
+    TransformedDistribution as TorchTransformedDistribution,
+)
+from torch.distributions.transforms import AffineTransform, ExpTransform
 
 from tensorcontainer.tensor_distribution.normal import TensorNormal
-from tensorcontainer.tensor_distribution.transformed_distribution import TransformedDistribution
+from tensorcontainer.tensor_distribution.transformed_distribution import (
+    TransformedDistribution,
+)
 from tests.compile_utils import run_and_compare_compiled
 from tests.tensor_distribution.conftest import (
-    assert_init_signatures_match,
-    assert_properties_signatures_match,
     assert_property_values_match,
 )
 

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any, Dict, Optional, get_args
+
 import torch
 from torch import Tensor
 from torch.distributions import (
@@ -11,7 +13,6 @@ from torch.distributions import (
 )
 from torch.distributions.utils import broadcast_all
 from torch.types import Number
-from typing import Any, Dict, Optional, get_args
 
 from .base import TensorDistribution
 
