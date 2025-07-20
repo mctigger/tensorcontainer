@@ -243,10 +243,9 @@ class TensorDataClass(TensorAnnotated, TensorDataclassTransform):
         This method is automatically called by the dataclass __init__ after all
         fields have been set. It:
 
-        1. Infers device from tensor fields if device was not specified
-        2. Initializes the TensorContainer base class with shape and device
-        3. Validates that all tensor fields have compatible devices
-        4. Validates that all tensor fields have compatible batch shapes
+        1. Initializes the TensorContainer base class with shape and device
+        2. Validates that all tensor fields have compatible devices
+        3. Validates that all tensor fields have compatible batch shapes
 
         Raises:
             ValueError: If tensor field shapes are incompatible with batch shape
