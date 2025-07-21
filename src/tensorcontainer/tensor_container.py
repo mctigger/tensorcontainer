@@ -82,6 +82,7 @@ class TensorContainer:
 
     ### Device Management
     Device consistency is enforced with flexible compatibility rules:
+    - **No Device Inference**: TensorContainer does not automatically infer device from tensors
     - If container device is None, any tensor device is accepted
     - String device specs ("cuda") are compatible with indexed variants ("cuda:0")
     - All operations preserve device consistency across transformations
