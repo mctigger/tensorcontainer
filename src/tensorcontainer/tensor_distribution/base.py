@@ -21,18 +21,21 @@ class TensorDistribution(TensorAnnotated):
 
     Key Design Principles:
     ----------------------
-    1. **Annotated Attributes**: Only tensor attributes marked with type annotations get
+    1. **Device Inference**: TensorDistribution infers device from tensor parameters, but all
+       tensor parameters must be on the same device to avoid inconsistencies.
+
+    2. **Annotated Attributes**: Only tensor attributes marked with type annotations get
        automatically transformed by TensorAnnotated operations (e.g., .to(), .expand()).
 
-    2. **Deferred Validation**: The __init__ method should mirror torch.distributions
+    3. **Deferred Validation**: The __init__ method should mirror torch.distributions
        equivalents but without validate_args, deferring all validation to the underlying
        torch.distributions.
 
-    3. **Lazy Distribution Creation**: The actual torch.distributions.Distribution instance
+    4. **Lazy Distribution Creation**: The actual torch.distributions.Distribution instance
        is created on-demand via the dist() method, allowing for efficient tensor operations
        without premature distribution instantiation.
 
-    4. **Reconstruction Pattern**: Uses _unflatten_distribution() to rebuild distributions
+    5. **Reconstruction Pattern**: Uses _unflatten_distribution() to rebuild distributions
        from serialized tensor and metadata attributes, enabling proper deserialization.
 
     Usage Pattern:
