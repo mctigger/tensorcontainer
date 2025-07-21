@@ -167,7 +167,7 @@ class TensorDataClass(TensorAnnotated, TensorDataclassTransform):
         shape (torch.Size): The batch shape that all tensor fields must share
             as their leading dimensions.
         device (Optional[Union[str, torch.device]]): The device all tensors should
-            reside on. If None, device is inferred from the first tensor field.
+            reside on. If None, tensors can be on any device.
 
     Raises:
         ValueError: If tensor field shapes are incompatible with batch shape.
