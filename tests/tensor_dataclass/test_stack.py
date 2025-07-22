@@ -131,9 +131,9 @@ class TestStackOptionalFields:
 
         def _test_stack_none():
             data1 = OptionalFieldsTestClass(
-                shape=(4,),
+                shape=(2, 3, 4),
                 device=None,
-                obs=torch.ones(4, 32, 32),
+                obs=torch.ones(2, 3, 4, 32, 32),
                 reward=None,
                 info=["step1"],
             )
@@ -141,22 +141,22 @@ class TestStackOptionalFields:
             return cast(OptionalFieldsTestClass, torch.stack([data1, data2], dim=0))  # type: ignore
 
         stacked_data, _ = run_and_compare_compiled(_test_stack_none)
-        assert stacked_data.obs.shape == (2, 4, 32, 32)
+        assert stacked_data.obs.shape == (2, 2, 3, 4, 32, 32)
         assert stacked_data.reward is None
         assert stacked_data.info == ["step1"]
         assert stacked_data.optional_meta is None
         assert stacked_data.optional_meta_val == "value"
-        assert stacked_data.shape == (2, 4)
+        assert stacked_data.shape == (2, 2, 3, 4)
 
     def test_stack_with_optional_tensor_as_tensor(self):
         """Tests stacking when an optional field is a tensor in all instances."""
 
         def _test_stack_tensor():
             data1 = OptionalFieldsTestClass(
-                shape=(4,),
+                shape=(2, 3, 4),
                 device=None,
-                obs=torch.ones(4, 32, 32),
-                reward=torch.ones(4),
+                obs=torch.ones(2, 3, 4, 32, 32),
+                reward=torch.ones(2, 3, 4),
             )
             data2 = data1.clone()
             assert data2.reward is not None
@@ -164,15 +164,15 @@ class TestStackOptionalFields:
             return cast(OptionalFieldsTestClass, torch.stack([data1, data2], dim=0))  # type: ignore
 
         stacked_data, _ = run_and_compare_compiled(_test_stack_tensor)
-        assert stacked_data.obs.shape == (2, 4, 32, 32)
+        assert stacked_data.obs.shape == (2, 2, 3, 4, 32, 32)
         assert stacked_data.reward is not None
-        assert stacked_data.reward.shape == (2, 4)
-        testing.assert_close(stacked_data.reward[0], torch.ones(4))
-        testing.assert_close(stacked_data.reward[1], torch.ones(4) * 2)
+        assert stacked_data.reward.shape == (2, 2, 3, 4)
+        testing.assert_close(stacked_data.reward[0], torch.ones(2, 3, 4))
+        testing.assert_close(stacked_data.reward[1], torch.ones(2, 3, 4) * 2)
         assert stacked_data.info == []
         assert stacked_data.optional_meta is None
         assert stacked_data.optional_meta_val == "value"
-        assert stacked_data.shape == (2, 4)
+        assert stacked_data.shape == (2, 2, 3, 4)
 
     def test_stack_mixed_optional_raises(self):
         """Tests that stacking mixed None and Tensor for an optional field raises."""
@@ -182,10 +182,10 @@ class TestStackOptionalFields:
             b: Optional[torch.Tensor] = None
 
         td1 = OptionalStack(
-            shape=(3,), device=torch.device("cpu"), a=torch.randn(3), b=torch.ones(3)
+            shape=(2, 3), device=torch.device("cpu"), a=torch.randn(2, 3), b=torch.ones(2, 3)
         )
         td2 = OptionalStack(
-            shape=(3,), device=torch.device("cpu"), a=torch.randn(3), b=None
+            shape=(2, 3), device=torch.device("cpu"), a=torch.randn(2, 3), b=None
         )
 
         with pytest.raises(ValueError, match="Node arity mismatch"):
@@ -197,9 +197,9 @@ class TestStackOptionalFields:
 
         def _test_default_factory_tensor():
             data1 = OptionalFieldsTestClass(
-                shape=(4,),
+                shape=(2, 3, 4),
                 device=None,
-                obs=torch.ones(4, 32, 32),
+                obs=torch.ones(2, 3, 4, 32, 32),
                 reward=None,
                 info=["step1"],
             )
@@ -213,10 +213,10 @@ class TestStackOptionalFields:
         (data1, stacked_data), _ = run_and_compare_compiled(
             _test_default_factory_tensor
         )
-        assert data1.default_tensor.shape == (4,)
-        testing.assert_close(data1.default_tensor, torch.zeros(4))
-        assert stacked_data.default_tensor.shape == (2, 4)
-        testing.assert_close(stacked_data.default_tensor, torch.zeros(2, 4))
+        assert data1.default_tensor.shape == (2, 3, 4)
+        testing.assert_close(data1.default_tensor, torch.zeros(2, 3, 4))
+        assert stacked_data.default_tensor.shape == (2, 2, 3, 4)
+        testing.assert_close(stacked_data.default_tensor, torch.zeros(2, 2, 3, 4))
 
 
 @skipif_no_compile
