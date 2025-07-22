@@ -5,6 +5,7 @@ import pytest
 import torch
 
 from tensorcontainer.tensor_dataclass import TensorDataClass
+from torch.utils._pytree import tree_map
 
 # ============================================================================
 # COMMON TENSORDATACLASS DEFINITIONS
@@ -42,7 +43,7 @@ class OptionalFieldsTestClass(TensorDataClass):
     optional_meta: Optional[str] = None
     optional_meta_val: Optional[str] = "value"
     default_tensor: torch.Tensor = dataclasses.field(
-        default_factory=lambda: torch.zeros(4)
+        default_factory=lambda: torch.zeros(2, 3, 4)
     )
 
 
@@ -308,15 +309,17 @@ def assert_tensor_equal_and_different_objects(tensor1, tensor2):
     assert tensor1 is not tensor2
 
 
-def assert_device_consistency(tensor_dataclass_instance, expected_device):
-    """Helper to assert device consistency across TensorDataclass and its tensors."""
-    if tensor_dataclass_instance.device is not None:
-        assert tensor_dataclass_instance.device.type == expected_device.type
+def assert_nested_device_consistency(tdc_instance, expected_device):
+    """Helper to assert device consistency across nested TensorDataclass, TensorDict and their tensors."""
+    if tdc_instance.device is not None:
+        assert tdc_instance.device.type == expected_device.type
 
-    # Check all tensor fields
-    for field_name, field_value in tensor_dataclass_instance.__dict__.items():
-        if isinstance(field_value, torch.Tensor):
-            assert field_value.device.type == expected_device.type
+    def _check_device(tensor):
+        if isinstance(tensor, torch.Tensor):
+            assert tensor.device.type == expected_device.type
+        return tensor
+
+    tree_map(_check_device, tdc_instance)
 
 
 def assert_shape_consistency(tensor_dataclass_instance, expected_shape):
