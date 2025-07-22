@@ -92,4 +92,6 @@ ipython_config.py
 
 # Poetry
 poetry.lock
-# If you want to ignore virtual
+
+# AI agents
+.kilocode
