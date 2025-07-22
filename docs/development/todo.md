@@ -1,0 +1,1 @@
+- Check assert_nested_device_consistency and simplify tests that dependent on it
