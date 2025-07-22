@@ -56,9 +56,6 @@ exclude_lines = [
 [tool.pytest.ini_options]
 addopts = [
     "--strict-markers",
-    "--cov=src",
-    "--cov-report=term-missing",
-    "--cov-report=html",
     "--tb=short",
 ]
 testpaths = ["tests"]
