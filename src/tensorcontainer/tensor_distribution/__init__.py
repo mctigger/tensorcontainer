@@ -28,6 +28,7 @@ from .multivariate_normal import TensorMultivariateNormal
 from .negative_binomial import TensorNegativeBinomial
 from .normal import TensorNormal
 from .one_hot_categorical import TensorOneHotCategorical
+from .one_hot_categorical_straight_through import TensorOneHotCategoricalStraightThrough
 from .pareto import TensorPareto
 from .poisson import TensorPoisson
 from .relaxed_bernoulli import TensorRelaxedBernoulli
@@ -73,6 +74,7 @@ __all__ = [
     "TensorNegativeBinomial",
     "TensorNormal",
     "TensorOneHotCategorical",
+    "TensorOneHotCategoricalStraightThrough",
     "TensorPareto",
     "TensorPoisson",
     "TensorRelaxedBernoulli",
