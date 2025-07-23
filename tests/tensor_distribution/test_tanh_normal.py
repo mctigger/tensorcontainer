@@ -29,13 +29,15 @@ class TestTensorTanhNormal:
 
     def test_initialization_reinterpreted_batch_ndims(self):
         # Test with TensorIndependent wrapper for reinterpreted batch dimensions
-        from src.tensorcontainer.tensor_distribution.independent import TensorIndependent
-        
+        from src.tensorcontainer.tensor_distribution.independent import (
+            TensorIndependent,
+        )
+
         loc = torch.tensor([[0.0, 1.0], [2.0, 3.0]])
         scale = torch.tensor([[1.0, 2.0], [3.0, 4.0]])
         base_dist = TensorTanhNormal(loc, scale)
         dist = TensorIndependent(base_dist, reinterpreted_batch_ndims=1)
-        
+
         assert torch.equal(base_dist.loc, loc)
         assert torch.equal(base_dist.scale, scale)
         assert base_dist.shape == loc.shape

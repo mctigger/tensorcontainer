@@ -41,7 +41,7 @@ class TestTensorIndependentInitialization:
         )
         assert td_independent.batch_shape == expected_batch_shape
         assert td_independent.dist().batch_shape == expected_batch_shape
-        
+
         # Test that shape property matches expected_batch_shape (fixes bug with reinterpreted_batch_ndims=0)
         assert td_independent.shape == expected_batch_shape
 
