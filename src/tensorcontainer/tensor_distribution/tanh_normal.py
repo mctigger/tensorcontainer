@@ -44,6 +44,7 @@ class ClampedTanhTransform(torch.distributions.transforms.Transform):
     def log_abs_det_jacobian(self, x, y):
         # |det J| = 1 - tanh^2(x)
         # log|det J| = log(1 - tanh^2(x))
+        # Use y = tanh(x) instead of recomputing tanh(x) for numerical stability
         return torch.log(
             1 - y.pow(2) + 1e-6
         )  # Adding small epsilon for numerical stability
@@ -96,17 +97,15 @@ class TensorTanhNormal(TensorDistribution):
         )
 
     def dist(self) -> Distribution:
-        return TransformedDistribution(
-            Normal(self._loc.float(), self._scale.float(), validate_args=False),
-            [
-                ClampedTanhTransform(),
-            ],
-            validate_args=False,
+        return SamplingDistribution(
+            TransformedDistribution(
+                Normal(self._loc.float(), self._scale.float(), validate_args=False),
+                [
+                    ClampedTanhTransform(),
+                ],
+                validate_args=False,
+            )
         )
-
-    def log_prob(self, value: Tensor) -> Tensor:
-        """Compute log probability of value under the distribution."""
-        return self.dist().log_prob(value)
 
     @property
     def loc(self) -> Tensor:
@@ -121,31 +120,27 @@ class TensorTanhNormal(TensorDistribution):
     @cached_property
     def _sampling_dist(self) -> SamplingDistribution:
         """Cached sampling distribution for consistent property calculations."""
-        return SamplingDistribution(self.dist(), n=10000)
+        return SamplingDistribution(
+            TransformedDistribution(
+                Normal(self._loc.float(), self._scale.float(), validate_args=False),
+                [
+                    ClampedTanhTransform(),
+                ],
+                validate_args=False,
+            )
+        )
 
     @property
     def mean(self) -> Tensor:
-        """Returns the mean of the distribution.
-
-        Note: For transformed distributions, this is computed via sampling
-        since the analytical mean may not be available.
-        """
+        """Returns the mean of the distribution."""
         return self._sampling_dist.mean
 
     @property
     def variance(self) -> Tensor:
-        """Returns the variance of the distribution.
-
-        Note: For transformed distributions, this is computed via sampling
-        since the analytical variance may not be available.
-        """
+        """Returns the variance of the distribution."""
         return self._sampling_dist.variance
 
     @property
     def stddev(self) -> Tensor:
-        """Returns the standard deviation of the distribution.
-
-        Note: For transformed distributions, this is computed via sampling
-        since the analytical standard deviation may not be available.
-        """
+        """Returns the standard deviation of the distribution."""
         return self._sampling_dist.stddev
