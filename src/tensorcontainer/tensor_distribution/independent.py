@@ -19,7 +19,11 @@ class TensorIndependent(TensorDistribution):
         self.reinterpreted_batch_ndims = reinterpreted_batch_ndims
 
         super().__init__(
-            Size(base_distribution.shape[:-reinterpreted_batch_ndims]),
+            Size(
+                base_distribution.shape[:-reinterpreted_batch_ndims]
+                if reinterpreted_batch_ndims > 0
+                else base_distribution.shape
+            ),
             base_distribution.device,
         )
 
