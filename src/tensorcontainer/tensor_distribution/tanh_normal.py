@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Optional, get_args
+from functools import cached_property
+from typing import Any, Dict, get_args
 
 import torch
 from torch import Tensor
 from torch.distributions import (
     Distribution,
-    Independent,
     Normal,
     TransformedDistribution,
     constraints,
@@ -14,6 +14,7 @@ from torch.distributions import (
 from torch.distributions.utils import broadcast_all
 from torch.types import Number
 
+from ..distributions.sampling import SamplingDistribution
 from .base import TensorDistribution
 
 
@@ -49,24 +50,30 @@ class ClampedTanhTransform(torch.distributions.transforms.Transform):
 
 
 class TensorTanhNormal(TensorDistribution):
+    """Tensor-aware TanhNormal distribution.
+
+    Creates a transformed Normal distribution where the output is passed through
+    a hyperbolic tangent (tanh) function, constraining values to the interval (-1, 1).
+
+    Args:
+        loc: Location parameter of the underlying normal distribution.
+        scale: Scale parameter of the underlying normal distribution. Must be positive.
+
+    Note:
+        This distribution is commonly used in reinforcement learning for bounded
+        continuous action spaces. Use TensorIndependent to reinterpret batch dimensions
+        as event dimensions if needed.
+    """
+
     _loc: Tensor
     _scale: Tensor
-    _reinterpreted_batch_ndims: int
 
     def __init__(
         self,
         loc: Tensor,
         scale: Tensor,
-        reinterpreted_batch_ndims: Optional[int] = None,
     ):
         self._loc, self._scale = broadcast_all(loc, scale)
-
-        if reinterpreted_batch_ndims is None:
-            self._reinterpreted_batch_ndims = 0
-            if self._loc.ndim > 0:
-                self._reinterpreted_batch_ndims = 1
-        else:
-            self._reinterpreted_batch_ndims = reinterpreted_batch_ndims
 
         if isinstance(loc, get_args(Number)) and isinstance(scale, get_args(Number)):
             shape = tuple()
@@ -86,25 +93,59 @@ class TensorTanhNormal(TensorDistribution):
         return cls(
             loc=attributes.get("_loc"),  # type: ignore
             scale=attributes.get("_scale"),  # type: ignore
-            reinterpreted_batch_ndims=attributes.get("_reinterpreted_batch_ndims"),  # type: ignore
         )
 
     def dist(self) -> Distribution:
-        return Independent(
-            TransformedDistribution(
-                Normal(self._loc.float(), self._scale.float(), validate_args=False),
-                [
-                    ClampedTanhTransform(),
-                ],
-                validate_args=False,
-            ),
-            self._reinterpreted_batch_ndims,
+        return TransformedDistribution(
+            Normal(self._loc.float(), self._scale.float(), validate_args=False),
+            [
+                ClampedTanhTransform(),
+            ],
+            validate_args=False,
         )
+
+    def log_prob(self, value: Tensor) -> Tensor:
+        """Compute log probability of value under the distribution."""
+        return self.dist().log_prob(value)
 
     @property
     def loc(self) -> Tensor:
+        """Returns the location parameter of the underlying normal distribution."""
         return self._loc
 
     @property
     def scale(self) -> Tensor:
+        """Returns the scale parameter of the underlying normal distribution."""
         return self._scale
+
+    @cached_property
+    def _sampling_dist(self) -> SamplingDistribution:
+        """Cached sampling distribution for consistent property calculations."""
+        return SamplingDistribution(self.dist(), n=10000)
+
+    @property
+    def mean(self) -> Tensor:
+        """Returns the mean of the distribution.
+
+        Note: For transformed distributions, this is computed via sampling
+        since the analytical mean may not be available.
+        """
+        return self._sampling_dist.mean
+
+    @property
+    def variance(self) -> Tensor:
+        """Returns the variance of the distribution.
+
+        Note: For transformed distributions, this is computed via sampling
+        since the analytical variance may not be available.
+        """
+        return self._sampling_dist.variance
+
+    @property
+    def stddev(self) -> Tensor:
+        """Returns the standard deviation of the distribution.
+
+        Note: For transformed distributions, this is computed via sampling
+        since the analytical standard deviation may not be available.
+        """
+        return self._sampling_dist.stddev
