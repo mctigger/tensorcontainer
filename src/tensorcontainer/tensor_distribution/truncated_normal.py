@@ -46,7 +46,9 @@ class TensorTruncatedNormal(TensorDistribution):
             event_shape = torch.Size([])
 
         self._event_shape = event_shape
-        super().__init__(shape=batch_shape, device=loc.device)
+        super().__init__(
+            shape=batch_shape, device=loc.device, validate_args=validate_args
+        )
 
     @classmethod
     def _unflatten_distribution(
@@ -98,6 +100,8 @@ class TensorTruncatedNormal(TensorDistribution):
                 self.low,
                 self.high,
                 eps=1e-6,  # Explicitly pass eps
+                validate_args=self._validate_args,
             ),
             len(self.event_shape),
+            validate_args=self._validate_args,
         )

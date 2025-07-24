@@ -21,6 +21,7 @@ class TensorGeometric(TensorDistribution):
         self,
         probs: Optional[Union[Tensor, Number]] = None,
         logits: Optional[Union[Tensor, Number]] = None,
+        validate_args: Optional[bool] = None,
     ):
         if (probs is None) == (logits is None):
             raise ValueError(
@@ -34,7 +35,7 @@ class TensorGeometric(TensorDistribution):
 
         # Create a temporary distribution to get the batch_shape and device
         # Create a temporary distribution to get the batch_shape and device
-        temp_dist = Geometric(probs=probs, logits=logits)
+        temp_dist = Geometric(probs=probs, logits=logits, validate_args=validate_args)
 
         # Determine the device based on which parameter is used
         if logits is not None:
@@ -44,7 +45,7 @@ class TensorGeometric(TensorDistribution):
         else:
             device = probs.device if isinstance(probs, Tensor) else torch.device("cpu")
 
-        super().__init__(temp_dist.batch_shape, device)
+        super().__init__(temp_dist.batch_shape, device, validate_args)
 
     @classmethod
     def _unflatten_distribution(
@@ -55,10 +56,13 @@ class TensorGeometric(TensorDistribution):
         return cls(
             probs=attributes.get("_probs"),
             logits=attributes.get("_logits"),
+            validate_args=attributes.get("_validate_args"),
         )
 
     def dist(self) -> Geometric:
-        return Geometric(probs=self._probs, logits=self._logits)
+        return Geometric(
+            probs=self._probs, logits=self._logits, validate_args=self._validate_args
+        )
 
     def log_prob(self, value: Tensor) -> Tensor:
         return self.dist().log_prob(value)

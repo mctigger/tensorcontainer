@@ -1,4 +1,4 @@
-from typing import Union
+from typing import Optional, Union
 
 import torch
 from torch import Tensor
@@ -18,7 +18,7 @@ class TensorChi2(TensorDistribution):
 
     _df: Tensor
 
-    def __init__(self, df: Union[float, Tensor]):
+    def __init__(self, df: Union[float, Tensor], validate_args: Optional[bool] = None):
         if isinstance(df, (float, int)):  # Handle both float and int
             df = torch.tensor(df, dtype=torch.float32)
 
@@ -28,14 +28,14 @@ class TensorChi2(TensorDistribution):
         batch_shape = self._df.shape
         device = self._df.device
 
-        super().__init__(shape=batch_shape, device=device)
+        super().__init__(shape=batch_shape, device=device, validate_args=validate_args)
 
     def dist(self) -> TorchChi2:
-        return TorchChi2(df=self._df)
+        return TorchChi2(df=self._df, validate_args=self._validate_args)
 
     @classmethod
     def _unflatten_distribution(cls, attributes: dict) -> "TensorChi2":
-        return cls(df=attributes["_df"])
+        return cls(df=attributes["_df"], validate_args=attributes.get("_validate_args"))
 
     @property
     def df(self) -> Tensor:

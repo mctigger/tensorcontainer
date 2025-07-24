@@ -16,7 +16,12 @@ class TensorLaplace(TensorDistribution):
     _loc: Tensor
     _scale: Tensor
 
-    def __init__(self, loc: Tensor | float, scale: Tensor | float):
+    def __init__(
+        self,
+        loc: Tensor | float,
+        scale: Tensor | float,
+        validate_args: Optional[bool] = None,
+    ):
         # Store the parameters in annotated attributes before calling super().__init__()
         # This is required because super().__init__() calls self.dist() which needs these attributes
         self._loc = loc if isinstance(loc, Tensor) else torch.tensor(loc)
@@ -32,7 +37,7 @@ class TensorLaplace(TensorDistribution):
 
         shape = torch.broadcast_shapes(self._loc.shape, self._scale.shape)
         device = self._loc.device if self._loc.numel() > 0 else self._scale.device
-        super().__init__(shape, device)
+        super().__init__(shape, device, validate_args)
 
     @classmethod
     def _unflatten_distribution(cls, attributes: Dict[str, Any]) -> TensorLaplace:
@@ -40,12 +45,14 @@ class TensorLaplace(TensorDistribution):
         return cls(
             loc=attributes["_loc"],
             scale=attributes["_scale"],
+            validate_args=attributes.get("_validate_args"),
         )
 
     def dist(self) -> Laplace:
         return Laplace(
             loc=self._loc,
             scale=self._scale,
+            validate_args=self._validate_args,
         )
 
     def log_prob(self, value: Tensor) -> Tensor:

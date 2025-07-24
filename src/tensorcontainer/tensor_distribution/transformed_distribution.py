@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import List
+from typing import List, Optional
 
 from torch.distributions import Distribution
 from torch.distributions import TransformedDistribution as TorchTransformedDistribution
@@ -22,11 +22,16 @@ class TransformedDistribution(TensorDistribution):
     transforms: List[Transform]
 
     def __init__(
-        self, base_distribution: TensorDistribution, transforms: List[Transform]
+        self,
+        base_distribution: TensorDistribution,
+        transforms: List[Transform],
+        validate_args: Optional[bool] = None,
     ):
         self.base_distribution = base_distribution
         self.transforms = transforms
-        super().__init__(base_distribution.batch_shape, base_distribution.device)
+        super().__init__(
+            base_distribution.batch_shape, base_distribution.device, validate_args
+        )
 
     def dist(self) -> Distribution:
         """
@@ -35,4 +40,5 @@ class TransformedDistribution(TensorDistribution):
         return TorchTransformedDistribution(
             base_distribution=self.base_distribution.dist(),
             transforms=self.transforms,
+            validate_args=self._validate_args,
         )

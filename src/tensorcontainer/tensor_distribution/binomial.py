@@ -33,6 +33,7 @@ class TensorBinomial(TensorDistribution):
         total_count: Union[int, Tensor] = 1,
         probs: Optional[Tensor] = None,
         logits: Optional[Tensor] = None,
+        validate_args: Optional[bool] = None,
     ):
         if (probs is None) == (logits is None):
             raise ValueError(
@@ -55,7 +56,7 @@ class TensorBinomial(TensorDistribution):
         shape = param.shape
         device = param.device
 
-        super().__init__(shape, device)
+        super().__init__(shape, device, validate_args)
 
     @classmethod
     def _unflatten_distribution(cls, attributes: Dict[str, Any]):
@@ -76,6 +77,7 @@ class TensorBinomial(TensorDistribution):
             total_count=total_count,
             probs=probs,
             logits=logits,
+            validate_args=attributes.get("_validate_args"),
         )
 
     def dist(self) -> Binomial:
@@ -95,7 +97,12 @@ class TensorBinomial(TensorDistribution):
                 # Fallback if neither probs nor logits are set (should not happen with current init logic)
                 total_count = torch.tensor(total_count)
 
-        return Binomial(total_count=total_count, probs=self._probs, logits=self._logits)
+        return Binomial(
+            total_count=total_count,
+            probs=self._probs,
+            logits=self._logits,
+            validate_args=self._validate_args,
+        )
 
     def log_prob(self, value: Tensor) -> Tensor:
         return self.dist().log_prob(value)

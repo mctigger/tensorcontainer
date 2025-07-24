@@ -6,4 +6,6 @@ from tensorcontainer.tensor_distribution.bernoulli import TensorBernoulli
 
 class TensorSoftBernoulli(TensorBernoulli):
     def dist(self):
-        return SoftBernoulli(logits=self._logits, probs=self._probs)
+        return SoftBernoulli(
+            logits=self._logits, probs=self._probs, validate_args=self._validate_args
+        )

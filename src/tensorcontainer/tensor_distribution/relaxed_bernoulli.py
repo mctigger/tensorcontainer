@@ -21,11 +21,12 @@ class TensorRelaxedBernoulli(TensorDistribution):
         temperature: Tensor,
         probs: Optional[Tensor] = None,
         logits: Optional[Tensor] = None,
+        validate_args: Optional[bool] = None,
     ):
         self._temperature = temperature
         self._probs = probs
         self._logits = logits
-        super().__init__(temperature.shape, temperature.device)
+        super().__init__(temperature.shape, temperature.device, validate_args)
 
     @classmethod
     def _unflatten_distribution(
@@ -36,6 +37,7 @@ class TensorRelaxedBernoulli(TensorDistribution):
             temperature=attributes["_temperature"],  # type: ignore
             probs=attributes.get("_probs"),  # type: ignore
             logits=attributes.get("_logits"),  # type: ignore
+            validate_args=attributes.get("_validate_args"),
         )
 
     def dist(self) -> TorchRelaxedBernoulli:
@@ -43,6 +45,7 @@ class TensorRelaxedBernoulli(TensorDistribution):
             temperature=self._temperature,
             probs=self._probs,
             logits=self._logits,
+            validate_args=self._validate_args,
         )
 
     def log_prob(self, value: Tensor) -> Tensor:

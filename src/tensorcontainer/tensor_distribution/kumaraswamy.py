@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Dict, Union
+from typing import Dict, Optional, Union
 
 import torch
 from torch import Tensor
@@ -19,7 +19,10 @@ class TensorKumaraswamy(TensorDistribution):
     _concentration0: Tensor
 
     def __init__(
-        self, concentration1: Union[float, Tensor], concentration0: Union[float, Tensor]
+        self,
+        concentration1: Union[float, Tensor],
+        concentration0: Union[float, Tensor],
+        validate_args: Optional[bool] = None,
     ):
         # Store the parameters in annotated attributes before calling super().__init__()
         # This is required because super().__init__() calls self.dist() which needs these attributes
@@ -37,7 +40,7 @@ class TensorKumaraswamy(TensorDistribution):
         shape = self._concentration1.shape
         device = self._concentration1.device
 
-        super().__init__(shape, device)
+        super().__init__(shape, device, validate_args)
 
     @classmethod
     def _unflatten_distribution(
@@ -48,6 +51,7 @@ class TensorKumaraswamy(TensorDistribution):
         return cls(
             concentration1=attributes["_concentration1"],  # type: ignore
             concentration0=attributes["_concentration0"],  # type: ignore
+            validate_args=attributes.get("_validate_args"),
         )
 
     def dist(self) -> TorchKumaraswamy:
@@ -57,6 +61,7 @@ class TensorKumaraswamy(TensorDistribution):
         return TorchKumaraswamy(
             concentration1=self._concentration1,
             concentration0=self._concentration0,
+            validate_args=self._validate_args,
         )
 
     def log_prob(self, value: Tensor) -> Tensor:

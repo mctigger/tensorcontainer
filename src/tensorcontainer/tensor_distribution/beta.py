@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, get_args
+from typing import Any, Dict, Optional, get_args
 
 from torch import Tensor
 from torch.distributions import Beta
@@ -28,7 +28,12 @@ class TensorBeta(TensorDistribution):
     _concentration1: Tensor
     _concentration0: Tensor
 
-    def __init__(self, concentration1: Tensor, concentration0: Tensor):
+    def __init__(
+        self,
+        concentration1: Tensor,
+        concentration0: Tensor,
+        validate_args: Optional[bool] = None,
+    ):
         self._concentration1, self._concentration0 = broadcast_all(
             concentration1, concentration0
         )
@@ -42,7 +47,7 @@ class TensorBeta(TensorDistribution):
 
         device = self._concentration1.device
 
-        super().__init__(shape, device)
+        super().__init__(shape, device, validate_args)
 
     @classmethod
     def _unflatten_distribution(
@@ -53,6 +58,7 @@ class TensorBeta(TensorDistribution):
         return cls(
             concentration1=attributes.get("_concentration1"),  # type: ignore
             concentration0=attributes.get("_concentration0"),  # type: ignore
+            validate_args=attributes.get("_validate_args"),
         )
 
     def dist(self) -> Beta:
@@ -60,6 +66,7 @@ class TensorBeta(TensorDistribution):
         return Beta(
             concentration1=self._concentration1,
             concentration0=self._concentration0,
+            validate_args=self._validate_args,
         )
 
     def log_prob(self, value: Tensor) -> Tensor:

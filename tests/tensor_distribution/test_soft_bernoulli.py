@@ -30,22 +30,6 @@ class TestTensorSoftBernoulliAPIMatch:
         ):
             TensorSoftBernoulli()
 
-    @pytest.mark.parametrize("validate_args", [True, False])
-    def test_validate_args(self, validate_args):
-        if validate_args:
-            with pytest.raises(
-                ValueError,
-                match="Either `probs` or `logits` must be specified, but not both.",
-            ):
-                TensorSoftBernoulli(validate_args=validate_args)
-        else:
-            # An error should still be raised because batch_shape and device cannot be inferred
-            with pytest.raises(
-                ValueError,
-                match="Either `probs` or `logits` must be specified, but not both.",
-            ):
-                TensorSoftBernoulli(validate_args=validate_args)
-
     @pytest.mark.parametrize("param_type", ["probs", "logits"])
     @pytest.mark.parametrize("shape", [(5,), (3, 5), (2, 4, 5)])
     def test_compile_compatibility(self, param_type, shape):

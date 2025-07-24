@@ -21,6 +21,7 @@ class TensorMultinomial(TensorDistribution):
         total_count: Union[int, Tensor] = 1,
         probs: Optional[Tensor] = None,
         logits: Optional[Tensor] = None,
+        validate_args: Optional[bool] = None,
     ):
         if probs is None and logits is None:
             raise RuntimeError("Either 'probs' or 'logits' must be provided.")
@@ -45,7 +46,7 @@ class TensorMultinomial(TensorDistribution):
         shape = data.shape[:-1]
         device = data.device
 
-        super().__init__(shape, device)
+        super().__init__(shape, device, validate_args)
 
     @classmethod
     def _unflatten_distribution(
@@ -57,11 +58,15 @@ class TensorMultinomial(TensorDistribution):
             total_count=attributes["_total_count"],
             probs=attributes.get("_probs"),
             logits=attributes.get("_logits"),
+            validate_args=attributes.get("_validate_args"),
         )
 
     def dist(self) -> Multinomial:  # Changed return type
         return Multinomial(  # Removed Independent wrapper
-            total_count=self._total_count, probs=self._probs, logits=self._logits
+            total_count=self._total_count,
+            probs=self._probs,
+            logits=self._logits,
+            validate_args=self._validate_args,
         )
 
     def log_prob(self, value: Tensor) -> Tensor:

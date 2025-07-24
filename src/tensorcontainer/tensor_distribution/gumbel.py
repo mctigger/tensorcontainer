@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Union
+from typing import Any, Dict, Optional, Union
 
 import torch
 from torch import Tensor
@@ -23,7 +23,12 @@ class TensorGumbel(TensorDistribution):
     _loc: Union[Tensor, float]
     _scale: Union[Tensor, float]
 
-    def __init__(self, loc: Union[Tensor, float], scale: Union[Tensor, float]):
+    def __init__(
+        self,
+        loc: Union[Tensor, float],
+        scale: Union[Tensor, float],
+        validate_args: Optional[bool] = None,
+    ):
         self._loc = loc
         self._scale = scale
         if isinstance(loc, Tensor):
@@ -36,7 +41,7 @@ class TensorGumbel(TensorDistribution):
             # If both are floats, assume scalar distribution on CPU
             shape = torch.Size([])
             device = torch.device("cpu")
-        super().__init__(shape, device)
+        super().__init__(shape, device, validate_args)
 
     @classmethod
     def _unflatten_distribution(cls, attributes: Dict[str, Any]) -> TensorGumbel:
@@ -50,6 +55,7 @@ class TensorGumbel(TensorDistribution):
         return cls(
             loc=loc,
             scale=scale,
+            validate_args=attributes.get("_validate_args"),
         )
 
     def dist(self) -> TorchGumbel:
@@ -59,6 +65,7 @@ class TensorGumbel(TensorDistribution):
         return TorchGumbel(
             loc=self._loc,
             scale=self._scale,
+            validate_args=self._validate_args,
         )
 
     def log_prob(self, value: Tensor) -> Tensor:

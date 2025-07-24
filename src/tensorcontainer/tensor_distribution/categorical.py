@@ -17,7 +17,12 @@ class TensorCategorical(TensorDistribution):
     _probs: Optional[Tensor] = None
     _logits: Optional[Tensor] = None
 
-    def __init__(self, probs: Optional[Tensor] = None, logits: Optional[Tensor] = None):
+    def __init__(
+        self,
+        probs: Optional[Tensor] = None,
+        logits: Optional[Tensor] = None,
+        validate_args: Optional[bool] = None,
+    ):
         data = probs if probs is not None else logits
         # Parameter validation occurs in super().__init__(), but we need an early
         # check here to safely derive shape and device from the data tensor
@@ -37,7 +42,7 @@ class TensorCategorical(TensorDistribution):
         device = data.device
 
         # The batch shape is all dimensions except the last one.
-        super().__init__(shape, device)
+        super().__init__(shape, device, validate_args)
 
     @classmethod
     def _unflatten_distribution(
@@ -48,10 +53,13 @@ class TensorCategorical(TensorDistribution):
         return cls(
             probs=attributes.get("_probs"),  # type: ignore
             logits=attributes.get("_logits"),  # type: ignore
+            validate_args=attributes.get("_validate_args"),
         )
 
     def dist(self) -> Categorical:
-        return Categorical(probs=self._probs, logits=self._logits)
+        return Categorical(
+            probs=self._probs, logits=self._logits, validate_args=self._validate_args
+        )
 
     def log_prob(self, value: Tensor) -> Tensor:
         return self.dist().log_prob(value)

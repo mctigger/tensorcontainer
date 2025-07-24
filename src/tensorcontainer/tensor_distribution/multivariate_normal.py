@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 import torch
 from torch import Tensor
@@ -21,6 +21,7 @@ class TensorMultivariateNormal(TensorDistribution):
         covariance_matrix: Tensor | None = None,
         precision_matrix: Tensor | None = None,
         scale_tril: Tensor | None = None,
+        validate_args: Optional[bool] = None,
     ):
         num_params = sum(
             p is not None for p in [covariance_matrix, precision_matrix, scale_tril]
@@ -35,7 +36,9 @@ class TensorMultivariateNormal(TensorDistribution):
         self._covariance_matrix = covariance_matrix
         self._precision_matrix = precision_matrix
         self._scale_tril = scale_tril
-        super().__init__(loc.shape, loc.device)  # Call super().__init__ here
+        super().__init__(
+            loc.shape, loc.device, validate_args
+        )  # Call super().__init__ here
 
     def dist(self) -> MultivariateNormal:
         return MultivariateNormal(
@@ -43,6 +46,7 @@ class TensorMultivariateNormal(TensorDistribution):
             covariance_matrix=self._covariance_matrix,
             precision_matrix=self._precision_matrix,
             scale_tril=self._scale_tril,
+            validate_args=self._validate_args,
         )
 
     @classmethod
@@ -54,6 +58,7 @@ class TensorMultivariateNormal(TensorDistribution):
             covariance_matrix=attributes.get("_covariance_matrix"),
             precision_matrix=attributes.get("_precision_matrix"),
             scale_tril=attributes.get("_scale_tril"),
+            validate_args=attributes.get("_validate_args"),
         )
         return instance
 

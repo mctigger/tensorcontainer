@@ -50,7 +50,7 @@ class TensorStudentT(TensorDistribution):
         if torch.any(self._scale <= 0):
             raise ValueError("scale must be positive")
 
-        super().__init__(batch_shape, self._df.device)
+        super().__init__(batch_shape, self._df.device, validate_args)
 
     @classmethod
     def _unflatten_distribution(
@@ -62,13 +62,19 @@ class TensorStudentT(TensorDistribution):
             df=torch.as_tensor(attributes["_df"]),
             loc=torch.as_tensor(attributes["_loc"]),
             scale=torch.as_tensor(attributes["_scale"]),
+            validate_args=attributes.get("_validate_args"),
         )
 
     def dist(self) -> StudentT:
         assert self._df is not None
         assert self._loc is not None
         assert self._scale is not None
-        return StudentT(df=self._df, loc=self._loc, scale=self._scale)
+        return StudentT(
+            df=self._df,
+            loc=self._loc,
+            scale=self._scale,
+            validate_args=self._validate_args,
+        )
 
     def log_prob(self, value: Tensor) -> Tensor:
         return self.dist().log_prob(value)

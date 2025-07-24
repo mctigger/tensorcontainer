@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, get_args
+from typing import Any, Dict, Optional, get_args
 
 import torch  # Added import torch
 from torch import Tensor
@@ -16,7 +16,9 @@ class TensorLogisticNormal(TensorDistribution):
     _loc: Tensor
     _scale: Tensor
 
-    def __init__(self, loc: Tensor, scale: Tensor):
+    def __init__(
+        self, loc: Tensor, scale: Tensor, validate_args: Optional[bool] = None
+    ):
         self._loc, self._scale = broadcast_all(loc, scale)
 
         if isinstance(loc, get_args(Number)) and isinstance(scale, get_args(Number)):
@@ -28,10 +30,12 @@ class TensorLogisticNormal(TensorDistribution):
 
         device = self._loc.device
 
-        super().__init__(shape, device)
+        super().__init__(shape, device, validate_args)
 
     def dist(self) -> Distribution:
-        return TorchLogisticNormal(loc=self._loc, scale=self._scale)
+        return TorchLogisticNormal(
+            loc=self._loc, scale=self._scale, validate_args=self._validate_args
+        )
 
     @property
     def loc(self) -> Tensor:
@@ -55,4 +59,5 @@ class TensorLogisticNormal(TensorDistribution):
         return cls(
             loc=loc,
             scale=scale,
+            validate_args=attributes.get("_validate_args"),
         )
