@@ -183,12 +183,12 @@ def assert_init_signatures_match(
     td_params = [
         p.replace(annotation=inspect.Parameter.empty)
         for p in td_sig.parameters.values()
-        if p.name not in ("self", "validate_args")
+        if p.name not in ("self")
     ]
     torch_params = [
         p.replace(annotation=inspect.Parameter.empty)
         for p in torch_sig.parameters.values()
-        if p.name not in ("self", "validate_args", "eps")
+        if p.name not in ("self")
     ]
 
     td_sig_compare = td_sig.replace(parameters=td_params)
