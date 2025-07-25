@@ -106,9 +106,7 @@ class TensorTanhNormal(TensorDistribution):
                     self._scale.float(),
                     validate_args=self._validate_args,
                 ),
-                [
-                    ClampedTanhTransform(),
-                ],
+                [ClampedTanhTransform()],
                 validate_args=self._validate_args,
             )
         )

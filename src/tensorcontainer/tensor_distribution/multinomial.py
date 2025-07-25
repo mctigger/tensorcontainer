@@ -61,8 +61,8 @@ class TensorMultinomial(TensorDistribution):
             validate_args=attributes.get("_validate_args"),
         )
 
-    def dist(self) -> Multinomial:  # Changed return type
-        return Multinomial(  # Removed Independent wrapper
+    def dist(self) -> Multinomial:
+        return Multinomial(
             total_count=self._total_count,
             probs=self._probs,
             logits=self._logits,

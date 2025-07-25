@@ -89,9 +89,17 @@ class TestTensorWishart:
         sample = compiled_sample()
         assert sample.shape == dist.sample().shape
 
-        # Create a dummy value for log_prob
+        # Create a dummy positive definite matrix for log_prob
         value_shape = sample.shape
-        value = torch.randn(value_shape, dtype=dist.dtype, device=dist.device)
+        # Generate a random matrix and make it positive definite
+        # by computing A @ A.T + epsilon * I
+        random_matrix = torch.randn(value_shape, dtype=dist.dtype, device=dist.device)
+        # Make it positive definite: A @ A.T + small_identity
+        value = torch.matmul(random_matrix, random_matrix.transpose(-2, -1))
+        # Add small identity to ensure positive definiteness
+        eye = torch.eye(value_shape[-1], dtype=dist.dtype, device=dist.device)
+        eye = eye.expand_as(value)
+        value = value + 0.1 * eye
         log_prob = compiled_log_prob(value)
         assert log_prob.shape == dist.log_prob(value).shape
 
