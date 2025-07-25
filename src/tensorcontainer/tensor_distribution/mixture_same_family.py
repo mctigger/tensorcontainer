@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from torch.distributions import MixtureSameFamily as TorchMixtureSameFamily
 from torch.distributions.distribution import Distribution
@@ -28,18 +28,21 @@ class TensorMixtureSameFamily(TensorDistribution):
         return TorchMixtureSameFamily(
             mixture_distribution=self._mixture_distribution.dist(),
             component_distribution=self._component_distribution.dist(),
+            validate_args=self._validate_args,
         )
 
     def __init__(
         self,
         mixture_distribution: TensorCategorical,
         component_distribution: TensorDistribution,
+        validate_args: Optional[bool] = None,
     ) -> None:
         self._mixture_distribution = mixture_distribution
         self._component_distribution = component_distribution
         super().__init__(
             shape=mixture_distribution.batch_shape,
             device=mixture_distribution.device,
+            validate_args=validate_args,
         )
 
     @property
@@ -57,4 +60,5 @@ class TensorMixtureSameFamily(TensorDistribution):
         return cls(
             mixture_distribution=attributes["_mixture_distribution"],
             component_distribution=attributes["_component_distribution"],
+            validate_args=attributes.get("_validate_args"),
         )

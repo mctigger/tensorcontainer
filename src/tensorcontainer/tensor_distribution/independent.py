@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from torch import Size
 from torch.distributions import Independent
@@ -13,7 +13,10 @@ class TensorIndependent(TensorDistribution):
     reinterpreted_batch_ndims: int
 
     def __init__(
-        self, base_distribution: TensorDistribution, reinterpreted_batch_ndims: int
+        self,
+        base_distribution: TensorDistribution,
+        reinterpreted_batch_ndims: int,
+        validate_args: Optional[bool] = None,
     ):
         self.base_distribution = base_distribution
         self.reinterpreted_batch_ndims = reinterpreted_batch_ndims
@@ -25,11 +28,14 @@ class TensorIndependent(TensorDistribution):
                 else base_distribution.shape
             ),
             base_distribution.device,
+            validate_args,
         )
 
     def dist(self):
         return Independent(
-            self.base_distribution.dist(), self.reinterpreted_batch_ndims
+            self.base_distribution.dist(),
+            self.reinterpreted_batch_ndims,
+            validate_args=self._validate_args,
         )
 
     @classmethod
@@ -37,4 +43,5 @@ class TensorIndependent(TensorDistribution):
         return cls(
             base_distribution=attributes["base_distribution"],
             reinterpreted_batch_ndims=attributes["reinterpreted_batch_ndims"],
+            validate_args=attributes.get("_validate_args"),
         )

@@ -27,7 +27,7 @@ class TensorVonMises(TensorDistribution):
         # This is required because super().__init__() calls self.dist() which needs these attributes
         self._loc, self._concentration = broadcast_all(loc, concentration)
         self.validate_args = validate_args
-        super().__init__(self._loc.shape, self._loc.device)
+        super().__init__(self._loc.shape, self._loc.device, validate_args)
 
     @classmethod
     def _unflatten_distribution(cls, attributes: Dict[str, Any]) -> TensorVonMises:
@@ -35,7 +35,7 @@ class TensorVonMises(TensorDistribution):
         return cls(
             loc=cast(torch.Tensor, attributes["_loc"]),
             concentration=cast(torch.Tensor, attributes["_concentration"]),
-            validate_args=cast(Optional[bool], attributes.get("validate_args")),
+            validate_args=cast(Optional[bool], attributes.get("_validate_args")),
         )
 
     def dist(self) -> TorchVonMises:
@@ -45,7 +45,7 @@ class TensorVonMises(TensorDistribution):
         return TorchVonMises(
             loc=self._loc,
             concentration=self._concentration,
-            validate_args=self.validate_args,
+            validate_args=self._validate_args,
         )
 
     def log_prob(self, value: torch.Tensor) -> torch.Tensor:

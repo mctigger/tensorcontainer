@@ -29,21 +29,15 @@ class TestTensorTruncatedNormalInitialization:
     def test_truncated_normal_init(self, batch_shape, event_shape, device):
         # Ensure that the shapes are correctly handled for scalar tensors
         loc_param_shape = batch_shape + event_shape
-        loc = torch.randn(loc_param_shape if loc_param_shape else (), device=device)
-        scale = (
-            torch.rand(loc_param_shape if loc_param_shape else (), device=device) + 1e-6
-        )
-        low = torch.randn(loc_param_shape if loc_param_shape else (), device=device)
-        high = (
-            low
-            + torch.rand(loc_param_shape if loc_param_shape else (), device=device)
-            + 1e-6
-        )
+        loc = torch.randn(loc_param_shape, device=device)
+        scale = torch.rand(loc_param_shape, device=device) + 1e-6
+        low = torch.randn(loc_param_shape, device=device)
+        high = low + torch.rand(loc_param_shape, device=device) + 1e-6
 
         dist = TensorTruncatedNormal(loc=loc, scale=scale, low=low, high=high)
 
-        expected_batch_shape = loc.shape[:-1] if loc.ndim > 0 else torch.Size([])
-        expected_event_shape = loc.shape[-1:] if loc.ndim > 0 else torch.Size([])
+        expected_batch_shape = loc.shape
+        expected_event_shape = torch.Size([])
 
         assert dist.batch_shape == expected_batch_shape
         assert dist.event_shape == expected_event_shape
@@ -76,16 +70,10 @@ class TestTensorTruncatedNormalMethods:
     @pytest.mark.parametrize("event_shape", [(), (1,), (2, 3)])
     def test_truncated_normal_methods(self, batch_shape, event_shape, device):
         loc_param_shape = batch_shape + event_shape
-        loc = torch.randn(loc_param_shape if loc_param_shape else (), device=device)
-        scale = (
-            torch.rand(loc_param_shape if loc_param_shape else (), device=device) + 1e-6
-        )
-        low = torch.randn(loc_param_shape if loc_param_shape else (), device=device)
-        high = (
-            low
-            + torch.rand(loc_param_shape if loc_param_shape else (), device=device)
-            + 1e-6
-        )
+        loc = torch.randn(loc_param_shape, device=device)
+        scale = torch.rand(loc_param_shape, device=device) + 1e-6
+        low = torch.randn(loc_param_shape, device=device)
+        high = low + torch.rand(loc_param_shape, device=device) + 1e-6
 
         dist = TensorTruncatedNormal(loc=loc, scale=scale, low=low, high=high)
 

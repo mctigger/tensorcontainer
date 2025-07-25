@@ -16,10 +16,12 @@ class TensorFisherSnedecor(TensorDistribution):
         self._df2: Tensor
         self._df1, self._df2 = broadcast_all(df1, df2)
         batch_shape = self._df1.shape
-        super().__init__(batch_shape, self._df1.device)
+        super().__init__(batch_shape, self._df1.device, validate_args)
 
     def dist(self) -> TorchFisherSnedecor:
-        return TorchFisherSnedecor(self._df1, self._df2)
+        return TorchFisherSnedecor(
+            self._df1, self._df2, validate_args=self._validate_args
+        )
 
     @classmethod
     def _unflatten_distribution(
@@ -28,7 +30,7 @@ class TensorFisherSnedecor(TensorDistribution):
         return cls(
             df1=attributes["_df1"],
             df2=attributes["_df2"],
-            validate_args=attributes.get("validate_args"),
+            validate_args=attributes.get("_validate_args"),
         )
 
     @property

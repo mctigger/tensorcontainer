@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, get_args
+from typing import Any, Dict, Optional, get_args
 
 from torch import Tensor
 from torch.distributions import Normal
@@ -27,7 +27,9 @@ class TensorNormal(TensorDistribution):
     _loc: Tensor
     _scale: Tensor
 
-    def __init__(self, loc: Tensor, scale: Tensor):
+    def __init__(
+        self, loc: Tensor, scale: Tensor, validate_args: Optional[bool] = None
+    ):
         self._loc, self._scale = broadcast_all(loc, scale)
 
         if isinstance(loc, get_args(Number)) and isinstance(scale, get_args(Number)):
@@ -37,7 +39,7 @@ class TensorNormal(TensorDistribution):
 
         device = self._loc.device
 
-        super().__init__(shape, device)
+        super().__init__(shape, device, validate_args)
 
     @classmethod
     def _unflatten_distribution(
@@ -48,6 +50,7 @@ class TensorNormal(TensorDistribution):
         return cls(
             loc=attributes.get("_loc"),  # type: ignore
             scale=attributes.get("_scale"),  # type: ignore
+            validate_args=attributes.get("_validate_args"),
         )
 
     def dist(self) -> Normal:
@@ -55,6 +58,7 @@ class TensorNormal(TensorDistribution):
         return Normal(
             loc=self._loc,
             scale=self._scale,
+            validate_args=self._validate_args,
         )
 
     def log_prob(self, value: Tensor) -> Tensor:

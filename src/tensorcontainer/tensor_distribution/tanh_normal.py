@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from functools import cached_property
-from typing import Any, Dict, get_args
+from typing import Any, Dict, Optional, get_args
 
 import torch
 from torch import Tensor
@@ -73,6 +73,7 @@ class TensorTanhNormal(TensorDistribution):
         self,
         loc: Tensor,
         scale: Tensor,
+        validate_args: Optional[bool] = None,
     ):
         self._loc, self._scale = broadcast_all(loc, scale)
 
@@ -83,7 +84,7 @@ class TensorTanhNormal(TensorDistribution):
 
         device = self._loc.device
 
-        super().__init__(shape, device)
+        super().__init__(shape, device, validate_args)
 
     @classmethod
     def _unflatten_distribution(
@@ -94,16 +95,19 @@ class TensorTanhNormal(TensorDistribution):
         return cls(
             loc=attributes.get("_loc"),  # type: ignore
             scale=attributes.get("_scale"),  # type: ignore
+            validate_args=attributes.get("_validate_args"),
         )
 
     def dist(self) -> Distribution:
         return SamplingDistribution(
             TransformedDistribution(
-                Normal(self._loc.float(), self._scale.float(), validate_args=False),
-                [
-                    ClampedTanhTransform(),
-                ],
-                validate_args=False,
+                Normal(
+                    self._loc.float(),
+                    self._scale.float(),
+                    validate_args=self._validate_args,
+                ),
+                [ClampedTanhTransform()],
+                validate_args=self._validate_args,
             )
         )
 
@@ -122,11 +126,15 @@ class TensorTanhNormal(TensorDistribution):
         """Cached sampling distribution for consistent property calculations."""
         return SamplingDistribution(
             TransformedDistribution(
-                Normal(self._loc.float(), self._scale.float(), validate_args=False),
+                Normal(
+                    self._loc.float(),
+                    self._scale.float(),
+                    validate_args=self._validate_args,
+                ),
                 [
                     ClampedTanhTransform(),
                 ],
-                validate_args=False,
+                validate_args=self._validate_args,
             )
         )
 

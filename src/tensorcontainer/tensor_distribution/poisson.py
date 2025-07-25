@@ -21,17 +21,18 @@ class TensorPoisson(TensorDistribution):
         shape = rate.shape
         device = rate.device
 
-        super().__init__(shape, device)
+        super().__init__(shape, device, validate_args)
 
     @classmethod
     def _unflatten_distribution(cls, attributes: Dict[str, Any]) -> TensorPoisson:
         """Reconstruct distribution from tensor attributes."""
         return cls(
             rate=attributes.get("_rate"),  # type: ignore
+            validate_args=attributes.get("_validate_args"),
         )
 
     def dist(self) -> Poisson:
-        return Poisson(rate=self._rate)
+        return Poisson(rate=self._rate, validate_args=self._validate_args)
 
     def log_prob(self, value: Tensor) -> Tensor:
         return self.dist().log_prob(value)

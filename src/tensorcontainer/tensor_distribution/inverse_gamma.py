@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Union
+from typing import Any, Dict, Optional, Union
 
 import torch
 from torch import Tensor
@@ -16,7 +16,12 @@ class TensorInverseGamma(TensorDistribution):
     _concentration: Tensor
     _rate: Tensor
 
-    def __init__(self, concentration: Union[float, Tensor], rate: Union[float, Tensor]):
+    def __init__(
+        self,
+        concentration: Union[float, Tensor],
+        rate: Union[float, Tensor],
+        validate_args: Optional[bool] = None,
+    ):
         # Store the parameters in annotated attributes before calling super().__init__()
         # This is required because super().__init__() calls self.dist() which needs these attributes
         self._concentration = (
@@ -29,7 +34,7 @@ class TensorInverseGamma(TensorDistribution):
         shape = self._concentration.shape
         device = self._concentration.device
 
-        super().__init__(shape, device)
+        super().__init__(shape, device, validate_args)
 
     @classmethod
     def _unflatten_distribution(
@@ -40,6 +45,7 @@ class TensorInverseGamma(TensorDistribution):
         return cls(
             concentration=attributes["_concentration"],
             rate=attributes["_rate"],
+            validate_args=attributes.get("_validate_args"),
         )
 
     def dist(self) -> TorchInverseGamma:
@@ -49,6 +55,7 @@ class TensorInverseGamma(TensorDistribution):
         return TorchInverseGamma(
             concentration=self._concentration,
             rate=self._rate,
+            validate_args=self._validate_args,
         )
 
     def log_prob(self, value: Tensor) -> Tensor:

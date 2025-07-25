@@ -21,12 +21,14 @@ class TensorBernoulli(TensorDistribution):
         self,
         probs: Optional[Union[Number, Tensor]] = None,
         logits: Optional[Union[Number, Tensor]] = None,
+        validate_args: Optional[bool] = None,
     ):
         if (probs is None) == (logits is None):
             raise ValueError(
                 "Either `probs` or `logits` must be specified, but not both."
             )
 
+        # broadcast_all is used to lift Number to Tensor
         if probs is not None:
             (self._probs,) = broadcast_all(probs)
             shape = self._probs.shape
@@ -38,7 +40,7 @@ class TensorBernoulli(TensorDistribution):
             device = self._logits.device
             self._probs = None
 
-        super().__init__(shape, device)
+        super().__init__(shape, device, validate_args)
 
     @classmethod
     def _unflatten_distribution(cls, attributes: Dict[str, Any]) -> TensorBernoulli:
@@ -46,10 +48,13 @@ class TensorBernoulli(TensorDistribution):
         return cls(
             probs=attributes.get("_probs"),
             logits=attributes.get("_logits"),
+            validate_args=attributes.get("_validate_args"),
         )
 
     def dist(self) -> Bernoulli:
-        return Bernoulli(probs=self._probs, logits=self._logits)
+        return Bernoulli(
+            probs=self._probs, logits=self._logits, validate_args=self._validate_args
+        )
 
     def log_prob(self, value: Tensor) -> Tensor:
         return self.dist().log_prob(value)

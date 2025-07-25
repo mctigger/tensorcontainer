@@ -75,7 +75,7 @@ class TestTensorTanhNormal:
     def test_compile_compatibility_rsample(self):
         loc = torch.tensor([0.0, 1.0])
         scale = torch.tensor([1.0, 0.5])
-        dist = TensorTanhNormal(loc, scale)
+        dist = TensorTanhNormal(loc, scale, validate_args=False)
 
         # Test rsample
         run_and_compare_compiled(dist.rsample, torch.Size((5,)))
@@ -83,7 +83,7 @@ class TestTensorTanhNormal:
     def test_compile_compatibility_log_prob(self):
         loc = torch.tensor([0.0, 1.0])
         scale = torch.tensor([1.0, 0.5])
-        dist = TensorTanhNormal(loc, scale)
+        dist = TensorTanhNormal(loc, scale, validate_args=False)
 
         # Test log_prob
         value = dist.rsample(torch.Size((1,)))

@@ -16,7 +16,12 @@ class TensorLogNormal(TensorDistribution):
     _loc: Tensor
     _scale: Tensor
 
-    def __init__(self, loc: float | Tensor, scale: float | Tensor):
+    def __init__(
+        self,
+        loc: float | Tensor,
+        scale: float | Tensor,
+        validate_args: Optional[bool] = None,
+    ):
         # Convert inputs to tensors
         loc = torch.as_tensor(loc)
         scale = torch.as_tensor(scale)
@@ -37,7 +42,7 @@ class TensorLogNormal(TensorDistribution):
         shape = self._loc.shape
         device = self._loc.device
 
-        super().__init__(shape, device)
+        super().__init__(shape, device, validate_args)
 
     @classmethod
     def _unflatten_distribution(cls, attributes: Dict[str, Any]) -> TensorLogNormal:
@@ -45,10 +50,13 @@ class TensorLogNormal(TensorDistribution):
         return cls(
             loc=attributes.get("_loc"),  # type: ignore
             scale=attributes.get("_scale"),  # type: ignore
+            validate_args=attributes.get("_validate_args"),
         )
 
     def dist(self) -> LogNormal:
-        return LogNormal(loc=self._loc, scale=self._scale)
+        return LogNormal(
+            loc=self._loc, scale=self._scale, validate_args=self._validate_args
+        )
 
     def log_prob(self, value: Tensor) -> Tensor:
         return self.dist().log_prob(value)

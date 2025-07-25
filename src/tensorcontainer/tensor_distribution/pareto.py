@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Union
+from typing import Any, Dict, Optional, Union
 
 from torch import Tensor
 from torch.distributions import Pareto as TorchPareto
@@ -22,7 +22,10 @@ class TensorPareto(TensorDistribution):
     _alpha: Tensor
 
     def __init__(
-        self, scale: Union[float, Tensor], alpha: Union[float, Tensor]
+        self,
+        scale: Union[float, Tensor],
+        alpha: Union[float, Tensor],
+        validate_args: Optional[bool] = None,
     ) -> None:
         if isinstance(scale, (float, int)):
             scale = Tensor([scale])
@@ -40,7 +43,7 @@ class TensorPareto(TensorDistribution):
         shape = self._scale.shape
         device = self._scale.device
 
-        super().__init__(shape, device)
+        super().__init__(shape, device, validate_args)
 
     @classmethod
     def _unflatten_distribution(cls, attributes: Dict[str, Any]) -> TensorPareto:
@@ -48,6 +51,7 @@ class TensorPareto(TensorDistribution):
         return cls(
             scale=attributes["_scale"],  # type: ignore
             alpha=attributes["_alpha"],  # type: ignore
+            validate_args=attributes.get("_validate_args"),
         )
 
     def dist(self) -> TorchPareto:
@@ -57,6 +61,7 @@ class TensorPareto(TensorDistribution):
         return TorchPareto(
             scale=self._scale,
             alpha=self._alpha,
+            validate_args=self._validate_args,
         )
 
     def log_prob(self, value: Tensor) -> Tensor:

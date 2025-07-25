@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Union
+from typing import Any, Dict, Optional, Union
 
 import torch
 from torch import Tensor
@@ -31,6 +31,7 @@ class TensorLKJCholesky(TensorDistribution):
         self,
         dim: int,
         concentration: Union[float, Tensor] = 1.0,
+        validate_args: Optional[bool] = None,
     ):
         self._dim = dim
         self._concentration = (
@@ -41,6 +42,7 @@ class TensorLKJCholesky(TensorDistribution):
         super().__init__(
             shape=self._concentration.shape,
             device=self._concentration.device,
+            validate_args=validate_args,
         )
 
     def dist(self) -> Distribution:
@@ -50,6 +52,7 @@ class TensorLKJCholesky(TensorDistribution):
         return TorchLKJCholesky(
             dim=self._dim,
             concentration=self._concentration,
+            validate_args=self._validate_args,
         )
 
     @classmethod
@@ -57,4 +60,5 @@ class TensorLKJCholesky(TensorDistribution):
         return cls(
             dim=attributes["_dim"],
             concentration=attributes["_concentration"],
+            validate_args=attributes.get("_validate_args"),
         )

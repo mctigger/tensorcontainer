@@ -18,6 +18,7 @@ class TensorContinuousBernoulli(TensorDistribution):
         probs: Optional[Union[Tensor, Number]] = None,
         logits: Optional[Union[Tensor, Number]] = None,
         lims: Tuple[float, float] = (0.499, 0.501),
+        validate_args: Optional[bool] = None,
     ) -> None:
         self._lims = lims
 
@@ -49,13 +50,14 @@ class TensorContinuousBernoulli(TensorDistribution):
             # but as a fallback for type inference or future changes.
             raise ValueError("Either `probs` or `logits` must be specified.")
 
-        super().__init__(shape=batch_shape, device=device)
+        super().__init__(shape=batch_shape, device=device, validate_args=validate_args)
 
     def dist(self) -> TorchContinuousBernoulli:
         return TorchContinuousBernoulli(
             probs=self._probs,
             logits=self._logits,
             lims=self._lims,
+            validate_args=self._validate_args,
         )
 
     @classmethod
@@ -67,6 +69,7 @@ class TensorContinuousBernoulli(TensorDistribution):
             probs=attributes.get("_probs"),
             logits=attributes.get("_logits"),
             lims=attributes["_lims"],
+            validate_args=attributes.get("_validate_args"),
         )
 
     @property

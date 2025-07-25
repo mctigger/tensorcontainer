@@ -25,7 +25,7 @@ class TensorDistribution(TensorAnnotated):
        automatically transformed by TensorAnnotated operations (e.g., .to(), .expand()).
 
     2. **Deferred Validation**: The __init__ method should mirror torch.distributions
-       equivalents but without validate_args, deferring all validation to the underlying
+       equivalents including validate_args, deferring all validation to the underlying
        torch.distributions.
 
     3. **Lazy Distribution Creation**: The actual torch.distributions.Distribution instance
@@ -39,8 +39,8 @@ class TensorDistribution(TensorAnnotated):
     --------------
     Subclasses should:
     - Annotate all tensor parameters as class attributes (e.g., _probs: Optional[Tensor] = None)
-    - Implement __init__ to mirror the corresponding torch.distributions constructor
-    - Implement dist() to return the underlying torch.distributions.Distribution
+    - Implement __init__ to mirror the corresponding torch.distributions constructor including validate_args
+    - Implement dist() to return the underlying torch.distributions.Distribution with validate_args
     - Override _unflatten_distribution() if custom reconstruction logic is needed
 
     Example:
@@ -50,18 +50,23 @@ class TensorDistribution(TensorAnnotated):
         _loc: Optional[Tensor] = None
         _scale: Optional[Tensor] = None
 
-        def __init__(self, loc: Tensor, scale: Tensor):
+        def __init__(self, loc: Tensor, scale: Tensor, validate_args: Optional[bool] = None):
             self._loc = loc
             self._scale = scale
-            super().__init__(loc.shape, loc.device)
+            super().__init__(loc.shape, loc.device, validate_args)
 
         def dist(self) -> Distribution:
-            return Normal(self._loc, self._scale)
+            return Normal(self._loc, self._scale, validate_args=self._validate_args)
     ```
     """
 
+    _validate_args: bool | None
+
     def __init__(
-        self, shape: Size | List[int] | Tuple[int], device: str | device | int | None
+        self,
+        shape: Size | List[int] | Tuple[int],
+        device: str | device | int | None,
+        validate_args: bool | None = None,
     ):
         """
         Initialize the TensorDistribution.
@@ -69,14 +74,14 @@ class TensorDistribution(TensorAnnotated):
         Args:
             shape: Shape of the distribution's batch dimensions
             device: Device where tensors should be placed
+            validate_args: Whether to validate distribution parameters
 
         Note:
             This calls dist() to validate that the distribution can be constructed,
             then initializes the parent TensorAnnotated class.
         """
+        self._validate_args = validate_args
         # Validate that the distribution can be constructed by calling dist()
-        # We pass validate_args=False to the super().__init__ because the
-        # TensorDistribution itself handles validation by calling self.dist()
         # and relies on the underlying torch.distributions for parameter validation.
         self.dist()
         super().__init__(shape, device)
@@ -128,6 +133,7 @@ class TensorDistribution(TensorAnnotated):
             return cls(
                 probs=attributes.get("_probs"),
                 logits=attributes.get("_logits"),
+                validate_args=attributes.get("_validate_args"),
             )
             ```
         """

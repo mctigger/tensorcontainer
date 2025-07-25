@@ -17,8 +17,7 @@ class TensorUniform(TensorDistribution):
         low, high = torch.broadcast_tensors(low, high)
         self._low = low
         self._high = high
-        self.validate_args = validate_args
-        super().__init__(low.shape, low.device)
+        super().__init__(low.shape, low.device, validate_args)
 
     @classmethod
     def _unflatten_distribution(
@@ -28,11 +27,13 @@ class TensorUniform(TensorDistribution):
         return cls(
             low=attributes.get("_low"),  # type: ignore
             high=attributes.get("_high"),  # type: ignore
-            validate_args=attributes.get("validate_args"),
+            validate_args=attributes.get("_validate_args"),
         )
 
     def dist(self) -> Uniform:
-        return Uniform(low=self._low, high=self._high, validate_args=self.validate_args)
+        return Uniform(
+            low=self._low, high=self._high, validate_args=self._validate_args
+        )
 
     def log_prob(self, value: Tensor) -> Tensor:
         return self.dist().log_prob(value)

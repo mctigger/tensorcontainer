@@ -17,7 +17,7 @@ class TensorDirichlet(TensorDistribution):
     def __init__(self, concentration: Tensor, validate_args: Optional[bool] = None):
         self._concentration = concentration
         batch_shape = concentration.shape[:-1]
-        super().__init__(batch_shape, concentration.device)
+        super().__init__(batch_shape, concentration.device, validate_args)
 
     @classmethod
     def _unflatten_distribution(
@@ -27,11 +27,13 @@ class TensorDirichlet(TensorDistribution):
         """Reconstruct distribution from tensor attributes."""
         return cls(
             concentration=attributes["_concentration"],
-            validate_args=attributes.get("validate_args"),
+            validate_args=attributes.get("_validate_args"),
         )
 
     def dist(self) -> Dirichlet:
-        return Dirichlet(concentration=self._concentration)
+        return Dirichlet(
+            concentration=self._concentration, validate_args=self._validate_args
+        )
 
     @property
     def concentration(self) -> Tensor:

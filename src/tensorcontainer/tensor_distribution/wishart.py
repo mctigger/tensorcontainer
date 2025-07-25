@@ -31,6 +31,7 @@ class TensorWishart(TensorDistribution):
         covariance_matrix: Optional[Tensor] = None,
         precision_matrix: Optional[Tensor] = None,
         scale_tril: Optional[Tensor] = None,
+        validate_args: Optional[bool] = None,
     ):
         # Validate that exactly one of the matrix parameters is provided
         num_params = sum(
@@ -49,7 +50,7 @@ class TensorWishart(TensorDistribution):
 
         # For Wishart, we need to use the df tensor as the primary shape reference
         # since the matrix parameters have additional event dimensions
-        super().__init__(df.shape, df.device)
+        super().__init__(df.shape, df.device, validate_args)
 
     def dist(self) -> TorchWishart:
         """
@@ -60,7 +61,7 @@ class TensorWishart(TensorDistribution):
             covariance_matrix=self._covariance_matrix,
             precision_matrix=self._precision_matrix,
             scale_tril=self._scale_tril,
-            validate_args=False,
+            validate_args=self._validate_args,
         )
 
     @classmethod
@@ -70,6 +71,7 @@ class TensorWishart(TensorDistribution):
             covariance_matrix=attributes.get("_covariance_matrix"),
             precision_matrix=attributes.get("_precision_matrix"),
             scale_tril=attributes.get("_scale_tril"),
+            validate_args=attributes.get("_validate_args"),
         )
 
     @property
