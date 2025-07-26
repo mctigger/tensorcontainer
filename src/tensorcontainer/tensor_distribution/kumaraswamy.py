@@ -1,12 +1,10 @@
 from __future__ import annotations
 
-from typing import Dict, Optional, Union
+from typing import Any, Dict, Optional, Union
 
-import torch
 from torch import Tensor
 from torch.distributions import Kumaraswamy as TorchKumaraswamy
-
-from tensorcontainer.tensor_annotated import TDCompatible
+from torch.distributions.utils import broadcast_all
 
 from .base import TensorDistribution
 
@@ -24,17 +22,8 @@ class TensorKumaraswamy(TensorDistribution):
         concentration0: Union[float, Tensor],
         validate_args: Optional[bool] = None,
     ):
-        # Store the parameters in annotated attributes before calling super().__init__()
-        # This is required because super().__init__() calls self.dist() which needs these attributes
-        self._concentration1 = (
-            concentration1
-            if isinstance(concentration1, Tensor)
-            else torch.tensor(concentration1)
-        )
-        self._concentration0 = (
-            concentration0
-            if isinstance(concentration0, Tensor)
-            else torch.tensor(concentration0)
+        self._concentration1, self._concentration0 = broadcast_all(
+            concentration1, concentration0
         )
 
         shape = self._concentration1.shape
@@ -45,12 +34,12 @@ class TensorKumaraswamy(TensorDistribution):
     @classmethod
     def _unflatten_distribution(
         cls,
-        attributes: Dict[str, TDCompatible],
+        attributes: Dict[str, Any],
     ) -> "TensorKumaraswamy":
         """Reconstruct distribution from tensor attributes."""
         return cls(
-            concentration1=attributes["_concentration1"],  # type: ignore
-            concentration0=attributes["_concentration0"],  # type: ignore
+            concentration1=attributes["_concentration1"],
+            concentration0=attributes["_concentration0"],
             validate_args=attributes.get("_validate_args"),
         )
 
