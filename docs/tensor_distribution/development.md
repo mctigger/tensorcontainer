@@ -24,9 +24,9 @@ All classes in [`tensorcontainer.tensor_distribution`](src/tensorcontainer/tenso
 
 ### Parameter Broadcasting Requirements
 
-Many [`torch.distributions`](https://pytorch.org/docs/stable/distributions.html) constructors accept parameters of type `Union[Number, Tensor]`. However, [`TensorContainer`](src/tensorcontainer/tensor_container.py) and [`TensorDistribution`](src/tensorcontainer/tensor_distribution/base.py:14) can only process `Union[Tensor, TensorContainer]` objects and require all parameters to have compatible shapes for broadcasting.
+Many [`torch.distributions`](https://pytorch.org/docs/stable/distributions.html) constructors accept parameters of type `Union[Number, Tensor]` or any specialization of `Number` (e.g. `float`). However, [`TensorContainer`](src/tensorcontainer/tensor_container.py) and [`TensorDistribution`](src/tensorcontainer/tensor_distribution/base.py:14) can only process `Union[Tensor, TensorContainer]` objects and require all parameters to have compatible shapes for broadcasting.
 
-**Implementation Rule**: When the constructor signature contains `Union[Number, Tensor]` parameters, implementations **must** use [`torch.distributions.utils.broadcast_all`](https://pytorch.org/docs/stable/distributions.html#torch.distributions.utils.broadcast_all) to:
+**Implementation Rule**: When the constructor signature contains `Union[Number, Tensor]` or any specialization of `Number` parameters, implementations **must** use [`torch.distributions.utils.broadcast_all`](https://pytorch.org/docs/stable/distributions.html#torch.distributions.utils.broadcast_all) to:
 1. Convert scalar numbers to tensors
 2. Broadcast all parameters to a common shape
 
