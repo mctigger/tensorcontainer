@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
-import torch
 from torch import Tensor
 from torch.distributions import Laplace
+from torch.distributions.utils import broadcast_all
 
 from .base import TensorDistribution
 
@@ -22,21 +22,9 @@ class TensorLaplace(TensorDistribution):
         scale: Tensor | float,
         validate_args: Optional[bool] = None,
     ):
-        # Store the parameters in annotated attributes before calling super().__init__()
-        # This is required because super().__init__() calls self.dist() which needs these attributes
-        self._loc = loc if isinstance(loc, Tensor) else torch.tensor(loc)
-        self._scale = scale if isinstance(scale, Tensor) else torch.tensor(scale)
-
-        if torch.any(self._scale <= 0):
-            raise ValueError("scale must be positive")
-
-        try:
-            torch.broadcast_tensors(self._loc, self._scale)
-        except RuntimeError as e:
-            raise ValueError(f"loc and scale must have compatible shapes: {e}")
-
-        shape = torch.broadcast_shapes(self._loc.shape, self._scale.shape)
-        device = self._loc.device if self._loc.numel() > 0 else self._scale.device
+        self._loc, self._scale = broadcast_all(loc, scale)
+        shape = self._loc.shape
+        device = self._loc.device
         super().__init__(shape, device, validate_args)
 
     @classmethod
@@ -55,9 +43,6 @@ class TensorLaplace(TensorDistribution):
             validate_args=self._validate_args,
         )
 
-    def log_prob(self, value: Tensor) -> Tensor:
-        return self.dist().log_prob(value)
-
     @property
     def loc(self) -> Optional[Tensor]:
         """Returns the loc used to initialize the distribution."""
@@ -68,8 +53,4 @@ class TensorLaplace(TensorDistribution):
         """Returns the scale used to initialize the distribution."""
         return self.dist().scale
 
-    @property
-    def variance(self) -> Tensor:
-        """Returns the variance of the Laplace distribution."""
-        assert self._scale is not None
-        return self.dist().variance
+  
