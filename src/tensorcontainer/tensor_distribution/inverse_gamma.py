@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional, Union
 
-import torch
 from torch import Tensor
 from torch.distributions import InverseGamma as TorchInverseGamma
+from torch.distributions.utils import broadcast_all
 
 from .base import TensorDistribution
 
@@ -12,7 +12,6 @@ from .base import TensorDistribution
 class TensorInverseGamma(TensorDistribution):
     """Tensor-aware Inverse Gamma distribution."""
 
-    # Annotated tensor parameters
     _concentration: Tensor
     _rate: Tensor
 
@@ -22,14 +21,7 @@ class TensorInverseGamma(TensorDistribution):
         rate: Union[float, Tensor],
         validate_args: Optional[bool] = None,
     ):
-        # Store the parameters in annotated attributes before calling super().__init__()
-        # This is required because super().__init__() calls self.dist() which needs these attributes
-        self._concentration = (
-            concentration
-            if isinstance(concentration, Tensor)
-            else torch.tensor(concentration)
-        )
-        self._rate = rate if isinstance(rate, Tensor) else torch.tensor(rate)
+        self._concentration, self._rate = broadcast_all(concentration, rate)
 
         shape = self._concentration.shape
         device = self._concentration.device
