@@ -1,8 +1,9 @@
-from typing import Optional, Tuple, Union, get_args
+from typing import Any, Dict, Optional, Tuple, Union
 
 import torch
 from torch import Tensor
 from torch.distributions import ContinuousBernoulli as TorchContinuousBernoulli
+from torch.distributions.utils import broadcast_all
 from torch.types import Number
 
 from .base import TensorDistribution
@@ -21,34 +22,21 @@ class TensorContinuousBernoulli(TensorDistribution):
         validate_args: Optional[bool] = None,
     ) -> None:
         self._lims = lims
-
-        if probs is not None and logits is not None:
+        if (probs is None) == (logits is None):
             raise ValueError(
                 "Either `probs` or `logits` must be specified, but not both."
             )
-        elif probs is None and logits is None:
-            raise ValueError("Either `probs` or `logits` must be specified.")
 
-        if probs is not None and isinstance(probs, get_args(Number)):
-            self._probs = torch.tensor(probs)
+        if probs is not None:
+            (self._probs,) = broadcast_all(probs)
+            self._logits = None
         else:
-            self._probs = probs
+            (self._logits,) = broadcast_all(logits)
+            self._probs = None
 
-        if logits is not None and isinstance(logits, get_args(Number)):
-            self._logits = torch.tensor(logits)
-        else:
-            self._logits = logits
-
-        if self._probs is not None:
-            batch_shape = self._probs.shape
-            device = self._probs.device
-        elif self._logits is not None:
-            batch_shape = self._logits.shape
-            device = self._logits.device
-        else:
-            # This case should ideally not be reached due to the checks above,
-            # but as a fallback for type inference or future changes.
-            raise ValueError("Either `probs` or `logits` must be specified.")
+        data = self._probs if self._probs is not None else self._logits
+        batch_shape = data.shape  # type: ignore
+        device = data.device  # type: ignore
 
         super().__init__(shape=batch_shape, device=device, validate_args=validate_args)
 
@@ -63,7 +51,7 @@ class TensorContinuousBernoulli(TensorDistribution):
     @classmethod
     def _unflatten_distribution(
         cls,
-        attributes: dict,
+        attributes: Dict[str, Any],
     ) -> "TensorContinuousBernoulli":
         return cls(
             probs=attributes.get("_probs"),
