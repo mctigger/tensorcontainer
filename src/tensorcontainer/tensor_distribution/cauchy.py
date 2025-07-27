@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional, Union
 
-import torch
 from torch import Tensor
 from torch.distributions import Cauchy
 from torch.distributions.utils import broadcast_all
@@ -26,8 +25,8 @@ class TensorCauchy(TensorDistribution):
     """
 
     # Annotated tensor parameters
-    _loc: Union[Tensor, float]
-    _scale: Union[Tensor, float]
+    _loc: Tensor
+    _scale: Tensor
 
     def __init__(
         self,
@@ -37,14 +36,10 @@ class TensorCauchy(TensorDistribution):
     ):
         self._loc, self._scale = broadcast_all(loc, scale)
 
-        if isinstance(loc, (float, int)) and isinstance(scale, (float, int)):
-            batch_shape = torch.Size()
-            device = None
-        else:
-            batch_shape = self._loc.size()
-            device = self._loc.device
+        shape = self._loc.shape
+        device = self._loc.device
 
-        super().__init__(batch_shape, device, validate_args)
+        super().__init__(shape, device, validate_args)
 
     @classmethod
     def _unflatten_distribution(cls, attributes: Dict[str, Any]) -> TensorCauchy:
@@ -69,15 +64,3 @@ class TensorCauchy(TensorDistribution):
     def scale(self) -> Tensor:
         """Returns the scale parameter of the distribution."""
         return self.dist().scale
-
-    @property
-    def mean(self) -> Tensor:
-        return self.dist().mean
-
-    @property
-    def mode(self) -> Tensor:
-        return self.dist().mode
-
-    @property
-    def variance(self) -> Tensor:
-        return self.dist().variance
