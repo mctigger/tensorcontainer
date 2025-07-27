@@ -30,11 +30,12 @@ class TensorContinuousBernoulli(TensorDistribution):
         if probs is not None:
             (self._probs,) = broadcast_all(probs)
             self._logits = None
+            data = self._probs
         else:
             (self._logits,) = broadcast_all(logits)
             self._probs = None
+            data = self._logits
 
-        data = self._probs if self._probs is not None else self._logits
         batch_shape = data.shape  # type: ignore
         device = data.device  # type: ignore
 
@@ -67,14 +68,6 @@ class TensorContinuousBernoulli(TensorDistribution):
     @property
     def logits(self) -> Tensor:
         return self.dist().logits
-
-    @property
-    def mean(self) -> Tensor:
-        return self.dist().mean
-
-    @property
-    def variance(self) -> Tensor:
-        return self.dist().variance
 
     @property
     def param_shape(self) -> torch.Size:
