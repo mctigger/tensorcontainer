@@ -51,7 +51,7 @@ class TestTensorBinomialInitialization:
         probs = torch.tensor([0.5, 0.8])
         dist = TensorBinomial(total_count=total_count, probs=probs)
         assert isinstance(dist, TensorBinomial)
-        torch.testing.assert_close(dist.total_count, total_count.float())
+        torch.testing.assert_close(dist.total_count, total_count)
         torch.testing.assert_close(dist.probs, probs)
 
     def test_init_with_broadcasted_params(self):
@@ -60,7 +60,7 @@ class TestTensorBinomialInitialization:
         probs = torch.tensor([0.5, 0.8]).reshape(1, 2)
         dist = TensorBinomial(total_count=total_count, probs=probs)
         assert isinstance(dist, TensorBinomial)
-        expected_total_count = torch.tensor([[10, 10], [20, 20]]).float()
+        expected_total_count = torch.tensor([[10, 10], [20, 20]])
         expected_probs = torch.tensor([[0.5, 0.8], [0.5, 0.8]])
         torch.testing.assert_close(dist.total_count, expected_total_count)
         torch.testing.assert_close(dist.probs, expected_probs)
@@ -118,13 +118,13 @@ class TestTensorBinomialTensorContainerIntegration:
         else:
             torch.testing.assert_close(td_binomial.logits, td_binomial_copy.logits)
 
-        # Ensure they are different objects
+        # Ensure they are same tensor objects
         assert td_binomial is not td_binomial_copy
-        assert td_binomial.total_count is not td_binomial_copy.total_count
+        assert td_binomial.total_count is td_binomial_copy.total_count
         if param_type == "probs":
-            assert td_binomial.probs is not td_binomial_copy.probs
+            assert td_binomial.probs is td_binomial_copy.probs
         else:
-            assert td_binomial.logits is not td_binomial_copy.logits
+            assert td_binomial.logits is td_binomial_copy.logits
 
 
 class TestTensorBinomialAPIMatch:

@@ -24,7 +24,7 @@ class TensorBinomial(TensorDistribution):
     """
 
     # Annotated tensor parameters
-    _total_count: Union[int, Tensor]
+    _total_count: Tensor
     _probs: Optional[Tensor] = None
     _logits: Optional[Tensor] = None
 
@@ -42,36 +42,19 @@ class TensorBinomial(TensorDistribution):
 
         if probs is not None:
             self._total_count, self._probs = broadcast_all(total_count, probs)
-            param = self._probs
-            assert param is not None
         else:
             self._total_count, self._logits = broadcast_all(total_count, logits)
-            param = self._logits
-            assert param is not None
 
-        # Ensure total_count has the same dtype as the parameter tensor if it's a Tensor
-        if isinstance(self._total_count, Tensor):
-            self._total_count = self._total_count.type_as(param)
-
-        shape = param.shape
-        device = param.device
+        shape = self._total_count.shape
+        device = self._total_count.device
 
         super().__init__(shape, device, validate_args)
 
     @classmethod
     def _unflatten_distribution(cls, attributes: Dict[str, Any]):
-        """Reconstruct distribution from tensor attributes."""
         total_count = attributes["_total_count"]
-        if isinstance(total_count, Tensor):
-            total_count = total_count.clone()
-
-        probs = attributes.get("_probs")
-        if probs is not None:
-            probs = probs.clone()
-
-        logits = attributes.get("_logits")
-        if logits is not None:
-            logits = logits.clone()
+        probs = attributes["_probs"]
+        logits = attributes["_logits"]
 
         return cls(
             total_count=total_count,
@@ -81,34 +64,15 @@ class TensorBinomial(TensorDistribution):
         )
 
     def dist(self) -> Binomial:
-        total_count = self._total_count
-        if isinstance(total_count, int):
-            # Convert int total_count to a tensor with the correct device and dtype
-            # The device and dtype should match the probs/logits tensor
-            if self._probs is not None:
-                total_count = torch.tensor(
-                    total_count, device=self._probs.device, dtype=self._probs.dtype
-                )
-            elif self._logits is not None:
-                total_count = torch.tensor(
-                    total_count, device=self._logits.device, dtype=self._logits.dtype
-                )
-            else:
-                # Fallback if neither probs nor logits are set (should not happen with current init logic)
-                total_count = torch.tensor(total_count)
-
         return Binomial(
-            total_count=total_count,
+            total_count=self._total_count,
             probs=self._probs,
             logits=self._logits,
             validate_args=self._validate_args,
         )
 
-    def log_prob(self, value: Tensor) -> Tensor:
-        return self.dist().log_prob(value)
-
     @property
-    def total_count(self) -> Union[int, Tensor]:
+    def total_count(self) -> Tensor:
         """Returns the total_count parameter of the distribution."""
         return self._total_count
 
@@ -126,18 +90,3 @@ class TensorBinomial(TensorDistribution):
     def param_shape(self) -> Size:
         """Returns the shape of the underlying parameter."""
         return self.dist().param_shape
-
-    @property
-    def mean(self) -> Tensor:
-        """Returns the mean of the Binomial distribution."""
-        return self.dist().mean
-
-    @property
-    def variance(self) -> Tensor:
-        """Returns the variance of the Binomial distribution."""
-        return self.dist().variance
-
-    @property
-    def mode(self) -> Tensor:
-        """Returns the mode of the Binomial distribution."""
-        return self.dist().mode
