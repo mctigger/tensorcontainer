@@ -52,5 +52,3 @@ class TensorLaplace(TensorDistribution):
     def scale(self) -> Optional[Tensor]:
         """Returns the scale used to initialize the distribution."""
         return self.dist().scale
-
-  
