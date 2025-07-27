@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Optional, get_args
+from typing import Any, Dict, Optional
 
 from torch import Tensor
 from torch.distributions import Beta
 from torch.distributions.utils import broadcast_all
-from torch.types import Number
 
 from .base import TensorDistribution
 
@@ -37,13 +36,7 @@ class TensorBeta(TensorDistribution):
         self._concentration1, self._concentration0 = broadcast_all(
             concentration1, concentration0
         )
-
-        if isinstance(concentration1, get_args(Number)) and isinstance(
-            concentration0, get_args(Number)
-        ):
-            shape = tuple()
-        else:
-            shape = self._concentration1.shape
+        shape = self._concentration1.shape
 
         device = self._concentration1.device
 
