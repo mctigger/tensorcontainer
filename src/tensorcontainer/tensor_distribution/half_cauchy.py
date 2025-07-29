@@ -4,9 +4,10 @@ from typing import Any, Dict, Optional
 
 import torch
 from torch import Tensor
-from torch.distributions import HalfCauchy as TorchHalfCauchy
+from torch.distributions import HalfCauchy
 
 from .base import TensorDistribution
+from .utils import broadcast_all
 
 
 class TensorHalfCauchy(TensorDistribution):
@@ -16,21 +17,10 @@ class TensorHalfCauchy(TensorDistribution):
     _scale: Tensor
 
     def __init__(self, scale: float | Tensor, validate_args: Optional[bool] = None):
-        if isinstance(scale, (float, int)):
-            scale = torch.tensor(scale)
+        (self._scale,) = broadcast_all(scale)
 
-        # Parameter validation occurs in super().__init__(), but we need an early
-        # check here to safely derive shape and device from the data tensor
-        # before calling the parent constructor
-        if scale is None:
-            raise RuntimeError("`scale` must be provided.")
-
-        # Store the parameters in annotated attributes before calling super().__init__()
-        # This is required because super().__init__() calls self.dist() which needs these attributes
-        self._scale = scale
-
-        shape = scale.shape
-        device = scale.device
+        shape = self._scale.shape
+        device = self._scale.device
 
         super().__init__(shape, device, validate_args)
 
@@ -45,11 +35,8 @@ class TensorHalfCauchy(TensorDistribution):
             validate_args=attributes.get("_validate_args"),
         )
 
-    def dist(self) -> TorchHalfCauchy:
-        return TorchHalfCauchy(scale=self._scale, validate_args=self._validate_args)
-
-    def log_prob(self, value: Tensor) -> Tensor:
-        return self.dist().log_prob(value)
+    def dist(self) -> HalfCauchy:
+        return HalfCauchy(scale=self._scale, validate_args=self._validate_args)
 
     @property
     def scale(self) -> Tensor:
