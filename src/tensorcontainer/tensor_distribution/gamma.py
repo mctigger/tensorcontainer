@@ -29,8 +29,9 @@ class TensorGamma(TensorDistribution):
         validate_args: Optional[bool] = None,
     ):
         self._concentration, self._rate = broadcast_all(concentration, rate)
-        batch_shape = self._concentration.shape
-        super().__init__(batch_shape, self._concentration.device, validate_args)
+        super().__init__(
+            self._concentration.shape, self._concentration.device, validate_args
+        )
 
     @classmethod
     def _unflatten_distribution(
