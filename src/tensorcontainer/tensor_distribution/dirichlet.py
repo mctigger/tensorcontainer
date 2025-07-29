@@ -37,5 +37,3 @@ class TensorDirichlet(TensorDistribution):
     @property
     def concentration(self) -> Tensor:
         return self.dist().concentration
-
-  

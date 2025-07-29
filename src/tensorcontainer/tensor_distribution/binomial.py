@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional, Union
 
-import torch
 from torch import Size, Tensor
 from torch.distributions import Binomial
 from torch.distributions.utils import broadcast_all
