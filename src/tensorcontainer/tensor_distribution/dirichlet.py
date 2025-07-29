@@ -16,8 +16,7 @@ class TensorDirichlet(TensorDistribution):
 
     def __init__(self, concentration: Tensor, validate_args: Optional[bool] = None):
         self._concentration = concentration
-        batch_shape = concentration.shape[:-1]
-        super().__init__(batch_shape, concentration.device, validate_args)
+        super().__init__(concentration.shape, concentration.device, validate_args)
 
     @classmethod
     def _unflatten_distribution(
@@ -39,14 +38,4 @@ class TensorDirichlet(TensorDistribution):
     def concentration(self) -> Tensor:
         return self.dist().concentration
 
-    @property
-    def mean(self) -> Tensor:
-        return self.dist().mean
-
-    @property
-    def mode(self) -> Tensor:
-        return self.dist().mode
-
-    @property
-    def variance(self) -> Tensor:
-        return self.dist().variance
+  
