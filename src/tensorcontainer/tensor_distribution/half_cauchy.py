@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
-import torch
 from torch import Tensor
 from torch.distributions import HalfCauchy
 
