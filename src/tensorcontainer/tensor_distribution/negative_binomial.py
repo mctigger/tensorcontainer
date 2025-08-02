@@ -47,9 +47,9 @@ class TensorNegativeBinomial(TensorDistribution):
     ) -> TensorNegativeBinomial:
         """Reconstruct distribution from tensor attributes."""
         return cls(
-            total_count=attributes["_total_count"],  # type: ignore
-            probs=attributes.get("_probs"),  # type: ignore
-            logits=attributes.get("_logits"),  # type: ignore
+            total_count=attributes["_total_count"],
+            probs=attributes.get("_probs"),
+            logits=attributes.get("_logits"),
             validate_args=attributes.get("_validate_args"),
         )
 
@@ -64,7 +64,7 @@ class TensorNegativeBinomial(TensorDistribution):
     @property
     def total_count(self) -> Tensor:
         """Returns the total_count used to initialize the distribution."""
-        return self._total_count
+        return self.dist().total_count
 
     @property
     def logits(self) -> Optional[Tensor]:
