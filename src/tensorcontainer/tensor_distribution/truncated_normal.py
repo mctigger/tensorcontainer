@@ -46,7 +46,7 @@ class TensorTruncatedNormal(TensorDistribution):
         cls, attributes: Dict[str, Any]
     ) -> TensorTruncatedNormal:
         instance = cls(
-            loc=attributes["loc"],
+            loc=attributes["_loc"],
             scale=attributes["_scale"],
             low=attributes["_low"],
             high=attributes["_high"],

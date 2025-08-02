@@ -23,28 +23,49 @@ from tests.tensor_distribution.conftest import (
 )
 
 
+@pytest.fixture
+def truncated_normal_params_factory(device):
+    """
+    Factory fixture that returns a function to create parameters with custom shapes.
+
+    Args:
+        device: torch device to create tensors on
+
+    Returns:
+        function: A function that takes a shape and returns parameter dict
+    """
+
+    def create_params(shape):
+        loc = torch.randn(shape, device=device)
+        scale = torch.rand(shape, device=device) + 1e-6
+        low = torch.randn(shape, device=device)
+        high = low + torch.rand(shape, device=device) + 1e-6
+        return {"loc": loc, "scale": scale, "low": low, "high": high}
+
+    return create_params
+
+
 class TestTensorTruncatedNormalInitialization:
     @pytest.mark.parametrize("batch_shape", [(), (1,), (2, 3)])
     @pytest.mark.parametrize("event_shape", [(), (1,), (2, 3)])
-    def test_truncated_normal_init(self, batch_shape, event_shape, device):
-        # Ensure that the shapes are correctly handled for scalar tensors
+    def test_truncated_normal_init(
+        self, batch_shape, event_shape, truncated_normal_params_factory
+    ):
+        # Create parameters with the specific shape for this test
         loc_param_shape = batch_shape + event_shape
-        loc = torch.randn(loc_param_shape, device=device)
-        scale = torch.rand(loc_param_shape, device=device) + 1e-6
-        low = torch.randn(loc_param_shape, device=device)
-        high = low + torch.rand(loc_param_shape, device=device) + 1e-6
+        params = truncated_normal_params_factory(loc_param_shape)
 
-        dist = TensorTruncatedNormal(loc=loc, scale=scale, low=low, high=high)
+        dist = TensorTruncatedNormal(**params)
 
-        expected_batch_shape = loc.shape
+        expected_batch_shape = params["loc"].shape
         expected_event_shape = torch.Size([])
 
         assert dist.batch_shape == expected_batch_shape
         assert dist.event_shape == expected_event_shape
-        assert dist.loc.shape == loc.shape
-        assert dist.scale.shape == scale.shape
-        assert dist.low.shape == low.shape
-        assert dist.high.shape == high.shape
+        assert dist.loc.shape == params["loc"].shape
+        assert dist.scale.shape == params["scale"].shape
+        assert dist.low.shape == params["low"].shape
+        assert dist.high.shape == params["high"].shape
 
 
 class TestTensorTruncatedNormalAPIMatch:
@@ -54,28 +75,24 @@ class TestTensorTruncatedNormalAPIMatch:
     def test_properties_match(self, device):
         assert_properties_signatures_match(TensorTruncatedNormal, TruncatedNormal)
 
-    def test_property_values_match(self, device):
-        loc = torch.randn(3, 5, device=device)
-        scale = torch.rand(3, 5, device=device) + 1e-6
-        low = torch.randn(3, 5, device=device)
-        high = low + torch.rand(3, 5, device=device) + 1e-6
-        td_truncated_normal = TensorTruncatedNormal(
-            loc=loc, scale=scale, low=low, high=high
-        )
+    def test_property_values_match(self, device, truncated_normal_params_factory):
+        # Create parameters with default shape (3, 5) that was used in the original fixture
+        params = truncated_normal_params_factory((3, 5))
+        td_truncated_normal = TensorTruncatedNormal(**params)
         assert_property_values_match(td_truncated_normal)
 
 
 class TestTensorTruncatedNormalMethods:
     @pytest.mark.parametrize("batch_shape", [(), (1,), (2, 3)])
     @pytest.mark.parametrize("event_shape", [(), (1,), (2, 3)])
-    def test_truncated_normal_methods(self, batch_shape, event_shape, device):
+    def test_truncated_normal_methods(
+        self, batch_shape, event_shape, truncated_normal_params_factory
+    ):
+        # Create parameters with the specific shape for this test
         loc_param_shape = batch_shape + event_shape
-        loc = torch.randn(loc_param_shape, device=device)
-        scale = torch.rand(loc_param_shape, device=device) + 1e-6
-        low = torch.randn(loc_param_shape, device=device)
-        high = low + torch.rand(loc_param_shape, device=device) + 1e-6
+        params = truncated_normal_params_factory(loc_param_shape)
 
-        dist = TensorTruncatedNormal(loc=loc, scale=scale, low=low, high=high)
+        dist = TensorTruncatedNormal(**params)
 
         # Test rsample
         sample = dist.rsample()
@@ -88,15 +105,11 @@ class TestTensorTruncatedNormalMethods:
 
 class TestTensorTruncatedNormalCompileCompatibility:
     @pytest.mark.parametrize("param_shape", [(5,), (3, 5), (2, 4, 5)])
-    def test_compile_compatibility(self, param_shape, device):
-        loc = torch.randn(*param_shape, device=device)
-        scale = torch.rand(*param_shape, device=device) + 1e-6
-        low = torch.randn(*param_shape, device=device)
-        high = low + torch.rand(*param_shape, device=device) + 1e-6
+    def test_compile_compatibility(self, param_shape, truncated_normal_params_factory):
+        # Create parameters with the specific shape for this test
+        params = truncated_normal_params_factory(param_shape)
 
-        td_truncated_normal = TensorTruncatedNormal(
-            loc=loc, scale=scale, low=low, high=high, validate_args=False
-        )
+        td_truncated_normal = TensorTruncatedNormal(**params, validate_args=False)
 
         def rsample_fn(td):
             return td.rsample()
@@ -109,3 +122,21 @@ class TestTensorTruncatedNormalCompileCompatibility:
         run_and_compare_compiled(
             log_prob_fn, td_truncated_normal, value, fullgraph=False
         )
+
+
+class TestTensorTruncatedNormalPyTreeIntegration:
+    @pytest.mark.parametrize("batch_shape", [(), (1,), (2, 3)])
+    def test_copy_pytree_integration(
+        self, batch_shape, truncated_normal_params_factory
+    ):
+        """
+        We use the copy method as a proxy to ensure pytree integration (e.g. unflattening)
+        works correctly.
+        """
+        loc_param_shape = batch_shape
+        params = truncated_normal_params_factory(loc_param_shape)
+
+        dist = TensorTruncatedNormal(**params)
+
+        # Test copy operation which triggers _unflatten_distribution
+        dist.copy()

@@ -34,8 +34,9 @@ class TensorLowRankMultivariateNormal(TensorDistribution):
         self._loc = loc
         self._cov_factor = cov_factor
         self._cov_diag = cov_diag
+
         super().__init__(
-            shape=loc.shape, device=loc.device, validate_args=validate_args
+            shape=loc.shape[:-1], device=loc.device, validate_args=validate_args
         )
 
     def dist(self) -> TorchLowRankMultivariateNormal:

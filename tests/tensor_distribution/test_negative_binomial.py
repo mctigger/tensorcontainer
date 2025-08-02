@@ -26,10 +26,13 @@ class TestTensorNegativeBinomialAPIMatch:
     def test_init_total_count_non_positive_raises_error(self, total_count_type):
         """A ValueError should be raised when total_count is non-positive."""
         if total_count_type == "int":
-            total_count = 0
+            total_count = -1
         else:
-            total_count = torch.tensor(0.0)
-        with pytest.raises(ValueError, match="total_count must be positive"):
+            total_count = torch.tensor(-1.0)
+        with pytest.raises(
+            ValueError,
+            match="Expected parameter total_count.*to satisfy the constraint GreaterThanEq.*but found invalid values",
+        ):
             TensorNegativeBinomial(total_count=total_count, probs=torch.rand(5))
 
     def test_init_both_params_raises_error(self):

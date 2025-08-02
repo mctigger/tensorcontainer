@@ -36,9 +36,7 @@ class TensorMultivariateNormal(TensorDistribution):
         self._covariance_matrix = covariance_matrix
         self._precision_matrix = precision_matrix
         self._scale_tril = scale_tril
-        super().__init__(
-            loc.shape, loc.device, validate_args
-        )  # Call super().__init__ here
+        super().__init__(loc.shape[:-1], loc.device, validate_args)
 
     def dist(self) -> MultivariateNormal:
         return MultivariateNormal(

@@ -1,75 +1,41 @@
-from typing import Tuple
+from __future__ import annotations
 
-import torch
 from torch import Tensor
+from torch.distributions.utils import broadcast_all as torch_broadcast_all
+from torch.types import Number
 
 
-def _process_args(
-    *args: Tensor,
-) -> Tuple[torch.Size, torch.Size, torch.dtype, torch.device]:
+def broadcast_all(*values: Number | Tensor) -> tuple[Tensor, ...]:
     """
-    Processes a sequence of tensors to determine their common batch shape, event shape, dtype, and device.
+    Broadcast all input values to a common shape.
+
+    Given a list of values (possibly containing numbers), returns a tuple where each
+    value is broadcasted based on the following rules:
+      - `torch.Tensor` instances are broadcasted as per broadcasting semantics.
+      - Number instances (scalars) are upcast to tensors having
+        the same size and type as the first tensor passed to `values`.  If all the
+        values are scalars, then they are upcasted to scalar Tensors.
 
     Args:
-        *args: A sequence of tensors.
+        *values: Variable number of arguments, each being a Number | Tensor,
+                or objects implementing __torch_function__
 
     Returns:
-        A tuple containing:
-            - batch_shape (torch.Size): The common batch shape.
-            - event_shape (torch.Size): The common event shape (derived from the last two dimensions for matrices).
-            - dtype (torch.dtype): The common data type.
-            - device (torch.device): The common device.
+        tuple[Tensor, ...]: Tuple of broadcasted tensors
+
+    Raises:
+        ValueError: if any of the values is not a Number instance,
+            a torch.Tensor instance, or an instance implementing __torch_function__
+
+    Example:
+        >>> import torch
+        >>> from tensorcontainer.tensor_distribution.utils import broadcast_all
+        >>> loc = torch.tensor([0.0, 1.0])
+        >>> scale = 1.0
+        >>> broadcasted_loc, broadcasted_scale = broadcast_all(loc, scale)
+        >>> broadcasted_loc.shape
+        torch.Size([2])
+        >>> broadcasted_scale.shape
+        torch.Size([2])
     """
-    if not args:
-        return (
-            torch.Size(),
-            torch.Size(),
-            torch.get_default_dtype(),
-            torch.device("cpu"),
-        )
-
-    non_none_args = [arg for arg in args if arg is not None]  # type: ignore
-    if not non_none_args:
-        return (
-            torch.Size(),
-            torch.Size(),
-            torch.get_default_dtype(),
-            torch.device("cpu"),
-        )
-
-    # Determine common dtype and device
-    dtype = non_none_args[0].dtype
-    device = non_none_args[0].device
-    for arg in non_none_args:
-        if arg.dtype != dtype:
-            # Promote dtype if necessary (simple promotion for now, can be more sophisticated)
-            if arg.dtype == torch.float64 or dtype == torch.float64:
-                dtype = torch.float64
-            elif arg.dtype == torch.float32 or dtype == torch.float32:
-                dtype = torch.float32
-        if arg.device != device:
-            # If devices differ, it's an error or requires explicit handling
-            # For now, assume all tensors are on the same device or will be moved
-            pass
-
-    # Determine common batch shape from all tensors
-    batch_shapes = [
-        arg.shape[:-2] if arg.ndim >= 2 else arg.shape for arg in non_none_args
-    ]
-    batch_shape = torch.broadcast_shapes(*batch_shapes)
-
-    # Determine common event shape only from tensors that are matrices (ndim >= 2)
-    matrix_args = [arg for arg in non_none_args if arg.ndim >= 2]
-    if len(matrix_args) > 0:
-        event_shapes = [arg.shape[-2:] for arg in matrix_args]
-        first_event_shape = event_shapes[0]
-        for es in event_shapes:
-            if es != first_event_shape:
-                raise ValueError(
-                    "Inconsistent event shapes among matrix input tensors."
-                )
-        event_shape = first_event_shape
-    else:
-        event_shape = torch.Size()  # No matrix inputs, so no event shape
-
-    return batch_shape, event_shape, dtype, device
+    return torch_broadcast_all(*values)

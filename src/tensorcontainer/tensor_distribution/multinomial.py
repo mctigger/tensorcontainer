@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, Optional
 
 from torch import Size, Tensor
 from torch.distributions import Multinomial
@@ -18,27 +18,16 @@ class TensorMultinomial(TensorDistribution):
 
     def __init__(
         self,
-        total_count: Union[int, Tensor] = 1,
+        total_count: int = 1,
         probs: Optional[Tensor] = None,
         logits: Optional[Tensor] = None,
         validate_args: Optional[bool] = None,
     ):
-        if probs is None and logits is None:
-            raise RuntimeError("Either 'probs' or 'logits' must be provided.")
-        if probs is not None and logits is not None:
-            raise RuntimeError("Only one of 'probs' or 'logits' can be provided.")
-
         data = probs if probs is not None else logits
-        if (
-            data is None
-        ):  # This case is already handled by the above checks, but for mypy
-            raise RuntimeError("Internal error: data tensor is None.")
+        if data is None:
+            raise RuntimeError("Either 'probs' or 'logits' must be provided.")
 
-        # Store the parameters in annotated attributes before calling super().__init__()
-        if isinstance(total_count, Tensor):
-            self._total_count = int(total_count.item())
-        else:
-            self._total_count = total_count
+        self._total_count = total_count
         self._probs = probs
         self._logits = logits
 
@@ -68,9 +57,6 @@ class TensorMultinomial(TensorDistribution):
             logits=self._logits,
             validate_args=self._validate_args,
         )
-
-    def log_prob(self, value: Tensor) -> Tensor:
-        return self.dist().log_prob(value)
 
     @property
     def total_count(self) -> int:

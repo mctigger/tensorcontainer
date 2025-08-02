@@ -56,21 +56,6 @@ class TensorBernoulli(TensorDistribution):
             probs=self._probs, logits=self._logits, validate_args=self._validate_args
         )
 
-    def log_prob(self, value: Tensor) -> Tensor:
-        return self.dist().log_prob(value)
-
-    @property
-    def mean(self) -> Tensor:
-        return self.dist().mean
-
-    @property
-    def variance(self) -> Tensor:
-        return self.dist().variance
-
-    @property
-    def mode(self) -> Tensor:
-        return self.dist().mode
-
     @property
     def logits(self) -> Tensor:
         return self.dist().logits

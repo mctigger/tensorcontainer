@@ -61,9 +61,6 @@ class TensorCategorical(TensorDistribution):
             probs=self._probs, logits=self._logits, validate_args=self._validate_args
         )
 
-    def log_prob(self, value: Tensor) -> Tensor:
-        return self.dist().log_prob(value)
-
     @property
     def logits(self) -> Tensor:
         """Returns the logits used to initialize the distribution."""

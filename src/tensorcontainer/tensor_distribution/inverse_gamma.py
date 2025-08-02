@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any, Dict, Optional, Union
 
 from torch import Tensor
-from torch.distributions import InverseGamma as TorchInverseGamma
+from torch.distributions import InverseGamma
 from torch.distributions.utils import broadcast_all
 
 from .base import TensorDistribution
@@ -40,18 +40,15 @@ class TensorInverseGamma(TensorDistribution):
             validate_args=attributes.get("_validate_args"),
         )
 
-    def dist(self) -> TorchInverseGamma:
+    def dist(self) -> InverseGamma:
         """
         Returns the underlying torch.distributions.InverseGamma instance.
         """
-        return TorchInverseGamma(
+        return InverseGamma(
             concentration=self._concentration,
             rate=self._rate,
             validate_args=self._validate_args,
         )
-
-    def log_prob(self, value: Tensor) -> Tensor:
-        return self.dist().log_prob(value)
 
     @property
     def concentration(self) -> Tensor:

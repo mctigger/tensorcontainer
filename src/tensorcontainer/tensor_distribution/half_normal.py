@@ -19,8 +19,6 @@ class TensorHalfNormal(TensorDistribution):
     def __init__(
         self, scale: Union[Tensor, float], validate_args: Optional[bool] = None
     ):
-        # Store the parameters in annotated attributes before calling super().__init__()
-        # This is required because super().__init__() calls self.dist() which needs these attributes
         (self._scale,) = broadcast_all(scale)
 
         shape = self._scale.shape
@@ -38,14 +36,6 @@ class TensorHalfNormal(TensorDistribution):
 
     def dist(self) -> HalfNormal:
         return HalfNormal(scale=self._scale, validate_args=self._validate_args)
-
-    def log_prob(self, value: Tensor) -> Tensor:
-        return self.dist().log_prob(value)
-
-    @property
-    def variance(self) -> Tensor:
-        """Returns the variance of the HalfNormal distribution."""
-        return self.dist().variance
 
     @property
     def scale(self) -> Tensor:
