@@ -1,22 +1,28 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
-import torch
 from torch import Tensor
 from torch.distributions import Uniform
 
 from .base import TensorDistribution
+from .utils import broadcast_all
 
 
 class TensorUniform(TensorDistribution):
-    _low: Optional[Tensor] = None
-    _high: Optional[Tensor] = None
+    _low: Tensor
+    _high: Tensor
 
-    def __init__(self, low: Tensor, high: Tensor, validate_args: Optional[bool] = None):
-        low, high = torch.broadcast_tensors(low, high)
+    def __init__(
+        self,
+        low: float | Tensor,
+        high: float | Tensor,
+        validate_args: bool | None = None,
+    ):
+        low, high = broadcast_all(low, high)
         self._low = low
         self._high = high
+
         super().__init__(low.shape, low.device, validate_args)
 
     @classmethod
@@ -25,8 +31,8 @@ class TensorUniform(TensorDistribution):
         attributes: Dict[str, Any],
     ) -> TensorUniform:
         return cls(
-            low=attributes.get("_low"),  # type: ignore
-            high=attributes.get("_high"),  # type: ignore
+            low=attributes["_low"],
+            high=attributes["_high"],
             validate_args=attributes.get("_validate_args"),
         )
 
@@ -35,9 +41,6 @@ class TensorUniform(TensorDistribution):
             low=self._low, high=self._high, validate_args=self._validate_args
         )
 
-    def log_prob(self, value: Tensor) -> Tensor:
-        return self.dist().log_prob(value)
-
     @property
     def low(self) -> Tensor:
         return self.dist().low
@@ -45,15 +48,3 @@ class TensorUniform(TensorDistribution):
     @property
     def high(self) -> Tensor:
         return self.dist().high
-
-    @property
-    def mean(self) -> Tensor:
-        return self.dist().mean
-
-    @property
-    def variance(self) -> Tensor:
-        return self.dist().variance
-
-    @property
-    def stddev(self) -> Tensor:
-        return self.dist().stddev
