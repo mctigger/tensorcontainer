@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from functools import cached_property
-from typing import Any, Dict, Optional, get_args
+from typing import Any, Dict, Optional
 
 import torch
 from torch import Tensor
@@ -12,7 +12,6 @@ from torch.distributions import (
     constraints,
 )
 from torch.distributions.utils import broadcast_all
-from torch.types import Number
 
 from ..distributions.sampling import SamplingDistribution
 from .base import TensorDistribution
@@ -77,11 +76,7 @@ class TensorTanhNormal(TensorDistribution):
     ):
         self._loc, self._scale = broadcast_all(loc, scale)
 
-        if isinstance(loc, get_args(Number)) and isinstance(scale, get_args(Number)):
-            shape = tuple()
-        else:
-            shape = self._loc.shape
-
+        shape = self._loc.shape
         device = self._loc.device
 
         super().__init__(shape, device, validate_args)
@@ -91,10 +86,9 @@ class TensorTanhNormal(TensorDistribution):
         cls,
         attributes: Dict[str, Any],
     ) -> TensorTanhNormal:
-        """Reconstruct distribution from tensor attributes."""
         return cls(
-            loc=attributes.get("_loc"),  # type: ignore
-            scale=attributes.get("_scale"),  # type: ignore
+            loc=attributes["_loc"],
+            scale=attributes["_scale"],
             validate_args=attributes.get("_validate_args"),
         )
 
