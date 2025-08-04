@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from typing import Any
 
 from torch.distributions import Distribution
 from torch.distributions import TransformedDistribution as TorchTransformedDistribution
@@ -30,6 +31,16 @@ class TransformedDistribution(TensorDistribution):
         self.transforms = transforms
         super().__init__(
             base_distribution.batch_shape, base_distribution.device, validate_args
+        )
+
+    @classmethod
+    def _unflatten_distribution(
+        cls, attributes: dict[str, Any]
+    ) -> TransformedDistribution:
+        return cls(
+            base_distribution=attributes["base_distribution"],
+            transforms=attributes["transforms"],
+            validate_args=attributes.get("_validate_args"),
         )
 
     def dist(self) -> Distribution:
