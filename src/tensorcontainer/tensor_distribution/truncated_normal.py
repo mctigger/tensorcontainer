@@ -4,7 +4,7 @@ from typing import Any
 
 from torch import Tensor
 from torch.distributions import Distribution
-from torch.distributions.utils import broadcast_all
+from .utils import broadcast_all
 
 from tensorcontainer.distributions.truncated_normal import TruncatedNormal
 

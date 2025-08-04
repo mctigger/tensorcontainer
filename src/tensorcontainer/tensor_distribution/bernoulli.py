@@ -4,7 +4,7 @@ from typing import Any
 
 from torch import Size, Tensor
 from torch.distributions import Bernoulli
-from torch.distributions.utils import broadcast_all
+from .utils import broadcast_all
 from torch.types import Number
 
 from .base import TensorDistribution

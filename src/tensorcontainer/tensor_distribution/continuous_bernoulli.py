@@ -5,7 +5,7 @@ from typing import Any
 import torch
 from torch import Tensor
 from torch.distributions import ContinuousBernoulli as TorchContinuousBernoulli
-from torch.distributions.utils import broadcast_all
+from .utils import broadcast_all
 from torch.types import Number
 
 from .base import TensorDistribution

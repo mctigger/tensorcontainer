@@ -11,7 +11,7 @@ from torch.distributions import (
     TransformedDistribution,
     constraints,
 )
-from torch.distributions.utils import broadcast_all
+from .utils import broadcast_all
 
 from ..distributions.sampling import SamplingDistribution
 from .base import TensorDistribution

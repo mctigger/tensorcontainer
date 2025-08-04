@@ -4,7 +4,7 @@ from typing import Any
 
 from torch import Tensor
 from torch.distributions import Chi2 as TorchChi2
-from torch.distributions.utils import broadcast_all
+from .utils import broadcast_all
 
 from tensorcontainer.tensor_distribution.base import TensorDistribution
 
