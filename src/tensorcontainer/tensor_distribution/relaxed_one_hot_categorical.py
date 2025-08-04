@@ -27,13 +27,13 @@ class TensorRelaxedOneHotCategorical(TensorDistribution):
         That is why we only allowed scalar temperatures for now.
         """
         if temperature.ndim > 0:
-            raise RuntimeError(
+            raise ValueError(
                 "Expected scalar temperature tensor. This is because of a bug in torch: https://github.com/pytorch/pytorch/issues/37162"
             )
 
         data = probs if probs is not None else logits
         if data is None:
-            raise RuntimeError("Either 'probs' or 'logits' must be provided.")
+            raise ValueError("Either 'probs' or 'logits' must be provided.")
 
         # Determine shape and device from data (probs or logits)
         shape = data.shape[:-1]

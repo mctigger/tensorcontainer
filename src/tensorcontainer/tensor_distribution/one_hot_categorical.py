@@ -26,7 +26,7 @@ class TensorOneHotCategorical(TensorDistribution):
         # check here to safely derive shape and device from the data tensor
         # before calling the parent constructor
         if data is None:
-            raise RuntimeError("Either 'probs' or 'logits' must be provided.")
+            raise ValueError("Either 'probs' or 'logits' must be provided.")
 
         # Store the parameters in annotated attributes before calling super().__init__()
         # This is required because super().__init__() calls self.dist() which needs these attributes

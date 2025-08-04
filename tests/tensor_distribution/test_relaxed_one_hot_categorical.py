@@ -45,7 +45,7 @@ class TestTensorRelaxedOneHotCategoricalInitialization:
     def test_init_no_params_raises_error(self):
         """A RuntimeError should be raised when neither probs nor logits are provided."""
         with pytest.raises(
-            RuntimeError, match="Either 'probs' or 'logits' must be provided."
+            ValueError, match="Either 'probs' or 'logits' must be provided."
         ):
             TensorRelaxedOneHotCategorical(temperature=torch.tensor(0.5))
 

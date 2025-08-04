@@ -25,7 +25,7 @@ class TensorMultinomial(TensorDistribution):
     ):
         data = probs if probs is not None else logits
         if data is None:
-            raise RuntimeError("Either 'probs' or 'logits' must be provided.")
+            raise ValueError("Either 'probs' or 'logits' must be provided.")
 
         self._total_count = total_count
         self._probs = probs
@@ -83,4 +83,4 @@ class TensorMultinomial(TensorDistribution):
         elif self._logits is not None:
             return self._logits.shape
         else:
-            raise RuntimeError("Neither probs nor logits are available.")
+            raise ValueError("Neither probs nor logits are available.")
