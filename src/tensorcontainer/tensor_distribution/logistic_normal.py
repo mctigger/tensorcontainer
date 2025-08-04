@@ -17,10 +17,17 @@ class TensorLogisticNormal(TensorDistribution):
     def __init__(
         self, loc: Tensor, scale: Tensor, validate_args: Optional[bool] = None
     ):
-        self._loc, self._scale = broadcast_all(loc, scale)
+        loc, scale = broadcast_all(loc, scale)
 
-        shape = self._loc.shape
-        device = self._loc.device
+        if loc.ndim == 0:
+            loc = loc.expand(1)
+            scale = scale.expand(1)
+
+        self._loc = loc
+        self._scale = scale
+
+        shape = loc.shape
+        device = loc.device
 
         super().__init__(shape, device, validate_args)
 
