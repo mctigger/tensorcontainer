@@ -54,4 +54,3 @@ class TensorLogisticNormal(TensorDistribution):
             scale=attributes["_scale"],
             validate_args=attributes.get("_validate_args"),
         )
-
