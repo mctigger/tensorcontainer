@@ -25,7 +25,8 @@ class TestTensorMultinomialAPIMatch:
     def test_init_both_params_raises_error(self):
         """A RuntimeError should be raised when both probs and logits are provided."""
         with pytest.raises(
-            ValueError, match="Either `probs` or `logits` must be specified, but not both."
+            ValueError,
+            match="Either `probs` or `logits` must be specified, but not both.",
         ):
             TensorMultinomial(probs=torch.rand(5), logits=torch.randn(5))
 
