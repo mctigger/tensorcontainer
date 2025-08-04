@@ -11,10 +11,9 @@ from .base import TensorDistribution
 class TensorRelaxedOneHotCategorical(TensorDistribution):
     """Tensor-aware RelaxedCategorical distribution."""
 
-    _temperature: tuple[Tensor]
+    _temperature: tuple[Tensor, ...]
     _probs: Tensor | None = None
     _logits: Tensor | None = None
-    _validate_args: bool | None = None
 
     def __init__(
         self,
@@ -44,9 +43,8 @@ class TensorRelaxedOneHotCategorical(TensorDistribution):
         self._temperature = (temperature,)
         self._probs = probs
         self._logits = logits
-        self._validate_args = validate_args
 
-        super().__init__(shape, device)
+        super().__init__(shape, device, validate_args)
 
     @classmethod
     def _unflatten_distribution(

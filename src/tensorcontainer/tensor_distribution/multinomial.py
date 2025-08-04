@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any
 
 from torch import Size, Tensor
 from torch.distributions import Multinomial
@@ -13,15 +13,15 @@ class TensorMultinomial(TensorDistribution):
 
     # Annotated tensor parameters
     _total_count: int
-    _probs: Optional[Tensor] = None
-    _logits: Optional[Tensor] = None
+    _probs: Tensor | None = None
+    _logits: Tensor | None = None
 
     def __init__(
         self,
         total_count: int = 1,
-        probs: Optional[Tensor] = None,
-        logits: Optional[Tensor] = None,
-        validate_args: Optional[bool] = None,
+        probs: Tensor | None = None,
+        logits: Tensor | None = None,
+        validate_args: bool | None = None,
     ):
         data = probs if probs is not None else logits
         if data is None:
@@ -40,7 +40,7 @@ class TensorMultinomial(TensorDistribution):
     @classmethod
     def _unflatten_distribution(
         cls,
-        attributes: Dict[str, Any],
+        attributes: dict[str, Any],
     ) -> TensorMultinomial:
         """Reconstruct distribution from tensor attributes."""
         return cls(
@@ -64,12 +64,12 @@ class TensorMultinomial(TensorDistribution):
         return self._total_count
 
     @property
-    def logits(self) -> Optional[Tensor]:
+    def logits(self) -> Tensor | None:
         """Returns the logits used to initialize the distribution."""
         return self.dist().logits  # Access directly
 
     @property
-    def probs(self) -> Optional[Tensor]:
+    def probs(self) -> Tensor | None:
         """Returns the probabilities used to initialize the distribution."""
         return self.dist().probs  # Access directly
 

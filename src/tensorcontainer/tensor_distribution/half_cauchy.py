@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any
 
 from torch import Tensor
 from torch.distributions import HalfCauchy
@@ -15,7 +15,7 @@ class TensorHalfCauchy(TensorDistribution):
     # Annotated tensor parameters
     _scale: Tensor
 
-    def __init__(self, scale: float | Tensor, validate_args: Optional[bool] = None):
+    def __init__(self, scale: float | Tensor, validate_args: bool | None = None):
         (self._scale,) = broadcast_all(scale)
 
         shape = self._scale.shape
@@ -26,7 +26,7 @@ class TensorHalfCauchy(TensorDistribution):
     @classmethod
     def _unflatten_distribution(
         cls,
-        attributes: Dict[str, Any],
+        attributes: dict[str, Any],
     ) -> TensorHalfCauchy:
         """Reconstruct distribution from tensor attributes."""
         return cls(

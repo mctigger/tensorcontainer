@@ -1,4 +1,6 @@
-from typing import Any, Dict, Optional, Tuple, Union
+from __future__ import annotations
+
+from typing import Any
 
 import torch
 from torch import Tensor
@@ -10,16 +12,16 @@ from .base import TensorDistribution
 
 
 class TensorContinuousBernoulli(TensorDistribution):
-    _probs: Optional[Tensor]
-    _logits: Optional[Tensor]
-    _lims: Tuple[float, float]
+    _probs: Tensor | None
+    _logits: Tensor | None
+    _lims: tuple[float, float]
 
     def __init__(
         self,
-        probs: Optional[Union[Tensor, Number]] = None,
-        logits: Optional[Union[Tensor, Number]] = None,
-        lims: Tuple[float, float] = (0.499, 0.501),
-        validate_args: Optional[bool] = None,
+        probs: Tensor | Number | None = None,
+        logits: Tensor | Number | None = None,
+        lims: tuple[float, float] = (0.499, 0.501),
+        validate_args: bool | None = None,
     ) -> None:
         self._lims = lims
         if (probs is None) == (logits is None):
@@ -52,7 +54,7 @@ class TensorContinuousBernoulli(TensorDistribution):
     @classmethod
     def _unflatten_distribution(
         cls,
-        attributes: Dict[str, Any],
+        attributes: dict[str, Any],
     ) -> "TensorContinuousBernoulli":
         return cls(
             probs=attributes.get("_probs"),

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Optional, Union
+from typing import Any
 
 from torch import Tensor
 from torch.distributions import Geometric
@@ -14,14 +14,14 @@ class TensorGeometric(TensorDistribution):
     """Tensor-aware Geometric distribution."""
 
     # Annotated tensor parameters
-    _probs: Optional[Tensor]
-    _logits: Optional[Tensor]
+    _probs: Tensor | None
+    _logits: Tensor | None
 
     def __init__(
         self,
-        probs: Optional[Union[Number, Tensor]] = None,
-        logits: Optional[Union[Number, Tensor]] = None,
-        validate_args: Optional[bool] = None,
+        probs: Number | Tensor | None = None,
+        logits: Number | Tensor | None = None,
+        validate_args: bool | None = None,
     ):
         if (probs is None) == (logits is None):
             raise ValueError(
@@ -45,7 +45,7 @@ class TensorGeometric(TensorDistribution):
     @classmethod
     def _unflatten_distribution(
         cls,
-        attributes: Dict[str, Any],
+        attributes: dict[str, Any],
     ) -> TensorGeometric:
         """Reconstruct distribution from tensor attributes."""
         return cls(
@@ -60,11 +60,11 @@ class TensorGeometric(TensorDistribution):
         )
 
     @property
-    def probs(self) -> Optional[Tensor]:
+    def probs(self) -> Tensor | None:
         """Returns the probabilities used to initialize the distribution."""
         return self.dist().probs
 
     @property
-    def logits(self) -> Optional[Tensor]:
+    def logits(self) -> Tensor | None:
         """Returns the logits used to initialize the distribution."""
         return self.dist().logits

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any
 
 from torch import Tensor
 from torch.distributions import Uniform
@@ -28,7 +28,7 @@ class TensorUniform(TensorDistribution):
     @classmethod
     def _unflatten_distribution(
         cls,
-        attributes: Dict[str, Any],
+        attributes: dict[str, Any],
     ) -> TensorUniform:
         return cls(
             low=attributes["_low"],

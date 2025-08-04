@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Optional, Union
+from typing import Any
 
 from torch import Size, Tensor
 from torch.distributions import Binomial
@@ -24,15 +24,15 @@ class TensorBinomial(TensorDistribution):
 
     # Annotated tensor parameters
     _total_count: Tensor
-    _probs: Optional[Tensor] = None
-    _logits: Optional[Tensor] = None
+    _probs: Tensor | None = None
+    _logits: Tensor | None = None
 
     def __init__(
         self,
-        total_count: Union[int, Tensor] = 1,
-        probs: Optional[Tensor] = None,
-        logits: Optional[Tensor] = None,
-        validate_args: Optional[bool] = None,
+        total_count: int | Tensor = 1,
+        probs: Tensor | None = None,
+        logits: Tensor | None = None,
+        validate_args: bool | None = None,
     ):
         if (probs is None) == (logits is None):
             raise ValueError(
@@ -50,7 +50,7 @@ class TensorBinomial(TensorDistribution):
         super().__init__(shape, device, validate_args)
 
     @classmethod
-    def _unflatten_distribution(cls, attributes: Dict[str, Any]):
+    def _unflatten_distribution(cls, attributes: dict[str, Any]):
         total_count = attributes["_total_count"]
         probs = attributes["_probs"]
         logits = attributes["_logits"]
@@ -76,12 +76,12 @@ class TensorBinomial(TensorDistribution):
         return self._total_count
 
     @property
-    def probs(self) -> Optional[Tensor]:
+    def probs(self) -> Tensor | None:
         """Returns the probs parameter of the distribution."""
         return self.dist().probs
 
     @property
-    def logits(self) -> Optional[Tensor]:
+    def logits(self) -> Tensor | None:
         """Returns the logits parameter of the distribution."""
         return self.dist().logits
 

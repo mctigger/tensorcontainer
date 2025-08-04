@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Optional, Union
+from typing import Any
 
 from torch import Tensor
 from torch.distributions import Exponential as TorchExponential
@@ -19,9 +19,7 @@ class TensorExponential(TensorDistribution):
 
     _rate: Tensor
 
-    def __init__(
-        self, rate: Union[float, Tensor], validate_args: Optional[bool] = None
-    ):
+    def __init__(self, rate: float | Tensor, validate_args: bool | None = None):
         (self._rate,) = broadcast_all(rate)
 
         shape = self._rate.shape
@@ -32,7 +30,7 @@ class TensorExponential(TensorDistribution):
     @classmethod
     def _unflatten_distribution(
         cls,
-        attributes: Dict[str, Any],
+        attributes: dict[str, Any],
     ) -> "TensorExponential":
         return cls(
             rate=attributes["_rate"], validate_args=attributes.get("_validate_args")

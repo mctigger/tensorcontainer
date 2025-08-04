@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Optional, Union
+from typing import Any
 
 from torch import Size, Tensor
 from torch.distributions import NegativeBinomial
@@ -14,15 +14,15 @@ class TensorNegativeBinomial(TensorDistribution):
 
     # Annotated tensor parameters
     _total_count: Tensor
-    _probs: Optional[Tensor] = None
-    _logits: Optional[Tensor] = None
+    _probs: Tensor | None = None
+    _logits: Tensor | None = None
 
     def __init__(
         self,
-        total_count: Union[float, Tensor],
-        probs: Optional[Tensor] = None,
-        logits: Optional[Tensor] = None,
-        validate_args: Optional[bool] = None,
+        total_count: float | Tensor,
+        probs: Tensor | None = None,
+        logits: Tensor | None = None,
+        validate_args: bool | None = None,
     ):
         if probs is not None and logits is not None:
             raise ValueError("Only one of 'probs' or 'logits' can be specified.")
@@ -43,7 +43,7 @@ class TensorNegativeBinomial(TensorDistribution):
 
     @classmethod
     def _unflatten_distribution(
-        cls, attributes: Dict[str, Any]
+        cls, attributes: dict[str, Any]
     ) -> TensorNegativeBinomial:
         """Reconstruct distribution from tensor attributes."""
         return cls(
@@ -67,12 +67,12 @@ class TensorNegativeBinomial(TensorDistribution):
         return self.dist().total_count
 
     @property
-    def logits(self) -> Optional[Tensor]:
+    def logits(self) -> Tensor | None:
         """Returns the logits used to initialize the distribution."""
         return self.dist().logits
 
     @property
-    def probs(self) -> Optional[Tensor]:
+    def probs(self) -> Tensor | None:
         """Returns the probabilities used to initialize the distribution."""
         return self.dist().probs
 

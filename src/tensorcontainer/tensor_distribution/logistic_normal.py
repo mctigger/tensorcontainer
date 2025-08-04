@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any
 
 from torch import Tensor
 from torch.distributions import LogisticNormal as TorchLogisticNormal
@@ -14,9 +14,7 @@ class TensorLogisticNormal(TensorDistribution):
     _loc: Tensor
     _scale: Tensor
 
-    def __init__(
-        self, loc: Tensor, scale: Tensor, validate_args: Optional[bool] = None
-    ):
+    def __init__(self, loc: Tensor, scale: Tensor, validate_args: bool | None = None):
         loc, scale = broadcast_all(loc, scale)
 
         if loc.ndim == 0:
@@ -49,10 +47,11 @@ class TensorLogisticNormal(TensorDistribution):
     @classmethod
     def _unflatten_distribution(
         cls,
-        attributes: Dict[str, Any],
+        attributes: dict[str, Any],
     ) -> TensorLogisticNormal:
         return cls(
-            loc=attributes["loc"],
-            scale=attributes["scale"],
+            loc=attributes["_loc"],
+            scale=attributes["_scale"],
             validate_args=attributes.get("_validate_args"),
         )
+

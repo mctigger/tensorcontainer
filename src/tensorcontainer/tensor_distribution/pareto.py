@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Optional, Union
+from typing import Any
 
 from torch import Tensor
 from torch.distributions import Pareto as TorchPareto
@@ -31,16 +31,16 @@ class TensorPareto(TensorDistribution):
 
     def __init__(
         self,
-        scale: Union[float, Tensor],
-        alpha: Union[float, Tensor],
-        validate_args: Optional[bool] = None,
+        scale: float | Tensor,
+        alpha: float | Tensor,
+        validate_args: bool | None = None,
     ) -> None:
         self._scale, self._alpha = broadcast_all(scale, alpha)
 
         super().__init__(self._scale.shape, self._scale.device, validate_args)
 
     @classmethod
-    def _unflatten_distribution(cls, attributes: Dict[str, Any]) -> TensorPareto:
+    def _unflatten_distribution(cls, attributes: dict[str, Any]) -> TensorPareto:
         """Reconstruct distribution from tensor attributes."""
         return cls(
             scale=attributes["_scale"],  # type: ignore

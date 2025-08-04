@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any
 
 from torch import Tensor
 from torch.distributions import Laplace
@@ -20,7 +20,7 @@ class TensorLaplace(TensorDistribution):
         self,
         loc: Tensor | float,
         scale: Tensor | float,
-        validate_args: Optional[bool] = None,
+        validate_args: bool | None = None,
     ):
         self._loc, self._scale = broadcast_all(loc, scale)
         shape = self._loc.shape
@@ -28,7 +28,7 @@ class TensorLaplace(TensorDistribution):
         super().__init__(shape, device, validate_args)
 
     @classmethod
-    def _unflatten_distribution(cls, attributes: Dict[str, Any]) -> TensorLaplace:
+    def _unflatten_distribution(cls, attributes: dict[str, Any]) -> TensorLaplace:
         """Reconstruct distribution from tensor attributes."""
         return cls(
             loc=attributes["_loc"],
@@ -44,11 +44,11 @@ class TensorLaplace(TensorDistribution):
         )
 
     @property
-    def loc(self) -> Optional[Tensor]:
+    def loc(self) -> Tensor | None:
         """Returns the loc used to initialize the distribution."""
         return self.dist().loc
 
     @property
-    def scale(self) -> Optional[Tensor]:
+    def scale(self) -> Tensor | None:
         """Returns the scale used to initialize the distribution."""
         return self.dist().scale

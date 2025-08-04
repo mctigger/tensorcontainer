@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Optional, Union
+from typing import Any
 
 from torch import Tensor
 from torch.distributions import InverseGamma
@@ -17,9 +17,9 @@ class TensorInverseGamma(TensorDistribution):
 
     def __init__(
         self,
-        concentration: Union[float, Tensor],
-        rate: Union[float, Tensor],
-        validate_args: Optional[bool] = None,
+        concentration: float | Tensor,
+        rate: float | Tensor,
+        validate_args: bool | None = None,
     ):
         self._concentration, self._rate = broadcast_all(concentration, rate)
 
@@ -31,7 +31,7 @@ class TensorInverseGamma(TensorDistribution):
     @classmethod
     def _unflatten_distribution(
         cls,
-        attributes: Dict[str, Any],
+        attributes: dict[str, Any],
     ) -> TensorInverseGamma:
         """Reconstruct distribution from tensor attributes."""
         return cls(

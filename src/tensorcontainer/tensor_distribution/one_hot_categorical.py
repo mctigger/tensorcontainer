@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any
 
 from torch import Size, Tensor
 from torch.distributions import OneHotCategorical as TorchOneHotCategorical
@@ -12,14 +12,14 @@ class TensorOneHotCategorical(TensorDistribution):
     """Tensor-aware OneHotCategorical distribution."""
 
     # Annotated tensor parameters
-    _probs: Optional[Tensor] = None
-    _logits: Optional[Tensor] = None
+    _probs: Tensor | None = None
+    _logits: Tensor | None = None
 
     def __init__(
         self,
-        probs: Optional[Tensor] = None,
-        logits: Optional[Tensor] = None,
-        validate_args: Optional[bool] = None,
+        probs: Tensor | None = None,
+        logits: Tensor | None = None,
+        validate_args: bool | None = None,
     ):
         data = probs if probs is not None else logits
         # Parameter validation occurs in super().__init__(), but we need an early
@@ -45,7 +45,7 @@ class TensorOneHotCategorical(TensorDistribution):
     @classmethod
     def _unflatten_distribution(
         cls,
-        attributes: Dict[str, Any],
+        attributes: dict[str, Any],
     ) -> TensorOneHotCategorical:
         """Reconstruct distribution from tensor attributes."""
         return cls(
@@ -60,12 +60,12 @@ class TensorOneHotCategorical(TensorDistribution):
         )
 
     @property
-    def logits(self) -> Optional[Tensor]:
+    def logits(self) -> Tensor | None:
         """Returns the logits used to initialize the distribution."""
         return self.dist().logits
 
     @property
-    def probs(self) -> Optional[Tensor]:
+    def probs(self) -> Tensor | None:
         """Returns the probabilities used to initialize the distribution."""
         return self.dist().probs
 

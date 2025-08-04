@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Optional, Union
+from typing import Any
 
 from torch import Size, Tensor
 from torch.distributions import Bernoulli
@@ -14,14 +14,14 @@ class TensorBernoulli(TensorDistribution):
     """Tensor-aware Bernoulli distribution."""
 
     # Annotated tensor parameters
-    _probs: Optional[Tensor]
-    _logits: Optional[Tensor]
+    _probs: Tensor | None
+    _logits: Tensor | None
 
     def __init__(
         self,
-        probs: Optional[Union[Number, Tensor]] = None,
-        logits: Optional[Union[Number, Tensor]] = None,
-        validate_args: Optional[bool] = None,
+        probs: Number | Tensor | None = None,
+        logits: Number | Tensor | None = None,
+        validate_args: bool | None = None,
     ):
         if (probs is None) == (logits is None):
             raise ValueError(
@@ -43,7 +43,7 @@ class TensorBernoulli(TensorDistribution):
         super().__init__(shape, device, validate_args)
 
     @classmethod
-    def _unflatten_distribution(cls, attributes: Dict[str, Any]) -> TensorBernoulli:
+    def _unflatten_distribution(cls, attributes: dict[str, Any]) -> TensorBernoulli:
         """Reconstruct distribution from tensor attributes."""
         return cls(
             probs=attributes.get("_probs"),

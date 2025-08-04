@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any
 
 from torch import Tensor
 from torch.distributions import RelaxedBernoulli as TorchRelaxedBernoulli
@@ -47,7 +47,7 @@ class TensorRelaxedBernoulli(TensorDistribution):
 
     @classmethod
     def _unflatten_distribution(
-        cls, attributes: Dict[str, Any]
+        cls, attributes: dict[str, Any]
     ) -> "TensorRelaxedBernoulli":
         """Reconstruct distribution from tensor attributes."""
         return cls(
@@ -71,11 +71,11 @@ class TensorRelaxedBernoulli(TensorDistribution):
         return self.dist().temperature
 
     @property
-    def logits(self) -> Optional[Tensor]:
+    def logits(self) -> Tensor | None:
         """Returns the logits used to initialize the distribution."""
         return self.dist().logits
 
     @property
-    def probs(self) -> Optional[Tensor]:
+    def probs(self) -> Tensor | None:
         """Returns the probabilities used to initialize the distribution."""
         return self.dist().probs

@@ -1,4 +1,6 @@
-from typing import Any, Dict, Optional, Union
+from __future__ import annotations
+
+from typing import Any
 
 from torch import Tensor
 from torch.distributions import Chi2 as TorchChi2
@@ -18,7 +20,7 @@ class TensorChi2(TensorDistribution):
 
     _df: Tensor
 
-    def __init__(self, df: Union[float, Tensor], validate_args: Optional[bool] = None):
+    def __init__(self, df: float | Tensor, validate_args: bool | None = None):
         # Use broadcast_all to handle Union[float, Tensor] and ensure tensor conversion
         (self._df,) = broadcast_all(df)
 
@@ -28,7 +30,7 @@ class TensorChi2(TensorDistribution):
         return TorchChi2(df=self._df, validate_args=self._validate_args)
 
     @classmethod
-    def _unflatten_distribution(cls, attributes: Dict[str, Any]) -> "TensorChi2":
+    def _unflatten_distribution(cls, attributes: dict[str, Any]) -> "TensorChi2":
         return cls(df=attributes["_df"], validate_args=attributes.get("_validate_args"))
 
     @property

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Iterable, List, Tuple, TypeVar, Union, get_args
+from typing import Any, Iterable, TypeVar, get_args
 
 import torch
 from torch import Tensor
@@ -10,7 +10,7 @@ from typing_extensions import Self
 from tensorcontainer.tensor_container import TensorContainer
 from tensorcontainer.utils import PytreeRegistered
 
-TDCompatible = Union[Tensor, TensorContainer]
+TDCompatible = Tensor | TensorContainer
 DATACLASS_ARGS = {"init", "repr", "eq", "order", "unsafe_hash", "frozen", "slots"}
 
 
@@ -20,7 +20,7 @@ T_TensorAnnotated = TypeVar("T_TensorAnnotated", bound="TensorAnnotated")
 class TensorAnnotated(TensorContainer, PytreeRegistered):
     def __init__(
         self,
-        shape: torch.Size | List[int] | Tuple[int],
+        shape: torch.Size | list[int] | tuple[int, ...],
         device: str | torch.device | int | None,
     ):
         super().__init__(shape, device, True)
@@ -76,14 +76,14 @@ class TensorAnnotated(TensorContainer, PytreeRegistered):
         return meta_attributes
 
     def _get_pytree_context(
-        self, flat_names: List[str], flat_leaves: List[TDCompatible], meta_data
-    ) -> Tuple:
+        self, flat_names: list[str], flat_leaves: list[TDCompatible], meta_data
+    ) -> tuple:
         batch_ndim = len(self.shape)
         event_ndims = tuple(leaf.ndim - batch_ndim for leaf in flat_leaves)
 
         return flat_names, event_ndims, meta_data, self.device
 
-    def _pytree_flatten(self) -> Tuple[List[Any], Any]:
+    def _pytree_flatten(self) -> tuple[list[Any], Any]:
         tensor_attributes = self._get_tensor_attributes()
         flat_names = list(tensor_attributes.keys())
         flat_values = list(tensor_attributes.values())
@@ -132,8 +132,8 @@ class TensorAnnotated(TensorContainer, PytreeRegistered):
     @classmethod
     def _init_from_reconstructed(
         cls,
-        tensor_attributes: Dict[str, TDCompatible],
-        meta_attributes: Dict[str, Any],
+        tensor_attributes: dict[str, TDCompatible],
+        meta_attributes: dict[str, Any],
         device,
         shape,
     ):

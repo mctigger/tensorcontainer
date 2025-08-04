@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Optional, Union
+from typing import Any
 
 from torch import Tensor
 from torch.distributions import LKJCholesky as TorchLKJCholesky
@@ -30,8 +30,8 @@ class TensorLKJCholesky(TensorDistribution):
     def __init__(
         self,
         dim: int,
-        concentration: Union[float, Tensor] = 1.0,
-        validate_args: Optional[bool] = None,
+        concentration: float | Tensor = 1.0,
+        validate_args: bool | None = None,
     ):
         self._dim = dim
         (self._concentration,) = broadcast_all(concentration)
@@ -52,7 +52,7 @@ class TensorLKJCholesky(TensorDistribution):
         )
 
     @classmethod
-    def _unflatten_distribution(cls, attributes: Dict[str, Any]) -> TensorLKJCholesky:
+    def _unflatten_distribution(cls, attributes: dict[str, Any]) -> TensorLKJCholesky:
         return cls(
             dim=attributes["_dim"],
             concentration=attributes["_concentration"],

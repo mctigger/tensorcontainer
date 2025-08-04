@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any
 
 import torch
 from torch.distributions import VonMises as TorchVonMises
@@ -27,7 +27,7 @@ class TensorVonMises(TensorDistribution):
         super().__init__(self._loc.shape, self._loc.device, validate_args)
 
     @classmethod
-    def _unflatten_distribution(cls, attributes: Dict[str, Any]) -> TensorVonMises:
+    def _unflatten_distribution(cls, attributes: dict[str, Any]) -> TensorVonMises:
         return cls(
             loc=attributes["_loc"],
             concentration=attributes["_concentration"],

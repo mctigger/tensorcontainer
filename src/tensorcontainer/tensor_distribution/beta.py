@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Optional, Union
+from typing import Any
 
 from torch import Tensor
 from torch.distributions import Beta
@@ -29,9 +29,9 @@ class TensorBeta(TensorDistribution):
 
     def __init__(
         self,
-        concentration1: Union[float, Tensor],
-        concentration0: Union[float, Tensor],
-        validate_args: Optional[bool] = None,
+        concentration1: float | Tensor,
+        concentration0: float | Tensor,
+        validate_args: bool | None = None,
     ):
         self._concentration1, self._concentration0 = broadcast_all(
             concentration1, concentration0
@@ -45,7 +45,7 @@ class TensorBeta(TensorDistribution):
     @classmethod
     def _unflatten_distribution(
         cls,
-        attributes: Dict[str, Any],
+        attributes: dict[str, Any],
     ) -> TensorBeta:
         """Reconstruct distribution from tensor attributes."""
         return cls(

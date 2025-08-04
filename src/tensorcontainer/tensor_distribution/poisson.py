@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any
 
 from torch import Tensor
 from torch.distributions import Poisson
@@ -22,7 +22,7 @@ class TensorPoisson(TensorDistribution):
         super().__init__(shape, device, validate_args)
 
     @classmethod
-    def _unflatten_distribution(cls, attributes: Dict[str, Any]) -> TensorPoisson:
+    def _unflatten_distribution(cls, attributes: dict[str, Any]) -> TensorPoisson:
         return cls(
             rate=attributes["_rate"],
             validate_args=attributes.get("_validate_args"),

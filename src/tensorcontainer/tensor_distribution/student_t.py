@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any
 
 from torch import Tensor
 from torch.distributions import StudentT
@@ -46,7 +46,7 @@ class TensorStudentT(TensorDistribution):
     @classmethod
     def _unflatten_distribution(
         cls,
-        attributes: Dict[str, Any],
+        attributes: dict[str, Any],
     ) -> "TensorStudentT":
         return cls(
             df=attributes["_df"],

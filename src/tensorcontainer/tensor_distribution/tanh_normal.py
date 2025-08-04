@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from functools import cached_property
-from typing import Any, Dict, Optional
+from typing import Any
 
 import torch
 from torch import Tensor
@@ -72,7 +72,7 @@ class TensorTanhNormal(TensorDistribution):
         self,
         loc: Tensor,
         scale: Tensor,
-        validate_args: Optional[bool] = None,
+        validate_args: bool | None = None,
     ):
         self._loc, self._scale = broadcast_all(loc, scale)
 
@@ -84,7 +84,7 @@ class TensorTanhNormal(TensorDistribution):
     @classmethod
     def _unflatten_distribution(
         cls,
-        attributes: Dict[str, Any],
+        attributes: dict[str, Any],
     ) -> TensorTanhNormal:
         return cls(
             loc=attributes["_loc"],

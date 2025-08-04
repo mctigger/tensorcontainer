@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any
 
 from torch import Size, Tensor
 from torch.distributions import LogNormal
@@ -20,7 +20,7 @@ class TensorLogNormal(TensorDistribution):
         self,
         loc: float | Tensor,
         scale: float | Tensor,
-        validate_args: Optional[bool] = None,
+        validate_args: bool | None = None,
     ):
         self._loc, self._scale = broadcast_all(loc, scale)
 
@@ -30,7 +30,7 @@ class TensorLogNormal(TensorDistribution):
         super().__init__(shape, device, validate_args)
 
     @classmethod
-    def _unflatten_distribution(cls, attributes: Dict[str, Any]) -> TensorLogNormal:
+    def _unflatten_distribution(cls, attributes: dict[str, Any]) -> TensorLogNormal:
         """Reconstruct distribution from tensor attributes."""
         return cls(
             loc=attributes.get("_loc"),  # type: ignore
@@ -44,12 +44,12 @@ class TensorLogNormal(TensorDistribution):
         )
 
     @property
-    def loc(self) -> Optional[Tensor]:
+    def loc(self) -> Tensor | None:
         """Returns the loc used to initialize the distribution."""
         return self.dist().loc
 
     @property
-    def scale(self) -> Optional[Tensor]:
+    def scale(self) -> Tensor | None:
         """Returns the scale used to initialize the distribution."""
         return self.dist().scale
 

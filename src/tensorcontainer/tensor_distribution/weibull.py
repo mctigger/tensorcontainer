@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any
 
 from torch import Tensor
 from torch.distributions import Weibull as TorchWeibull
@@ -15,7 +15,6 @@ class TensorWeibull(TensorDistribution):
 
     _scale: Tensor
     _concentration: Tensor
-    _validate_args: Optional[bool]
 
     def __init__(
         self,
@@ -31,12 +30,12 @@ class TensorWeibull(TensorDistribution):
         super().__init__(shape, device, validate_args)
 
     @classmethod
-    def _unflatten_distribution(cls, attributes: Dict[str, Any]) -> TensorWeibull:
+    def _unflatten_distribution(cls, attributes: dict[str, Any]) -> TensorWeibull:
         """Reconstruct distribution from tensor attributes."""
         return cls(
             scale=attributes["_scale"],
             concentration=attributes["_concentration"],
-            validate_args=attributes["_validate_args"],
+            validate_args=attributes.get("_validate_args"),
         )
 
     def dist(self) -> TorchWeibull:
