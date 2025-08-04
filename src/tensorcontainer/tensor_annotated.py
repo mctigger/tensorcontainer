@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Iterable, TypeVar, get_args
+from typing import Any, Iterable, TypeVar, Union, get_args
 
 import torch
 from torch import Tensor
@@ -10,7 +10,7 @@ from typing_extensions import Self
 from tensorcontainer.tensor_container import TensorContainer
 from tensorcontainer.utils import PytreeRegistered
 
-TDCompatible = Tensor | TensorContainer
+TDCompatible = Union[Tensor, TensorContainer]
 DATACLASS_ARGS = {"init", "repr", "eq", "order", "unsafe_hash", "frozen", "slots"}
 
 
