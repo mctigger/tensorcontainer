@@ -2,10 +2,9 @@ from __future__ import annotations
 
 from typing import Any
 
-import torch
 from torch import Tensor
 from torch.distributions import FisherSnedecor as TorchFisherSnedecor
-from torch.distributions.utils import broadcast_all
+from .utils import broadcast_all
 
 from .base import TensorDistribution
 
@@ -32,50 +31,3 @@ class TensorFisherSnedecor(TensorDistribution):
             df2=attributes["_df2"],
             validate_args=attributes.get("_validate_args"),
         )
-
-    @property
-    def mean(self) -> Tensor:
-        return self.dist().mean
-
-    @property
-    def variance(self) -> Tensor:
-        return self.dist().variance
-
-    @property
-    def mode(self) -> Tensor:
-        return self.dist().mode
-
-    @property
-    def support(self):
-        return self.dist().support
-
-    @property
-    def has_rsample(self):
-        return self.dist().has_rsample
-
-    def entropy(self) -> Tensor:
-        return self.dist().entropy()
-
-    def log_prob(self, value: Tensor) -> Tensor:
-        return self.dist().log_prob(value)
-
-    def cdf(self, value: Tensor) -> Tensor:
-        return self.dist().cdf(value)
-
-    def icdf(self, value: Tensor) -> Tensor:
-        return self.dist().icdf(value)
-
-    def sample(self, sample_shape: torch.Size = torch.Size()) -> Tensor:
-        return self.dist().sample(sample_shape)
-
-    def rsample(self, sample_shape: torch.Size = torch.Size()) -> Tensor:
-        return self.dist().rsample(sample_shape)
-
-    def enumerate_support(self, expand: bool = True) -> Tensor:
-        return self.dist().enumerate_support(expand)
-
-    def __repr__(self):
-        return self.dist().__repr__()
-
-    def __eq__(self, other):
-        return self.dist().__eq__(other)
