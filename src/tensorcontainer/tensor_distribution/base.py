@@ -300,22 +300,6 @@ class TensorDistribution(TensorAnnotated):
         """
         return self.dist().perplexity()
 
-    def _extended_shape(self, sample_shape: Size = Size()) -> Size:
-        """
-        Compute the extended shape for sampling.
-
-        Args:
-            sample_shape: Shape of samples to generate
-
-        Returns:
-            Extended shape combining sample_shape and batch_shape
-        """
-        return self.dist()._extended_shape(sample_shape)
-
-    def _get_checked_instance(self, cls, _instance=None):
-        """Get a checked instance for distribution operations."""
-        return self.dist()._get_checked_instance(cls, _instance)
-
 
 # KL Divergence Registration
 # ==========================
