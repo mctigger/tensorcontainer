@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any
 
 from torch import Tensor
 from torch.distributions import Beta
-from torch.distributions.utils import broadcast_all
+from .utils import broadcast_all
 
 from .base import TensorDistribution
 
@@ -29,9 +29,9 @@ class TensorBeta(TensorDistribution):
 
     def __init__(
         self,
-        concentration1: Tensor,
-        concentration0: Tensor,
-        validate_args: Optional[bool] = None,
+        concentration1: float | Tensor,
+        concentration0: float | Tensor,
+        validate_args: bool | None = None,
     ):
         self._concentration1, self._concentration0 = broadcast_all(
             concentration1, concentration0
@@ -45,12 +45,12 @@ class TensorBeta(TensorDistribution):
     @classmethod
     def _unflatten_distribution(
         cls,
-        attributes: Dict[str, Any],
+        attributes: dict[str, Any],
     ) -> TensorBeta:
         """Reconstruct distribution from tensor attributes."""
         return cls(
-            concentration1=attributes.get("_concentration1"),  # type: ignore
-            concentration0=attributes.get("_concentration0"),  # type: ignore
+            concentration1=attributes["_concentration1"],
+            concentration0=attributes["_concentration0"],
             validate_args=attributes.get("_validate_args"),
         )
 
@@ -62,9 +62,6 @@ class TensorBeta(TensorDistribution):
             validate_args=self._validate_args,
         )
 
-    def log_prob(self, value: Tensor) -> Tensor:
-        return self.dist().log_prob(value)
-
     @property
     def concentration1(self) -> Tensor:
         """Returns the concentration1 parameter of the distribution."""
@@ -74,23 +71,3 @@ class TensorBeta(TensorDistribution):
     def concentration0(self) -> Tensor:
         """Returns the concentration0 parameter of the distribution."""
         return self.dist().concentration0
-
-    @property
-    def mean(self) -> Tensor:
-        """Returns the mean of the distribution."""
-        return self.dist().mean
-
-    @property
-    def variance(self) -> Tensor:
-        """Returns the variance of the distribution."""
-        return self.dist().variance
-
-    @property
-    def mode(self) -> Tensor:
-        """Returns the mode of the distribution."""
-        return self.dist().mode
-
-    @property
-    def stddev(self) -> Tensor:
-        """Returns the standard deviation of the distribution."""
-        return self.dist().stddev

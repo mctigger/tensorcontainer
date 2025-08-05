@@ -17,7 +17,7 @@ class TestTensorOneHotCategoricalInitialization:
     def test_init_no_params_raises_error(self):
         """A ValueError should be raised when neither probs nor logits are provided."""
         with pytest.raises(
-            RuntimeError, match="Either 'probs' or 'logits' must be provided."
+            ValueError, match="Either 'probs' or 'logits' must be provided."
         ):
             TensorOneHotCategorical()
 

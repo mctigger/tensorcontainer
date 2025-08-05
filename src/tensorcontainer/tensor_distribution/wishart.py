@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any
 
 import torch
 from torch import Tensor
@@ -15,10 +15,10 @@ class TensorWishart(TensorDistribution):
 
     Args:
         df (Tensor): The degrees of freedom of the distribution.
-        covariance_matrix (Optional[Tensor]): The covariance matrix of the distribution.
-        precision_matrix (Optional[Tensor]): The precision matrix of the distribution.
-        scale_tril (Optional[Tensor]): The lower-triangular Cholesky factor of the scale matrix.
-        validate_args (Optional[bool]): Whether to validate the arguments.
+        covariance_matrix (Tensor | None): The covariance matrix of the distribution.
+        precision_matrix (Tensor | None): The precision matrix of the distribution.
+        scale_tril (Tensor | None): The lower-triangular Cholesky factor of the scale matrix.
+        validate_args (bool | None): Whether to validate the arguments.
     """
 
     df: Tensor
@@ -28,10 +28,10 @@ class TensorWishart(TensorDistribution):
     def __init__(
         self,
         df: Tensor,
-        covariance_matrix: Optional[Tensor] = None,
-        precision_matrix: Optional[Tensor] = None,
-        scale_tril: Optional[Tensor] = None,
-        validate_args: Optional[bool] = None,
+        covariance_matrix: Tensor | None = None,
+        precision_matrix: Tensor | None = None,
+        scale_tril: Tensor | None = None,
+        validate_args: bool | None = None,
     ):
         # Validate that exactly one of the matrix parameters is provided
         num_params = sum(
@@ -65,7 +65,7 @@ class TensorWishart(TensorDistribution):
         )
 
     @classmethod
-    def _unflatten_distribution(cls, attributes: Dict[str, Any]) -> TensorWishart:
+    def _unflatten_distribution(cls, attributes: dict[str, Any]) -> TensorWishart:
         return cls(
             df=attributes["df"],
             covariance_matrix=attributes.get("_covariance_matrix"),

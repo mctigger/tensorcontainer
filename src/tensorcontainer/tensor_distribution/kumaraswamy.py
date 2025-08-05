@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Optional, Union
+from typing import Any
 
 from torch import Tensor
 from torch.distributions import Kumaraswamy as TorchKumaraswamy
-from torch.distributions.utils import broadcast_all
+from .utils import broadcast_all
 
 from .base import TensorDistribution
 
@@ -18,9 +18,9 @@ class TensorKumaraswamy(TensorDistribution):
 
     def __init__(
         self,
-        concentration1: Union[float, Tensor],
-        concentration0: Union[float, Tensor],
-        validate_args: Optional[bool] = None,
+        concentration1: float | Tensor,
+        concentration0: float | Tensor,
+        validate_args: bool | None = None,
     ):
         self._concentration1, self._concentration0 = broadcast_all(
             concentration1, concentration0
@@ -34,7 +34,7 @@ class TensorKumaraswamy(TensorDistribution):
     @classmethod
     def _unflatten_distribution(
         cls,
-        attributes: Dict[str, Any],
+        attributes: dict[str, Any],
     ) -> "TensorKumaraswamy":
         """Reconstruct distribution from tensor attributes."""
         return cls(
@@ -52,9 +52,6 @@ class TensorKumaraswamy(TensorDistribution):
             concentration0=self._concentration0,
             validate_args=self._validate_args,
         )
-
-    def log_prob(self, value: Tensor) -> Tensor:
-        return self.dist().log_prob(value)
 
     @property
     def concentration1(self) -> Tensor:

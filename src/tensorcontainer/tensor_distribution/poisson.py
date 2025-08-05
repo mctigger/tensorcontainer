@@ -1,43 +1,36 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any
 
-import torch
 from torch import Tensor
 from torch.distributions import Poisson
 
 from .base import TensorDistribution
+from torch.types import Number
+from .utils import broadcast_all
 
 
 class TensorPoisson(TensorDistribution):
-    # Annotated tensor parameters
-    _rate: Optional[Tensor] = None
+    _rate: Tensor
 
-    def __init__(self, rate: torch.Tensor, validate_args: Optional[bool] = None):
-        # Store the parameters in annotated attributes before calling super().__init__()
-        # This is required because super().__init__() calls self.dist() which needs these attributes
-        self._rate = rate
+    def __init__(self, rate: Number | Tensor, validate_args: bool | None = None):
+        (self._rate,) = broadcast_all(rate)
 
-        shape = rate.shape
-        device = rate.device
+        shape = self._rate.shape
+        device = self._rate.device
 
         super().__init__(shape, device, validate_args)
 
     @classmethod
-    def _unflatten_distribution(cls, attributes: Dict[str, Any]) -> TensorPoisson:
-        """Reconstruct distribution from tensor attributes."""
+    def _unflatten_distribution(cls, attributes: dict[str, Any]) -> TensorPoisson:
         return cls(
-            rate=attributes.get("_rate"),  # type: ignore
+            rate=attributes["_rate"],
             validate_args=attributes.get("_validate_args"),
         )
 
     def dist(self) -> Poisson:
         return Poisson(rate=self._rate, validate_args=self._validate_args)
 
-    def log_prob(self, value: Tensor) -> Tensor:
-        return self.dist().log_prob(value)
-
     @property
-    def rate(self) -> Optional[Tensor]:
-        """Returns the rate parameter used to initialize the distribution."""
+    def rate(self) -> Tensor:
         return self.dist().rate

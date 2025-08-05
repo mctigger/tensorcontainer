@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from abc import abstractmethod
-from typing import Any, Dict, List, Tuple
+from typing import Any
 
 from torch import Size, Tensor
 from torch._C import device
@@ -47,10 +47,10 @@ class TensorDistribution(TensorAnnotated):
     --------
     ```python
     class TensorNormal(TensorDistribution):
-        _loc: Optional[Tensor] = None
-        _scale: Optional[Tensor] = None
+        _loc: Tensor | None = None
+        _scale: Tensor | None = None
 
-        def __init__(self, loc: Tensor, scale: Tensor, validate_args: Optional[bool] = None):
+        def __init__(self, loc: Tensor, scale: Tensor, validate_args: bool | None = None):
             self._loc = loc
             self._scale = scale
             super().__init__(loc.shape, loc.device, validate_args)
@@ -64,7 +64,7 @@ class TensorDistribution(TensorAnnotated):
 
     def __init__(
         self,
-        shape: Size | List[int] | Tuple[int],
+        shape: Size | list[int] | tuple[int, ...],
         device: str | device | int | None,
         validate_args: bool | None = None,
     ):
@@ -89,8 +89,8 @@ class TensorDistribution(TensorAnnotated):
     @classmethod
     def _init_from_reconstructed(
         cls,
-        tensor_attributes: Dict[str, TDCompatible],
-        meta_attributes: Dict[str, Any],
+        tensor_attributes: dict[str, TDCompatible],
+        meta_attributes: dict[str, Any],
         device,
         shape,
     ):
@@ -112,7 +112,7 @@ class TensorDistribution(TensorAnnotated):
         return cls._unflatten_distribution({**tensor_attributes, **meta_attributes})
 
     @classmethod
-    def _unflatten_distribution(cls, attributes: Dict[str, Any]):
+    def _unflatten_distribution(cls, attributes: dict[str, Any]):
         """
         Reconstruct a distribution from flattened tensor and metadata attributes.
 

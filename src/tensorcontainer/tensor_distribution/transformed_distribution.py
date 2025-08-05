@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import List, Optional
+from typing import Any
 
 from torch.distributions import Distribution
 from torch.distributions import TransformedDistribution as TorchTransformedDistribution
@@ -15,22 +15,32 @@ class TransformedDistribution(TensorDistribution):
 
     Args:
         base_distribution (TensorDistribution): The base distribution.
-        transforms (List[Transform]): A list of transforms.
+        transforms (list[Transform]): A list of transforms.
     """
 
     base_distribution: TensorDistribution
-    transforms: List[Transform]
+    transforms: list[Transform]
 
     def __init__(
         self,
         base_distribution: TensorDistribution,
-        transforms: List[Transform],
-        validate_args: Optional[bool] = None,
+        transforms: list[Transform],
+        validate_args: bool | None = None,
     ):
         self.base_distribution = base_distribution
         self.transforms = transforms
         super().__init__(
             base_distribution.batch_shape, base_distribution.device, validate_args
+        )
+
+    @classmethod
+    def _unflatten_distribution(
+        cls, attributes: dict[str, Any]
+    ) -> TransformedDistribution:
+        return cls(
+            base_distribution=attributes["base_distribution"],
+            transforms=attributes["transforms"],
+            validate_args=attributes.get("_validate_args"),
         )
 
     def dist(self) -> Distribution:

@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any
 
-import torch
 from torch import Size, Tensor
 from torch.distributions import LogNormal
 
 from .base import TensorDistribution
+from .utils import broadcast_all
 
 
 class TensorLogNormal(TensorDistribution):
@@ -20,24 +20,9 @@ class TensorLogNormal(TensorDistribution):
         self,
         loc: float | Tensor,
         scale: float | Tensor,
-        validate_args: Optional[bool] = None,
+        validate_args: bool | None = None,
     ):
-        # Convert inputs to tensors
-        loc = torch.as_tensor(loc)
-        scale = torch.as_tensor(scale)
-
-        try:
-            data = torch.broadcast_tensors(loc, scale)
-        except RuntimeError as e:
-            raise ValueError(f"loc and scale must have compatible shapes: {e}")
-
-        # Store the parameters in annotated attributes before calling super().__init__()
-        # This is required because super().__init__() calls self.dist() which needs these attributes
-        self._loc = data[0]
-        self._scale = data[1]
-
-        if torch.any(self._scale <= 0):
-            raise ValueError("scale must be positive")
+        self._loc, self._scale = broadcast_all(loc, scale)
 
         shape = self._loc.shape
         device = self._loc.device
@@ -45,7 +30,7 @@ class TensorLogNormal(TensorDistribution):
         super().__init__(shape, device, validate_args)
 
     @classmethod
-    def _unflatten_distribution(cls, attributes: Dict[str, Any]) -> TensorLogNormal:
+    def _unflatten_distribution(cls, attributes: dict[str, Any]) -> TensorLogNormal:
         """Reconstruct distribution from tensor attributes."""
         return cls(
             loc=attributes.get("_loc"),  # type: ignore
@@ -58,23 +43,15 @@ class TensorLogNormal(TensorDistribution):
             loc=self._loc, scale=self._scale, validate_args=self._validate_args
         )
 
-    def log_prob(self, value: Tensor) -> Tensor:
-        return self.dist().log_prob(value)
-
     @property
-    def loc(self) -> Optional[Tensor]:
+    def loc(self) -> Tensor | None:
         """Returns the loc used to initialize the distribution."""
         return self.dist().loc
 
     @property
-    def scale(self) -> Optional[Tensor]:
+    def scale(self) -> Tensor | None:
         """Returns the scale used to initialize the distribution."""
         return self.dist().scale
-
-    @property
-    def variance(self) -> Tensor:
-        """Returns the variance of the LogNormal distribution."""
-        return self.dist().variance
 
     @property
     def param_shape(self) -> Size:

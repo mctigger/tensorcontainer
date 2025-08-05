@@ -1,25 +1,27 @@
-from typing import Any, Dict, Optional, Tuple, Union
+from __future__ import annotations
+
+from typing import Any
 
 import torch
 from torch import Tensor
 from torch.distributions import ContinuousBernoulli as TorchContinuousBernoulli
-from torch.distributions.utils import broadcast_all
+from .utils import broadcast_all
 from torch.types import Number
 
 from .base import TensorDistribution
 
 
 class TensorContinuousBernoulli(TensorDistribution):
-    _probs: Optional[Tensor]
-    _logits: Optional[Tensor]
-    _lims: Tuple[float, float]
+    _probs: Tensor | None
+    _logits: Tensor | None
+    _lims: tuple[float, float]
 
     def __init__(
         self,
-        probs: Optional[Union[Tensor, Number]] = None,
-        logits: Optional[Union[Tensor, Number]] = None,
-        lims: Tuple[float, float] = (0.499, 0.501),
-        validate_args: Optional[bool] = None,
+        probs: Tensor | Number | None = None,
+        logits: Tensor | Number | None = None,
+        lims: tuple[float, float] = (0.499, 0.501),
+        validate_args: bool | None = None,
     ) -> None:
         self._lims = lims
         if (probs is None) == (logits is None):
@@ -30,11 +32,12 @@ class TensorContinuousBernoulli(TensorDistribution):
         if probs is not None:
             (self._probs,) = broadcast_all(probs)
             self._logits = None
+            data = self._probs
         else:
             (self._logits,) = broadcast_all(logits)
             self._probs = None
+            data = self._logits
 
-        data = self._probs if self._probs is not None else self._logits
         batch_shape = data.shape  # type: ignore
         device = data.device  # type: ignore
 
@@ -51,7 +54,7 @@ class TensorContinuousBernoulli(TensorDistribution):
     @classmethod
     def _unflatten_distribution(
         cls,
-        attributes: Dict[str, Any],
+        attributes: dict[str, Any],
     ) -> "TensorContinuousBernoulli":
         return cls(
             probs=attributes.get("_probs"),
@@ -67,14 +70,6 @@ class TensorContinuousBernoulli(TensorDistribution):
     @property
     def logits(self) -> Tensor:
         return self.dist().logits
-
-    @property
-    def mean(self) -> Tensor:
-        return self.dist().mean
-
-    @property
-    def variance(self) -> Tensor:
-        return self.dist().variance
 
     @property
     def param_shape(self) -> torch.Size:

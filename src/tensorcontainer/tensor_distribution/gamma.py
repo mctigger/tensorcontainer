@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Optional, Union
+from typing import Any
 
 from torch import Tensor
 from torch.distributions import Gamma as TorchGamma
-from torch.distributions.utils import broadcast_all
+from .utils import broadcast_all
 
 from .base import TensorDistribution
 
@@ -24,18 +24,19 @@ class TensorGamma(TensorDistribution):
 
     def __init__(
         self,
-        concentration: Union[float, Tensor],
-        rate: Union[float, Tensor],
-        validate_args: Optional[bool] = None,
+        concentration: float | Tensor,
+        rate: float | Tensor,
+        validate_args: bool | None = None,
     ):
         self._concentration, self._rate = broadcast_all(concentration, rate)
-        batch_shape = self._concentration.shape
-        super().__init__(batch_shape, self._concentration.device, validate_args)
+        super().__init__(
+            self._concentration.shape, self._concentration.device, validate_args
+        )
 
     @classmethod
     def _unflatten_distribution(
         cls,
-        attributes: Dict[str, Any],
+        attributes: dict[str, Any],
     ) -> TensorGamma:
         """Reconstruct distribution from tensor attributes."""
         return cls(

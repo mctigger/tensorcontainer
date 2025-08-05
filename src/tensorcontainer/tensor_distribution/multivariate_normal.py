@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any
 
 import torch
 from torch import Tensor
@@ -21,7 +21,7 @@ class TensorMultivariateNormal(TensorDistribution):
         covariance_matrix: Tensor | None = None,
         precision_matrix: Tensor | None = None,
         scale_tril: Tensor | None = None,
-        validate_args: Optional[bool] = None,
+        validate_args: bool | None = None,
     ):
         num_params = sum(
             p is not None for p in [covariance_matrix, precision_matrix, scale_tril]
@@ -36,9 +36,7 @@ class TensorMultivariateNormal(TensorDistribution):
         self._covariance_matrix = covariance_matrix
         self._precision_matrix = precision_matrix
         self._scale_tril = scale_tril
-        super().__init__(
-            loc.shape, loc.device, validate_args
-        )  # Call super().__init__ here
+        super().__init__(loc.shape[:-1], loc.device, validate_args)
 
     def dist(self) -> MultivariateNormal:
         return MultivariateNormal(
@@ -51,7 +49,7 @@ class TensorMultivariateNormal(TensorDistribution):
 
     @classmethod
     def _unflatten_distribution(
-        cls, attributes: Dict[str, Any]
+        cls, attributes: dict[str, Any]
     ) -> TensorMultivariateNormal:
         instance = cls(
             loc=attributes["_loc"],

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any
 
 from torch import Tensor
 from torch.distributions import (
@@ -29,13 +29,14 @@ class TensorLowRankMultivariateNormal(TensorDistribution):
         loc: Tensor,
         cov_factor: Tensor,
         cov_diag: Tensor,
-        validate_args: Optional[bool] = None,
+        validate_args: bool | None = None,
     ):
         self._loc = loc
         self._cov_factor = cov_factor
         self._cov_diag = cov_diag
+
         super().__init__(
-            shape=loc.shape, device=loc.device, validate_args=validate_args
+            shape=loc.shape[:-1], device=loc.device, validate_args=validate_args
         )
 
     def dist(self) -> TorchLowRankMultivariateNormal:
@@ -66,7 +67,7 @@ class TensorLowRankMultivariateNormal(TensorDistribution):
 
     @classmethod
     def _unflatten_distribution(
-        cls, attributes: Dict[str, Any]
+        cls, attributes: dict[str, Any]
     ) -> TensorLowRankMultivariateNormal:
         return TensorLowRankMultivariateNormal(
             loc=attributes["_loc"],

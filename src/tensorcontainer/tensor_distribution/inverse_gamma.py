@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Optional, Union
+from typing import Any
 
 from torch import Tensor
-from torch.distributions import InverseGamma as TorchInverseGamma
-from torch.distributions.utils import broadcast_all
+from torch.distributions import InverseGamma
+from .utils import broadcast_all
 
 from .base import TensorDistribution
 
@@ -17,9 +17,9 @@ class TensorInverseGamma(TensorDistribution):
 
     def __init__(
         self,
-        concentration: Union[float, Tensor],
-        rate: Union[float, Tensor],
-        validate_args: Optional[bool] = None,
+        concentration: float | Tensor,
+        rate: float | Tensor,
+        validate_args: bool | None = None,
     ):
         self._concentration, self._rate = broadcast_all(concentration, rate)
 
@@ -31,7 +31,7 @@ class TensorInverseGamma(TensorDistribution):
     @classmethod
     def _unflatten_distribution(
         cls,
-        attributes: Dict[str, Any],
+        attributes: dict[str, Any],
     ) -> TensorInverseGamma:
         """Reconstruct distribution from tensor attributes."""
         return cls(
@@ -40,18 +40,15 @@ class TensorInverseGamma(TensorDistribution):
             validate_args=attributes.get("_validate_args"),
         )
 
-    def dist(self) -> TorchInverseGamma:
+    def dist(self) -> InverseGamma:
         """
         Returns the underlying torch.distributions.InverseGamma instance.
         """
-        return TorchInverseGamma(
+        return InverseGamma(
             concentration=self._concentration,
             rate=self._rate,
             validate_args=self._validate_args,
         )
-
-    def log_prob(self, value: Tensor) -> Tensor:
-        return self.dist().log_prob(value)
 
     @property
     def concentration(self) -> Tensor:

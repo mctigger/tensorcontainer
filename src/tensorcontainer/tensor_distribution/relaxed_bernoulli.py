@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any
 
 from torch import Tensor
 from torch.distributions import RelaxedBernoulli as TorchRelaxedBernoulli
-
+from torch.types import Number
 from .base import TensorDistribution
+from .utils import broadcast_all
 
 
 class TensorRelaxedBernoulli(TensorDistribution):
@@ -13,30 +14,46 @@ class TensorRelaxedBernoulli(TensorDistribution):
 
     # Annotated tensor parameters
     _temperature: Tensor
-    _probs: Optional[Tensor] = None
-    _logits: Optional[Tensor] = None
+    _probs: Tensor | None = None
+    _logits: Tensor | None = None
 
     def __init__(
         self,
         temperature: Tensor,
-        probs: Optional[Tensor] = None,
-        logits: Optional[Tensor] = None,
-        validate_args: Optional[bool] = None,
+        probs: Number | Tensor | None = None,
+        logits: Number | Tensor | None = None,
+        validate_args: bool | None = None,
     ):
         self._temperature = temperature
-        self._probs = probs
-        self._logits = logits
-        super().__init__(temperature.shape, temperature.device, validate_args)
+
+        if probs is not None and logits is not None:
+            raise ValueError(
+                "Either `probs` or `logits` must be specified, but not both."
+            )
+
+        # broadcast_all is used to lift Number to Tensor
+        if probs is not None:
+            self._probs, self._temperature = broadcast_all(probs, temperature)
+            self._logits = None
+        elif logits is not None:
+            self._logits, self._temperature = broadcast_all(logits, temperature)
+            self._probs = None
+        else:
+            raise ValueError("Either `probs` or `logits` must be specified.")
+
+        super().__init__(
+            self._temperature.shape, self._temperature.device, validate_args
+        )
 
     @classmethod
     def _unflatten_distribution(
-        cls, attributes: Dict[str, Any]
+        cls, attributes: dict[str, Any]
     ) -> "TensorRelaxedBernoulli":
         """Reconstruct distribution from tensor attributes."""
         return cls(
-            temperature=attributes["_temperature"],  # type: ignore
-            probs=attributes.get("_probs"),  # type: ignore
-            logits=attributes.get("_logits"),  # type: ignore
+            temperature=attributes["_temperature"],
+            probs=attributes.get("_probs"),
+            logits=attributes.get("_logits"),
             validate_args=attributes.get("_validate_args"),
         )
 
@@ -48,20 +65,17 @@ class TensorRelaxedBernoulli(TensorDistribution):
             validate_args=self._validate_args,
         )
 
-    def log_prob(self, value: Tensor) -> Tensor:
-        return self.dist().log_prob(value)
-
     @property
     def temperature(self) -> Tensor:
         """Returns the temperature used to initialize the distribution."""
         return self.dist().temperature
 
     @property
-    def logits(self) -> Optional[Tensor]:
+    def logits(self) -> Tensor | None:
         """Returns the logits used to initialize the distribution."""
         return self.dist().logits
 
     @property
-    def probs(self) -> Optional[Tensor]:
+    def probs(self) -> Tensor | None:
         """Returns the probabilities used to initialize the distribution."""
         return self.dist().probs

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any
 
 from torch.distributions import MixtureSameFamily as TorchMixtureSameFamily
 from torch.distributions.distribution import Distribution
@@ -35,7 +35,7 @@ class TensorMixtureSameFamily(TensorDistribution):
         self,
         mixture_distribution: TensorCategorical,
         component_distribution: TensorDistribution,
-        validate_args: Optional[bool] = None,
+        validate_args: bool | None = None,
     ) -> None:
         self._mixture_distribution = mixture_distribution
         self._component_distribution = component_distribution
@@ -55,7 +55,7 @@ class TensorMixtureSameFamily(TensorDistribution):
 
     @classmethod
     def _unflatten_distribution(
-        cls, attributes: Dict[str, Any]
+        cls, attributes: dict[str, Any]
     ) -> TensorMixtureSameFamily:
         return cls(
             mixture_distribution=attributes["_mixture_distribution"],

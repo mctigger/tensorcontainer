@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Optional, get_args
+from typing import Any
 
 from torch import Tensor
 from torch.distributions import Normal
-from torch.distributions.utils import broadcast_all
-from torch.types import Number
+from .utils import broadcast_all
 
 from .base import TensorDistribution
 
@@ -28,15 +27,14 @@ class TensorNormal(TensorDistribution):
     _scale: Tensor
 
     def __init__(
-        self, loc: Tensor, scale: Tensor, validate_args: Optional[bool] = None
+        self,
+        loc: float | Tensor,
+        scale: float | Tensor,
+        validate_args: bool | None = None,
     ):
         self._loc, self._scale = broadcast_all(loc, scale)
 
-        if isinstance(loc, get_args(Number)) and isinstance(scale, get_args(Number)):
-            shape = tuple()
-        else:
-            shape = self._loc.shape
-
+        shape = self._loc.shape
         device = self._loc.device
 
         super().__init__(shape, device, validate_args)
@@ -44,25 +42,20 @@ class TensorNormal(TensorDistribution):
     @classmethod
     def _unflatten_distribution(
         cls,
-        attributes: Dict[str, Any],
+        attributes: dict[str, Any],
     ) -> TensorNormal:
-        """Reconstruct distribution from tensor attributes."""
         return cls(
-            loc=attributes.get("_loc"),  # type: ignore
-            scale=attributes.get("_scale"),  # type: ignore
+            loc=attributes["_loc"],
+            scale=attributes["_scale"],
             validate_args=attributes.get("_validate_args"),
         )
 
     def dist(self) -> Normal:
-        """Return Normal distribution."""
         return Normal(
             loc=self._loc,
             scale=self._scale,
             validate_args=self._validate_args,
         )
-
-    def log_prob(self, value: Tensor) -> Tensor:
-        return self.dist().log_prob(value)
 
     @property
     def loc(self) -> Tensor:
@@ -73,18 +66,3 @@ class TensorNormal(TensorDistribution):
     def scale(self) -> Tensor:
         """Returns the scale parameter of the distribution."""
         return self.dist().scale
-
-    @property
-    def mean(self) -> Tensor:
-        """Returns the mean of the distribution."""
-        return self.dist().mean
-
-    @property
-    def variance(self) -> Tensor:
-        """Returns the variance of the distribution."""
-        return self.dist().variance
-
-    @property
-    def stddev(self) -> Tensor:
-        """Returns the standard deviation of the distribution."""
-        return self.dist().stddev

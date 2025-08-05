@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any
 
 from torch import Tensor
 from torch.distributions import Distribution
-from torch.distributions.utils import broadcast_all
+from .utils import broadcast_all
 
 from tensorcontainer.distributions.truncated_normal import TruncatedNormal
 
@@ -16,8 +16,7 @@ class TensorTruncatedNormal(TensorDistribution):
     _scale: Tensor
     _low: Tensor
     _high: Tensor
-    _eps: Tensor
-    _validate_args: Optional[bool] = None
+    _eps: float
 
     def __init__(
         self,
@@ -28,13 +27,12 @@ class TensorTruncatedNormal(TensorDistribution):
         eps: float = 1e-6,
         validate_args: bool | None = None,
     ):
-        loc, scale, low, high, eps = broadcast_all(loc, scale, low, high, eps)
+        loc, scale, low, high = broadcast_all(loc, scale, low, high)
         self._loc = loc
         self._scale = scale
         self._low = low
         self._high = high
         self._eps = eps
-        self._validate_args = validate_args
 
         shape = self._loc.shape
         device = self._loc.device
@@ -43,10 +41,10 @@ class TensorTruncatedNormal(TensorDistribution):
 
     @classmethod
     def _unflatten_distribution(
-        cls, attributes: Dict[str, Any]
+        cls, attributes: dict[str, Any]
     ) -> TensorTruncatedNormal:
         instance = cls(
-            loc=attributes["loc"],
+            loc=attributes["_loc"],
             scale=attributes["_scale"],
             low=attributes["_low"],
             high=attributes["_high"],

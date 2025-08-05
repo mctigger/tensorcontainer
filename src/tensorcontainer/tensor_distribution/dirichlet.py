@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any
 
 from torch import Tensor
 from torch.distributions import Dirichlet
@@ -14,15 +14,14 @@ class TensorDirichlet(TensorDistribution):
     # Annotated tensor parameters
     _concentration: Tensor
 
-    def __init__(self, concentration: Tensor, validate_args: Optional[bool] = None):
+    def __init__(self, concentration: Tensor, validate_args: bool | None = None):
         self._concentration = concentration
-        batch_shape = concentration.shape[:-1]
-        super().__init__(batch_shape, concentration.device, validate_args)
+        super().__init__(concentration.shape, concentration.device, validate_args)
 
     @classmethod
     def _unflatten_distribution(
         cls,
-        attributes: Dict[str, Any],
+        attributes: dict[str, Any],
     ) -> TensorDirichlet:
         """Reconstruct distribution from tensor attributes."""
         return cls(
@@ -38,15 +37,3 @@ class TensorDirichlet(TensorDistribution):
     @property
     def concentration(self) -> Tensor:
         return self.dist().concentration
-
-    @property
-    def mean(self) -> Tensor:
-        return self.dist().mean
-
-    @property
-    def mode(self) -> Tensor:
-        return self.dist().mode
-
-    @property
-    def variance(self) -> Tensor:
-        return self.dist().variance
