@@ -21,7 +21,7 @@ import torch
 # Use the official PyTree utility from torch
 import torch.utils._pytree as pytree
 from torch import Tensor
-from torch._prims_common import DeviceLikeType, ShapeType
+from torch.types import Device, Size
 from torch.utils._pytree import Context, KeyEntry, PyTree
 from typing_extensions import Self, TypeAlias
 
@@ -229,7 +229,7 @@ class TensorContainer:
         >>> first_batch = container[0]           # Shape becomes (3,), events preserved
     """
 
-    shape: ShapeType
+    shape: Size
     device: Optional[torch.device]
 
     # Thread-local storage for unsafe construction flag
@@ -237,8 +237,8 @@ class TensorContainer:
 
     def __init__(
         self,
-        shape: ShapeType,
-        device: Optional[DeviceLikeType],
+        shape: Size,
+        device: Optional[Device],
         validate_args: bool = True,
     ):
         super().__init__()

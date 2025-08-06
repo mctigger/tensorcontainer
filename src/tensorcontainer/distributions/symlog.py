@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import torch
 from torch.distributions import (
-    Distribution,
     Normal,
     Transform,
     TransformedDistribution,
@@ -131,4 +130,3 @@ class SymLogDistribution(TransformedDistribution):
         )
         new._validate_args = self._validate_args
         return new
-

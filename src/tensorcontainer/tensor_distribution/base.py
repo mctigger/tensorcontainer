@@ -4,7 +4,7 @@ from abc import abstractmethod
 from typing import Any
 
 from torch import Size, Tensor
-from torch._C import device
+from torch.types import Device
 from torch.distributions import Distribution, kl_divergence, register_kl
 
 from tensorcontainer.tensor_annotated import TensorAnnotated
@@ -65,7 +65,7 @@ class TensorDistribution(TensorAnnotated):
     def __init__(
         self,
         shape: Size | list[int] | tuple[int, ...],
-        device: str | device | int | None,
+        device: str | Device | int | None,
         validate_args: bool | None = None,
     ):
         """
