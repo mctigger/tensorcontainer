@@ -50,6 +50,7 @@ class TensorDictPytreeContext(NamedTuple):
     event_ndims: Tuple[int, ...]
     shape_context: Tuple[int, ...]
     device_context: Optional[Union[str, torch.device]]
+    metadata: Dict[str, Any]
 
 
 class TensorDict(TensorContainer, PytreeRegistered):
@@ -143,21 +144,23 @@ class TensorDict(TensorContainer, PytreeRegistered):
         self,
         keys: List[str],
         flat_leaves: List[Any],
+        metadata: Dict[str, Any],
     ) -> TensorDictPytreeContext:
         """Compute pytree context metadata for reconstructing this TensorDict.
 
         Args:
           keys: Top-level keys in insertion order.
           flat_leaves: Leaves corresponding to the keys.
+          metadata: Dictionary of non-TDCompatible metadata.
 
         Returns:
           TensorDictPytreeContext: Context capturing keys, per-leaf ``event_ndims``,
-          original batch shape, and device.
+          original batch shape, device, and metadata.
         """
         batch_ndim = len(self.shape)
         event_ndims = tuple(leaf.ndim - batch_ndim for leaf in flat_leaves)
         return TensorDictPytreeContext(
-            tuple(keys), event_ndims, self.shape, self.device
+            tuple(keys), event_ndims, self.shape, self.device, metadata
         )
 
     def _pytree_flatten(
@@ -166,17 +169,24 @@ class TensorDict(TensorContainer, PytreeRegistered):
         """Shallow flatten into leaves and context.
 
         Returns:
-          Tuple[List[TDCompatible], TensorDictPytreeContext]: The leaves in key order and
-          the reconstruction context (keys, per-leaf ``event_ndims``, shape, device).
+          Tuple[List[TDCompatible], TensorDictPytreeContext]: The TDCompatible leaves in key order and
+          the reconstruction context (keys, per-leaf ``event_ndims``, shape, device, metadata).
         """
-        leaves: List[Any] = []
-        keys: List[str] = []
-        for key, value in self.data.items():
-            leaves.append(value)
-            keys.append(key)
+        td_compatible_leaves: List[Any] = []
+        td_compatible_keys: List[str] = []
+        metadata: Dict[str, Any] = {}
 
-        context = self._get_pytree_context(keys, leaves)
-        return leaves, context
+        for key, value in self.data.items():
+            if isinstance(value, TDCompatible):
+                td_compatible_leaves.append(value)
+                td_compatible_keys.append(key)
+            else:
+                metadata[key] = value
+
+        context = self._get_pytree_context(
+            td_compatible_keys, td_compatible_leaves, metadata
+        )
+        return td_compatible_leaves, context
 
     def _pytree_flatten_with_keys_fn(
         self,
@@ -218,22 +228,24 @@ class TensorDict(TensorContainer, PytreeRegistered):
             from the context. The device is restored from the context.
         """
         # Unpack context tuple
-        keys, event_ndims, shape_context, device_context = context
+        keys, event_ndims, shape_context, device_context, metadata = context
 
         obj = cls.__new__(cls)
         obj.device = device_context
         leaves_list = list(leaves)
+
+        # Reconstruct mapping from keys and leaves
+        data = dict(zip(keys, leaves_list))
+        # Add metadata back to the data
+        data.update(metadata)
+        obj.data = data
+
         if not leaves_list:
-            # Empty case
-            obj.data = {}
+            # Empty case - use shape from context
             obj.shape = shape_context
             return obj
 
         first_leaf = leaves_list[0]
-
-        # Reconstruct mapping from keys and leaves
-        data = dict(zip(keys, leaves_list))
-        obj.data = data
 
         # Infer batch shape from first leaf and event_ndims
         if (
