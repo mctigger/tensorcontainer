@@ -37,13 +37,11 @@ from torch.utils._pytree import (
     MappingKey,
     PyTree,
 )
-from typing_extensions import TypeAlias
 
 from tensorcontainer.tensor_container import TensorContainer
 from tensorcontainer.utils import PytreeRegistered
 
-TDCompatible: TypeAlias = Union[Tensor, TensorContainer]
-NestedTDCompatible: TypeAlias = Union[TDCompatible, Dict[str, TDCompatible]]
+TDCompatible = Union[Tensor, TensorContainer]
 
 
 # PyTree context metadata for reconstruction
@@ -94,7 +92,7 @@ class TensorDict(TensorContainer, PytreeRegistered):
 
     def __init__(
         self,
-        data: Mapping[str, NestedTDCompatible],
+        data: Mapping[str, Any],
         shape: Tuple[int, ...],
         device: Optional[Union[str, torch.device]] = None,
     ):
@@ -114,7 +112,7 @@ class TensorDict(TensorContainer, PytreeRegistered):
         super().__init__(shape, device)
 
     @classmethod
-    def data_from_dict(cls, data, shape, device=None) -> Dict[str, TDCompatible]:
+    def data_from_dict(cls, data, shape, device=None) -> Dict[str, Any]:
         """Recursively wrap nested dict values into TensorDict instances.
 
         Args:
@@ -144,7 +142,7 @@ class TensorDict(TensorContainer, PytreeRegistered):
     def _get_pytree_context(
         self,
         keys: List[str],
-        flat_leaves: List[TDCompatible],
+        flat_leaves: List[Any],
     ) -> TensorDictPytreeContext:
         """Compute pytree context metadata for reconstructing this TensorDict.
 
@@ -164,14 +162,14 @@ class TensorDict(TensorContainer, PytreeRegistered):
 
     def _pytree_flatten(
         self,
-    ) -> Tuple[List[TDCompatible], TensorDictPytreeContext]:
+    ) -> Tuple[List[Any], TensorDictPytreeContext]:
         """Shallow flatten into leaves and context.
 
         Returns:
           Tuple[List[TDCompatible], TensorDictPytreeContext]: The leaves in key order and
           the reconstruction context (keys, per-leaf ``event_ndims``, shape, device).
         """
-        leaves: List[TDCompatible] = []
+        leaves: List[Any] = []
         keys: List[str] = []
         for key, value in self.data.items():
             leaves.append(value)
@@ -200,7 +198,7 @@ class TensorDict(TensorContainer, PytreeRegistered):
 
     @classmethod
     def _pytree_unflatten(
-        cls, leaves: Iterable[TDCompatible], context: TensorDictPytreeContext
+        cls, leaves: Iterable[Any], context: TensorDictPytreeContext
     ) -> PyTree:
         """Reconstruct a TensorDict from leaves and context.
 
@@ -253,7 +251,7 @@ class TensorDict(TensorContainer, PytreeRegistered):
 
     # --- Standard MutableMapping methods ---
     @overload
-    def __getitem__(self, key: str) -> TDCompatible: ...
+    def __getitem__(self, key: str) -> Any: ...
 
     @overload
     def __getitem__(self, key: slice) -> TensorDict: ...
@@ -261,23 +259,23 @@ class TensorDict(TensorContainer, PytreeRegistered):
     @overload
     def __getitem__(self, key: Tensor) -> TensorDict: ...
 
-    def __getitem__(self, key: Any) -> TDCompatible:
+    def __getitem__(self, key: Any) -> Any:
         if isinstance(key, str):
             return self.data[key]
 
         return super().__getitem__(key)
 
     @overload
-    def __setitem__(self, key: str, value: TDCompatible): ...
+    def __setitem__(self, key: str, value: Any) -> None: ...
 
     @overload
     def __setitem__(
         self,
         key: Union[slice, Tensor, int, Tuple[Union[slice, Tensor, int], ...]],
-        value: Union[float, int, Tensor, TensorDict],
-    ): ...
+        value: Any,
+    ) -> None: ...
 
-    def __setitem__(self, key: Any, value: Any):
+    def __setitem__(self, key: Any, value: Any) -> None:
         if isinstance(key, str):
             if isinstance(value, dict):
                 value = TensorDict(value, self.shape, self.device)
@@ -317,7 +315,7 @@ class TensorDict(TensorContainer, PytreeRegistered):
     def items(self):
         return self.data.items()
 
-    def update(self, other: Union[Dict[str, TDCompatible], TensorDict]):
+    def update(self, other: Union[Dict[str, Any], TensorDict]):
         """Update entries from a mapping or another TensorDict.
 
         Args:
@@ -352,7 +350,7 @@ class TensorDict(TensorContainer, PytreeRegistered):
         """
         out = {}
         # Stack for iterative traversal: (data, prefix)
-        stack: List[Tuple[TDCompatible, str]] = [(self, "")]
+        stack: List[Tuple[Any, str]] = [(self, "")]
 
         while stack:
             data, prefix = stack.pop()
