@@ -18,7 +18,7 @@ class TensorMultinomial(TensorDistribution):
 
     def __init__(
         self,
-        total_count: Union[int, Tensor] = 1,
+        total_count: int = 1,
         probs: Optional[Tensor] = None,
         logits: Optional[Tensor] = None,
         validate_args: Optional[bool] = None,
@@ -35,10 +35,7 @@ class TensorMultinomial(TensorDistribution):
             raise RuntimeError("Internal error: data tensor is None.")
 
         # Store the parameters in annotated attributes before calling super().__init__()
-        if isinstance(total_count, Tensor):
-            self._total_count = int(total_count.item())
-        else:
-            self._total_count = total_count
+        self._total_count = total_count
         self._probs = probs
         self._logits = logits
 
