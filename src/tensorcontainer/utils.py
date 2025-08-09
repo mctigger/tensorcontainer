@@ -3,7 +3,7 @@ from typing import Any, Iterable, List, Tuple, Type, TypeVar, Union
 
 import torch
 import torch.utils._pytree as pytree
-from torch._prims_common import DeviceLikeType
+from torch.types import Device
 from torch.utils._pytree import Context, KeyEntry, PyTree
 
 _PytreeRegistered = TypeVar("_PytreeRegistered", bound="PytreeRegistered")
@@ -45,7 +45,7 @@ class PytreeRegistered:
         pass
 
 
-def resolve_device(device_str: Union[str, DeviceLikeType]) -> torch.device:
+def resolve_device(device_str: Union[str, Device]) -> torch.device:
     """
     Dynamically resolves a device string to a torch.device object with a
     specific device index, if the backend is available and supports it.

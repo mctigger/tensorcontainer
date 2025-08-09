@@ -4,7 +4,7 @@ from abc import abstractmethod
 from typing import Any
 
 from torch import Size, Tensor
-from torch._C import device
+from torch.types import Device
 from torch.distributions import Distribution, kl_divergence, register_kl
 
 from tensorcontainer.tensor_annotated import TensorAnnotated
@@ -65,7 +65,7 @@ class TensorDistribution(TensorAnnotated):
     def __init__(
         self,
         shape: Size | list[int] | tuple[int, ...],
-        device: str | device | int | None,
+        device: str | Device | int | None,
         validate_args: bool | None = None,
     ):
         """
@@ -299,22 +299,6 @@ class TensorDistribution(TensorAnnotated):
             Perplexity tensor with shape matching the distribution's batch shape
         """
         return self.dist().perplexity()
-
-    def _extended_shape(self, sample_shape: Size = Size()) -> Size:
-        """
-        Compute the extended shape for sampling.
-
-        Args:
-            sample_shape: Shape of samples to generate
-
-        Returns:
-            Extended shape combining sample_shape and batch_shape
-        """
-        return self.dist()._extended_shape(sample_shape)
-
-    def _get_checked_instance(self, cls, _instance=None):
-        """Get a checked instance for distribution operations."""
-        return self.dist()._get_checked_instance(cls, _instance)
 
 
 # KL Divergence Registration
