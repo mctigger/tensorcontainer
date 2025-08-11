@@ -23,7 +23,6 @@ from typing import (
     List,
     Mapping,
     NamedTuple,
-    Optional,
     Tuple,
     Union,
     cast,
@@ -39,7 +38,7 @@ from torch.utils._pytree import (
 )
 
 from tensorcontainer.tensor_container import TensorContainer
-from tensorcontainer.types import Shape
+from tensorcontainer.types import DeviceLike, ShapeLike
 from tensorcontainer.utils import PytreeRegistered
 
 TDCompatible = Union[Tensor, TensorContainer]
@@ -95,8 +94,8 @@ class TensorDict(TensorContainer, PytreeRegistered):
     def __init__(
         self,
         data: Mapping[str, Any],
-        shape: Shape,
-        device: Optional[Union[str, torch.device]] = None,
+        shape: ShapeLike,
+        device: DeviceLike | None = None,
     ):
         """Initialize a TensorDict with minimal overhead for torch.compile.
 

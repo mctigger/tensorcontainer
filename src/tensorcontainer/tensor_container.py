@@ -11,11 +11,10 @@ import torch
 
 import torch.utils._pytree as pytree
 from torch import Tensor
-from torch.types import Device
 from torch.utils._pytree import Context, KeyEntry, PyTree
 from typing_extensions import Self, TypeAlias
 
-from tensorcontainer.types import Shape
+from tensorcontainer.types import DeviceLike, ShapeLike
 from tensorcontainer.utils import resolve_device
 
 HANDLED_FUNCTIONS = {}
@@ -228,14 +227,14 @@ class TensorContainer:
 
     def __init__(
         self,
-        shape: Shape,
-        device: Optional[Device],
+        shape: ShapeLike,
+        device: DeviceLike | None,
         validate_args: bool = True,
     ):
         super().__init__()
 
         self.shape = torch.Size(shape)
-        self.device = None if device is None else torch.device(resolve_device(device))
+        self.device = None if device is None else resolve_device(device)
 
         if validate_args:
             self._validate()
