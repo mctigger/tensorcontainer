@@ -5,7 +5,7 @@ import pytest
 import torch
 
 from tensorcontainer.tensor_dataclass import TensorDataClass
-from tensorcontainer.types import Shape
+from tensorcontainer.types import ShapeLike
 
 
 def _assert_init_signature(cls, expected_fields):
@@ -16,7 +16,7 @@ def _assert_init_signature(cls, expected_fields):
         inspect.Parameter(
             "shape",
             inspect.Parameter.POSITIONAL_OR_KEYWORD,
-            annotation=Shape,
+            annotation=ShapeLike,
         ),
         inspect.Parameter(
             "device",
