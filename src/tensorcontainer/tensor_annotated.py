@@ -8,6 +8,7 @@ from torch.utils import _pytree as pytree
 from typing_extensions import Self
 
 from tensorcontainer.tensor_container import TensorContainer
+from tensorcontainer.types import Shape
 from tensorcontainer.utils import PytreeRegistered
 
 TDCompatible = Union[Tensor, TensorContainer]
@@ -20,7 +21,7 @@ T_TensorAnnotated = TypeVar("T_TensorAnnotated", bound="TensorAnnotated")
 class TensorAnnotated(TensorContainer, PytreeRegistered):
     def __init__(
         self,
-        shape: torch.Size | list[int] | tuple[int, ...],
+        shape: Shape,
         device: str | torch.device | int | None,
     ):
         super().__init__(shape, device, True)

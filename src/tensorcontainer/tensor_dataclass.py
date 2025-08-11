@@ -7,7 +7,7 @@ from typing import Optional, TypeVar, Union
 
 import torch
 from torch import Tensor
-from torch.types import Size
+from tensorcontainer.types import Shape
 from typing_extensions import dataclass_transform
 
 from tensorcontainer.tensor_annotated import TensorAnnotated
@@ -185,7 +185,7 @@ class TensorDataClass(TensorAnnotated, TensorDataclassTransform):
     # can enable static analyzers to provide type hints in IDEs. Both are programmatically
     # added in __init_subclass__ so removing the following two lines will only remove the
     # type hints, but the class will stay functional.
-    shape: Size
+    shape: Shape
     device: Optional[torch.device]
 
     def __init_subclass__(cls, **kwargs):
@@ -216,7 +216,7 @@ class TensorDataClass(TensorAnnotated, TensorDataclassTransform):
         annotations = cls._get_annotations(TensorDataClass)
 
         cls.__annotations__ = {
-            "shape": torch.Size,
+            "shape": Shape,
             "device": Optional[torch.device],
             **annotations,
         }

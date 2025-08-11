@@ -39,6 +39,7 @@ from torch.utils._pytree import (
 )
 
 from tensorcontainer.tensor_container import TensorContainer
+from tensorcontainer.types import Shape
 from tensorcontainer.utils import PytreeRegistered
 
 TDCompatible = Union[Tensor, TensorContainer]
@@ -48,8 +49,8 @@ TDCompatible = Union[Tensor, TensorContainer]
 class TensorDictPytreeContext(NamedTuple):
     keys: Tuple[str, ...]
     event_ndims: Tuple[int, ...]
-    shape_context: Tuple[int, ...]
-    device_context: Optional[Union[str, torch.device]]
+    shape_context: torch.Size
+    device_context: torch.device | None
     metadata: Dict[str, Any]
 
 
@@ -94,7 +95,7 @@ class TensorDict(TensorContainer, PytreeRegistered):
     def __init__(
         self,
         data: Mapping[str, Any],
-        shape: Tuple[int, ...],
+        shape: Shape,
         device: Optional[Union[str, torch.device]] = None,
     ):
         """Initialize a TensorDict with minimal overhead for torch.compile.
