@@ -10,7 +10,9 @@ from typing import Union
 import torch
 
 # Mirror torch._prims_common.ShapeType without importing it directly.
-# Current upstream definition is: Union[torch.Size, list[int], tuple[int, ...]]
-Shape = Union[torch.Size, list[int], tuple[int, ...]]
+ShapeLike = Union[torch.Size, list[int], tuple[int, ...]]
 
-__all__ = ["Shape"]
+# Mirror torch._prims_common.DeviceLikeType without importing it directly.
+DeviceLike = Union[str, torch.device, int]
+
+__all__ = ["ShapeLike", "DeviceLike"]
