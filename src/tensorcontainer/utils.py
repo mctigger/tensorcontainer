@@ -5,7 +5,6 @@ import torch
 import torch.utils._pytree as pytree
 from torch.types import Device
 from torch.utils._pytree import Context, KeyEntry, PyTree
-from tensorcontainer.types import Shape
 
 _PytreeRegistered = TypeVar("_PytreeRegistered", bound="PytreeRegistered")
 
@@ -75,19 +74,3 @@ def resolve_device(device_str: Union[str, Device]) -> torch.device:
 
     # 4. If the backend doesn't exist or isn't set up, return the original device.
     return device
-
-
-def _to_torch_size(shape: Shape) -> torch.Size:
-    """Convert a shape-like input to torch.Size in a torch.compile-friendly way.
-
-    This function uses torch.empty with device="meta" to create a torch.Size object.
-    The "meta" device ensures no actual memory allocation occurs, making this
-    operation very fast while remaining compatible with torch.compile.
-
-    Args:
-        shape: A shape-like input (tuple, list, torch.Size, etc.)
-
-    Returns:
-        torch.Size: The shape as a torch.Size object
-    """
-    return torch.empty(shape, device="meta").shape
