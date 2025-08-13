@@ -102,6 +102,41 @@ indexed = container[0]                 # Batch becomes (3,)
 
 The [`__getitem__()`](src/tensorcontainer/tensor_container.py) method uses [`transform_ellipsis_index()`](src/tensorcontainer/tensor_container.py) to ensure indexing operations only affect batch dimensions.
 
+## Indexing and Assignment
+
+This section documents the base container's indexing and in-place assignment semantics and aligns with the implementations of [`__getitem__`](src/tensorcontainer/tensor_container.py) and [`__setitem__`](src/tensorcontainer/tensor_container.py).
+
+- Same-subclass, exact structure: Slice assignment requires the right-hand side (RHS) to be an instance of the same subclass with exactly matching structure (e.g., identical keys/fields). Assignment is performed leafwise.
+- Broadcasting scope: For each corresponding leaf, the RHS must be broadcastable to the addressed batch slice per PyTorch rules. Event dimensions are preserved; they are not consumed or reshaped by assignment.
+- No scalar/tensor RHS in base: Scalar values or raw torch.Tensors on the RHS are not supported by the base class. Such semantics are subclass-specific (e.g., TensorDict) and out of scope here.
+- Ellipsis handling: Ellipses in indices are normalized via [`transform_ellipsis_index()`](src/tensorcontainer/tensor_container.py), so assignment supports the same ellipsis behavior as PyTorch.
+
+Example:
+
+```python
+# Batch shape (4, 3)
+container = MyContainer(shape=(4, 3))
+# Conceptual leaves in `container` (not shown):
+#   obs:    torch.Size([4, 3, 128])
+#   action: torch.Size([4, 3, 6])
+
+# Assign to a batch slice with a container of matching structure
+rhs = MyContainer(shape=(4,))
+# Conceptual leaves in `rhs`:
+#   obs:    torch.Size([4, 128])   # broadcastable to container[:, 0].obs
+#   action: torch.Size([4, 6])     # broadcastable to container[:, 0].action
+
+container[:, 0] = rhs  # Leafwise assignment; event dims preserved
+
+# Boolean mask assignment
+mask = torch.tensor([True, False, True, False])
+rhs_mask = MyContainer(shape=(2,))
+# Conceptual leaves in `rhs_mask`:
+#   obs:    torch.Size([2, 128])
+#   action: torch.Size([2, 6])
+container[mask] = rhs_mask
+```
+
 ## Design Decision 5: Path-Based Error Reporting
 
 ### The Problem
