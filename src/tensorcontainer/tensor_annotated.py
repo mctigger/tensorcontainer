@@ -18,11 +18,7 @@ T_TensorAnnotated = TypeVar("T_TensorAnnotated", bound="TensorAnnotated")
 
 
 class TensorAnnotated(TensorContainer, PytreeRegistered):
-    def __init__(
-        self,
-        shape: ShapeLike,
-        device: DeviceLike | None
-    ):
+    def __init__(self, shape: ShapeLike, device: DeviceLike | None):
         super().__init__(shape, device)
 
     @classmethod

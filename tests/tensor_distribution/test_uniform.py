@@ -83,9 +83,7 @@ def test_uniform_compile(low, high, batch_shape):
         pytest.skip("low must be less than high for Uniform distribution")
     low_tensor = torch.full(batch_shape, low)
     high_tensor = torch.full(batch_shape, high)
-    dist = TensorUniform(
-        low_tensor, high_tensor, validate_args=False
-    )
+    dist = TensorUniform(low_tensor, high_tensor, validate_args=False)
     sample_shape = (5,)
     run_and_compare_compiled(_test_uniform_compile_fn, dist, sample_shape)
 

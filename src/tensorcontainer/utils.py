@@ -1,5 +1,5 @@
 from abc import abstractmethod
-from typing import Any, Iterable, List, Tuple, Type, TypeVar, Union
+from typing import Any, Iterable, List, Tuple, Type, TypeVar
 
 import torch
 import torch.utils._pytree as pytree
