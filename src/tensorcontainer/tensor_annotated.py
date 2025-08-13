@@ -21,9 +21,9 @@ class TensorAnnotated(TensorContainer, PytreeRegistered):
     def __init__(
         self,
         shape: ShapeLike,
-        device: DeviceLike | None,
+        device: DeviceLike | None
     ):
-        super().__init__(shape, device, True)
+        super().__init__(shape, device)
 
     @classmethod
     def _get_annotations(cls, base_cls):

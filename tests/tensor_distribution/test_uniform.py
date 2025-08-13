@@ -85,7 +85,7 @@ def test_uniform_compile(low, high, batch_shape):
     high_tensor = torch.full(batch_shape, high)
     dist = TensorUniform(
         low_tensor, high_tensor, validate_args=False
-    )  # Pass validate_args=False
+    )
     sample_shape = (5,)
     run_and_compare_compiled(_test_uniform_compile_fn, dist, sample_shape)
 

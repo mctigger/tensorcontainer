@@ -229,15 +229,13 @@ class TensorContainer:
         self,
         shape: ShapeLike,
         device: DeviceLike | None,
-        validate_args: bool = True,
     ):
         super().__init__()
 
         self.shape = torch.Size(shape)
         self.device = None if device is None else resolve_device(device)
 
-        if validate_args:
-            self._validate()
+        self._validate()
 
     @classmethod
     @contextmanager

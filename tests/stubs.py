@@ -17,9 +17,10 @@ class StubTensorContainer(TensorContainer):
         self.tensor_a = tensor_a
         self.tensor_b = tensor_b
 
-        # validate_args=False because we want to avoid calling flatten for validation
+        # Use unsafe_construction to avoid calling flatten for validation
         # in TensorContainer __init__
-        super().__init__(shape, device, validate_args=False)
+        with TensorContainer.unsafe_construction():
+            super().__init__(shape, device)
 
     def _pytree_flatten(self) -> tuple[list[Any], Any]:
         """Return tensors in consistent order for reconstruction."""
