@@ -14,7 +14,9 @@ class TensorDirichlet(TensorDistribution):
     # Annotated tensor parameters
     _concentration: Tensor
 
-    def __init__(self, concentration: Tensor, validate_args: bool | None = None) -> None:
+    def __init__(
+        self, concentration: Tensor, validate_args: bool | None = None
+    ) -> None:
         self._concentration = concentration
         super().__init__(concentration.shape, concentration.device, validate_args)
 
