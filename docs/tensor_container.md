@@ -192,21 +192,22 @@ Machine learning workflows often involve moving tensors between different device
 TensorContainer implements flexible device compatibility through the [`resolve_device()`](src/tensorcontainer/utils.py) function and [`_is_device_compatible()`](src/tensorcontainer/tensor_container.py) method.
 
 ```python
-# Flexible device compatibility
-container = MyContainer(shape=(4, 3), device="cuda")  # Accepts "cuda:0", "cuda:1", etc.
-container = MyContainer(shape=(4, 3), device=None)    # Accepts any device
+# Device resolution at construction
+container = MyContainer(shape=(4, 3), device="cuda")  # Resolves to current CUDA device (e.g., "cuda:0"), leaves must match exactly
+container = MyContainer(shape=(4, 3), device=None)    # Allows mixed-device leaves
 
 # Device resolution
 device = resolve_device("cuda")  # Resolves to current CUDA device (e.g., "cuda:0")
 ```
 
 ### Why This Works
-- **Flexible Compatibility**: String device specs like "cuda" are compatible with indexed variants like "cuda:0"
-- **Optional Enforcement**: Setting device=None allows mixed-device containers when needed
+- **Construction-Time Resolution**: Device strings like "cuda" are resolved once at construction to a concrete device (e.g., "cuda:0") via [`resolve_device()`](src/tensorcontainer/utils.py)
+- **Strict Equality Enforcement**: With a non-None container device, leaf devices must match exactly according to [`_is_device_compatible()`](src/tensorcontainer/tensor_container.py)
+- **Mixed-Device Support**: Setting device=None allows mixed-device containers when needed
 - **Dynamic Resolution**: The [`resolve_device()`](src/tensorcontainer/utils.py) function automatically resolves device strings to specific indices based on the current backend state
 - **Backend Agnostic**: Works with any PyTorch backend that follows the torch.cuda pattern (cuda, xpu, etc.)
 
-The device compatibility system allows for practical usage patterns while maintaining consistency when needed.
+The device compatibility system resolves device strings at construction and enforces strict equality for all leaves unless device=None is specified.
 
 ## Type System
 
