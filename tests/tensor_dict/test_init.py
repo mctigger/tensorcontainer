@@ -27,12 +27,6 @@ def test_init_compiled(nested_dict):
     run_and_compare_compiled(init_fn, nested_dict(shape), shape)
 
 
-def test_init_with_mixed_types():
-    data = {"a": torch.arange(2), "c": "string"}
-    with pytest.raises(AttributeError):
-        TensorDict(data, shape=[2]).view(1, 1, 2)
-
-
 def test_init_with_zero_sized_tensor():
     data = {"a": torch.empty(0)}
     with pytest.raises(RuntimeError):

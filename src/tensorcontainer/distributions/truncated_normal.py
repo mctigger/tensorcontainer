@@ -14,7 +14,7 @@ class TruncatedNormal(torch.distributions.Normal):
         high: Tensor,
         eps: float = 1e-6,
         validate_args=None,
-    ):
+    ) -> None:
         super().__init__(loc, scale, validate_args)
         self.low = low
         self.high = high

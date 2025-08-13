@@ -30,7 +30,7 @@ class TensorLowRankMultivariateNormal(TensorDistribution):
         cov_factor: Tensor,
         cov_diag: Tensor,
         validate_args: bool | None = None,
-    ):
+    ) -> None:
         self._loc = loc
         self._cov_factor = cov_factor
         self._cov_diag = cov_diag

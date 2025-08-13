@@ -23,7 +23,7 @@ class TensorNegativeBinomial(TensorDistribution):
         probs: Tensor | None = None,
         logits: Tensor | None = None,
         validate_args: bool | None = None,
-    ):
+    ) -> None:
         if probs is not None and logits is not None:
             raise ValueError("Only one of 'probs' or 'logits' can be specified.")
 

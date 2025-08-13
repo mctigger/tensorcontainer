@@ -32,7 +32,7 @@ class TensorWishart(TensorDistribution):
         precision_matrix: Tensor | None = None,
         scale_tril: Tensor | None = None,
         validate_args: bool | None = None,
-    ):
+    ) -> None:
         # Validate that exactly one of the matrix parameters is provided
         num_params = sum(
             p is not None for p in [covariance_matrix, precision_matrix, scale_tril]

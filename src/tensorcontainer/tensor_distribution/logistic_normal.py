@@ -14,7 +14,9 @@ class TensorLogisticNormal(TensorDistribution):
     _loc: Tensor
     _scale: Tensor
 
-    def __init__(self, loc: Tensor, scale: Tensor, validate_args: bool | None = None):
+    def __init__(
+        self, loc: Tensor, scale: Tensor, validate_args: bool | None = None
+    ) -> None:
         loc, scale = broadcast_all(loc, scale)
 
         if loc.ndim == 0:

@@ -21,7 +21,7 @@ class TensorVonMises(TensorDistribution):
         loc: torch.Tensor,
         concentration: torch.Tensor,
         validate_args: bool | None = None,
-    ):
+    ) -> None:
         self._loc, self._concentration = broadcast_all(loc, concentration)
 
         super().__init__(self._loc.shape, self._loc.device, validate_args)

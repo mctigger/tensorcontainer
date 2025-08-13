@@ -20,7 +20,7 @@ class TensorOneHotCategorical(TensorDistribution):
         probs: Tensor | None = None,
         logits: Tensor | None = None,
         validate_args: bool | None = None,
-    ):
+    ) -> None:
         data = probs if probs is not None else logits
         # Parameter validation occurs in super().__init__(), but we need an early
         # check here to safely derive shape and device from the data tensor

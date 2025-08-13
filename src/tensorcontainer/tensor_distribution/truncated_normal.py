@@ -26,7 +26,7 @@ class TensorTruncatedNormal(TensorDistribution):
         high: Tensor,
         eps: float = 1e-6,
         validate_args: bool | None = None,
-    ):
+    ) -> None:
         loc, scale, low, high = broadcast_all(loc, scale, low, high)
         self._loc = loc
         self._scale = scale

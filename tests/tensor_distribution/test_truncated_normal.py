@@ -109,7 +109,7 @@ class TestTensorTruncatedNormalCompileCompatibility:
         # Create parameters with the specific shape for this test
         params = truncated_normal_params_factory(param_shape)
 
-        td_truncated_normal = TensorTruncatedNormal(**params, validate_args=False)
+        td_truncated_normal = TensorTruncatedNormal(**params)
 
         def rsample_fn(td):
             return td.rsample()

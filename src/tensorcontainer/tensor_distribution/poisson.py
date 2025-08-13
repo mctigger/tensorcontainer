@@ -13,7 +13,9 @@ from .utils import broadcast_all
 class TensorPoisson(TensorDistribution):
     _rate: Tensor
 
-    def __init__(self, rate: Number | Tensor, validate_args: bool | None = None):
+    def __init__(
+        self, rate: Number | Tensor, validate_args: bool | None = None
+    ) -> None:
         (self._rate,) = broadcast_all(rate)
 
         shape = self._rate.shape

@@ -17,7 +17,7 @@ class TensorIndependent(TensorDistribution):
         base_distribution: TensorDistribution,
         reinterpreted_batch_ndims: int,
         validate_args: bool | None = None,
-    ):
+    ) -> None:
         self.base_distribution = base_distribution
         self.reinterpreted_batch_ndims = reinterpreted_batch_ndims
 

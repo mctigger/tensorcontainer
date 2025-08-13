@@ -21,7 +21,7 @@ class TensorLaplace(TensorDistribution):
         loc: Tensor | float,
         scale: Tensor | float,
         validate_args: bool | None = None,
-    ):
+    ) -> None:
         self._loc, self._scale = broadcast_all(loc, scale)
         shape = self._loc.shape
         device = self._loc.device

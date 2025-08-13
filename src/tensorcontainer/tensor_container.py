@@ -5,26 +5,16 @@ import textwrap
 import threading
 from abc import abstractmethod
 from contextlib import contextmanager
-from typing import (
-    Any,
-    Callable,
-    Iterable,
-    List,
-    Optional,
-    Tuple,
-    Type,
-    Union,
-)
+from typing import Any, Callable, Iterable, List, Optional, Tuple, Type, Union
 
 import torch
 
-# Use the official PyTree utility from torch
 import torch.utils._pytree as pytree
 from torch import Tensor
-from torch._prims_common import DeviceLikeType, ShapeType
 from torch.utils._pytree import Context, KeyEntry, PyTree
 from typing_extensions import Self, TypeAlias
 
+from tensorcontainer.types import DeviceLike, ShapeLike
 from tensorcontainer.utils import resolve_device
 
 HANDLED_FUNCTIONS = {}
@@ -229,7 +219,7 @@ class TensorContainer:
         >>> first_batch = container[0]           # Shape becomes (3,), events preserved
     """
 
-    shape: ShapeType
+    shape: torch.Size
     device: Optional[torch.device]
 
     # Thread-local storage for unsafe construction flag
@@ -237,17 +227,15 @@ class TensorContainer:
 
     def __init__(
         self,
-        shape: ShapeType,
-        device: Optional[DeviceLikeType],
-        validate_args: bool = True,
+        shape: ShapeLike,
+        device: DeviceLike | None,
     ):
         super().__init__()
 
-        self.shape = shape
-        self.device = None if device is None else torch.device(resolve_device(device))
+        self.shape = torch.Size(shape)
+        self.device = None if device is None else resolve_device(device)
 
-        if validate_args:
-            self._validate()
+        self._validate()
 
     @classmethod
     @contextmanager
@@ -378,7 +366,7 @@ class TensorContainer:
 
         return 1
 
-    def transform_ellipsis_index(self, shape: tuple[int, ...], idx: tuple) -> tuple:
+    def transform_ellipsis_index(self, shape: torch.Size, idx: tuple) -> tuple:
         """
         Transforms an indexing tuple with an ellipsis into an equivalent one without it.
         ...
@@ -465,7 +453,7 @@ class TensorContainer:
         # Assemble the final, properly formatted representation string
         return (
             f"{self.__class__.__name__}(\n"
-            f"{indent}shape={str(self.shape)},\n"
+            f"{indent}shape={tuple(self.shape)},\n"
             f"{indent}device={self.device},\n"
             f"{indent}items=\n{textwrap.indent(indented_items, indent)}\n{indent}\n"
             f")"
@@ -549,7 +537,7 @@ class TensorContainer:
                     v[processed_index] = k.get(value)
                 except Exception as e:
                     raise type(e)(
-                        f"Issue with key {str(k)} and index {processed_index} for value of shape {v.shape} and type {type(v)} and assignment of shape {value.shape}"
+                        f"Issue with key {str(k)} and index {processed_index} for value of shape {v.shape} and type {type(v)} and assignment of shape {tuple(value.shape)}"
                     ) from e
 
     def view(self: Self, *shape: int) -> Self:
@@ -753,7 +741,7 @@ class TensorContainer:
 
     def size(self) -> torch.Size:
         """Returns the size of the batch dimensions."""
-        return torch.Size(self.shape)
+        return self.shape
 
     def dim(self) -> int:
         """Returns the number of batch dimensions."""

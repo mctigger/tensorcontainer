@@ -26,7 +26,7 @@ class TransformedDistribution(TensorDistribution):
         base_distribution: TensorDistribution,
         transforms: list[Transform],
         validate_args: bool | None = None,
-    ):
+    ) -> None:
         self.base_distribution = base_distribution
         self.transforms = transforms
         super().__init__(

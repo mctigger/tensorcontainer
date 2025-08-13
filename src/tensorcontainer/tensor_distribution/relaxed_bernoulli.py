@@ -23,7 +23,7 @@ class TensorRelaxedBernoulli(TensorDistribution):
         probs: Number | Tensor | None = None,
         logits: Number | Tensor | None = None,
         validate_args: bool | None = None,
-    ):
+    ) -> None:
         self._temperature = temperature
 
         if probs is not None and logits is not None:

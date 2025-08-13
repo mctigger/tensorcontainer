@@ -83,15 +83,13 @@ def test_uniform_compile(low, high, batch_shape):
         pytest.skip("low must be less than high for Uniform distribution")
     low_tensor = torch.full(batch_shape, low)
     high_tensor = torch.full(batch_shape, high)
-    dist = TensorUniform(
-        low_tensor, high_tensor, validate_args=False
-    )  # Pass validate_args=False
+    dist = TensorUniform(low_tensor, high_tensor, validate_args=False)
     sample_shape = (5,)
     run_and_compare_compiled(_test_uniform_compile_fn, dist, sample_shape)
 
 
 def test_uniform_validate_args():
     with raises(
-        ValueError, match="Uniform is not defined when low>= high"
-    ):  # Updated regex
+        ValueError, match=r"Expected parameter low.*to satisfy the constraint LessThan"
+    ):
         TensorUniform(torch.tensor([1.0]), torch.tensor([0.0]), validate_args=True)

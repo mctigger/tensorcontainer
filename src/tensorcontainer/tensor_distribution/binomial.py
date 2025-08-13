@@ -33,7 +33,7 @@ class TensorBinomial(TensorDistribution):
         probs: Tensor | None = None,
         logits: Tensor | None = None,
         validate_args: bool | None = None,
-    ):
+    ) -> None:
         if (probs is None) == (logits is None):
             raise ValueError(
                 "Either `probs` or `logits` must be specified, but not both."
