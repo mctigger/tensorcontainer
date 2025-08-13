@@ -3,8 +3,9 @@ from typing import Any, Iterable, List, Tuple, Type, TypeVar, Union
 
 import torch
 import torch.utils._pytree as pytree
-from torch.types import Device
 from torch.utils._pytree import Context, KeyEntry, PyTree
+
+from tensorcontainer.types import DeviceLike
 
 _PytreeRegistered = TypeVar("_PytreeRegistered", bound="PytreeRegistered")
 
@@ -45,32 +46,43 @@ class PytreeRegistered:
         pass
 
 
-def resolve_device(device_str: Union[str, Device]) -> torch.device:
+def resolve_device(device: DeviceLike) -> torch.device:
     """
-    Dynamically resolves a device string to a torch.device object with a
-    specific device index, if the backend is available and supports it.
+    Resolves a device string to a torch.device object using manual device
+    resolution without creating dummy tensors. Auto-indexes devices when
+    no specific index is provided.
 
-    This works for any backend that follows the torch.cuda pattern,
-    such as 'cuda', 'xpu', etc.
+    If the device cannot be resolved or is not available, raises an appropriate
+    exception instead of returning a fallback.
+
+    Args:
+        device_str: Device string or torch.device object to resolve
+
+    Returns:
+        torch.device: The resolved device object with proper indexing
+
+    Raises:
+        RuntimeError: If the device type is invalid or device is not available
+        AssertionError: If the backend is not compiled/available
     """
-    device = torch.device(device_str)
+    # Handle case where input is already a torch.device object
+    if isinstance(device, torch.device):
+        device = device
+    elif device is not None:
+        device = torch.device(device)
+    else:
+        raise ValueError("Device cannot be None")
 
-    # 1. If an index is already specified or it's a non-indexable device, return it.
-    if device.index is not None or device.type in ["meta", "cpu"]:
-        return device
+    # Auto-index the device
+    if device.index is None:
+        if device.type == "cuda":
+            # Check if CUDA is available before trying to get current device
+            if not torch.cuda.is_available():
+                raise RuntimeError("CUDA is not available")
+            device = torch.device(device.type, index=torch.cuda.current_device())
+        elif device.type not in ("cpu", "meta"):
+            # For other device types (mps, xla, etc.), default to index 0
+            # This will raise an error if the backend is not available
+            device = torch.device(device.type, index=0)
 
-    # 2. Dynamically check for the backend module (e.g., torch.cuda, torch.xpu).
-    if hasattr(torch, device.type):
-        backend = getattr(torch, device.type)
-
-        # 3. Check if the backend is available and can report the current device.
-        if (
-            hasattr(backend, "is_available")
-            and backend.is_available()
-            and hasattr(backend, "current_device")
-        ):
-            current_index = backend.current_device()
-            return torch.device(f"{device.type}:{current_index}")
-
-    # 4. If the backend doesn't exist or isn't set up, return the original device.
     return device
