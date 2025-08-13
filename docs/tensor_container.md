@@ -147,15 +147,16 @@ TensorContainer uses [`_format_path()`](src/tensorcontainer/tensor_container.py)
 
 ```python
 # Error message example:
-# "Shape mismatch at path 'data.observations': expected (4, 3, ...), got (4, 2, 128)"
+# "Shape mismatch at key ['data']['observations']: expected (4, 3, ...), got (4, 2, 128)"
 ```
 
 ### Why This Works
 - **Debugging Efficiency**: In nested structures, developers can immediately identify which specific tensor failed validation without manual inspection
 - **Leverages PyTree**: Uses PyTree's built-in path tracking system, which already understands the container's structure
 - **Contextual Information**: Error messages include both the expected and actual values along with the precise location
+- **Subclass-Aware Formatting**: The bracketed path style (e.g., `['data']['observations']`) is determined by the TensorContainer subclass's KeyEntry representation, ensuring consistency with the underlying data structure
 
-The [`_tree_map()`](src/tensorcontainer/tensor_container.py) method captures KeyPath information during tree traversal and passes it to [`_format_path()`](src/tensorcontainer/tensor_container.py) when validation errors occur.
+The [`_tree_map()`](src/tensorcontainer/tensor_container.py) method captures KeyPath information during tree traversal and passes it to [`_format_path()`](src/tensorcontainer/tensor_container.py) when validation errors occur. The exact bracketed style depends on how each subclass represents keys in its PyTree structure.
 
 ## Design Decision 6: `torch.compile` and Static Shape Design
 
