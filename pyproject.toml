@@ -4,12 +4,12 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tensorcontainer"
-version = "0.6.3"
+version = "0.7.0"
 description = "TensorDict-like functionality for PyTorch with PyTree compatibility and torch.compile support"
 authors = [{name="Tim Joseph", email="tim@mctigger.com"}]
 license = {text = "MIT"}
 dependencies = [
-    "torch>=2.0.0"
+    "torch>=2.6"
 ]
 readme = "README.md"
 requires-python = ">=3.9"
