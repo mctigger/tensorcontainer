@@ -1,6 +1,6 @@
 import torch
 
-from tensorcontainer import TensorAnnotated
+from tensorcontainer.tensor_annotated import TensorAnnotated
 from tests.stubs import StubTensorContainer
 
 
