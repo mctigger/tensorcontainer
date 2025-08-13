@@ -26,13 +26,14 @@ All classes in [`tensorcontainer.tensor_distribution`](/src/tensorcontainer/tens
 
 Many `torch.distributions` constructors accept parameters of type `Union[Number, Tensor]` or any specialization of `Number` (e.g. `float`). However, [`TensorContainer`](/src/tensorcontainer/tensor_container.py) and [`TensorDistribution`](/src/tensorcontainer/tensor_distribution/base.py) can only process `Union[Tensor, TensorContainer]` objects and require all parameters to have compatible shapes for broadcasting.
 
-**Implementation Rule**: When the constructor signature contains `Union[Number, Tensor]` or any specialization of `Number` parameters, implementations **must** use `torch.distributions.utils.broadcast_all` to:
+**Implementation Rule**: When the constructor signature contains `Union[Number, Tensor]` or any specialization of `Number` parameters, implementations **must** use `tensorcontainer.tensor_distribution.utils.broadcast_all` to:
 1. Convert scalar numbers to tensors
 2. Broadcast all parameters to a common shape
 
+
 This preprocessing ensures proper shape and device management within the [`TensorAnnotated`](/src/tensorcontainer/tensor_annotated.py) framework.
 
-**Decision Criterion**: If the constructor signature does not contain `Union[Number, Tensor]` parameters, simpler parameter handling approaches should be preferred.
+**Decision Criterion**: If the constructor signature does not contain `Union[Number, Tensor]` parameters, simpler parameter handling approaches should be preferred. E.g. if it only contains a single argument of type `Tensor`, broadcasting is not necessary and should be avoided.
 
 ### Validation Strategy
 
@@ -46,7 +47,7 @@ This preprocessing ensures proper shape and device management within the [`Tenso
 
 Following the `torch.distributions.Distribution` pattern, basic distribution properties are provided through the [`TensorDistribution`](/src/tensorcontainer/tensor_distribution/base.py) base class via delegation to `self.dist()`.
 
-**Specialization Rule**: Distribution-specific properties **must** be implemented only in the corresponding subclass, maintaining the same delegation pattern to the underlying `torch.distributions` object.
+**Specialization Rule**: Distribution-specific properties (such as `logits` and `probs` in `Categorical`) **must** be implemented only in the corresponding subclass, maintaining the same delegation pattern to the underlying `torch.distributions` object.
 
 ## Implementation Patterns
 
