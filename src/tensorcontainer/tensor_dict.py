@@ -27,6 +27,7 @@ from typing import (
     Union,
     cast,
     overload,
+    get_args
 )
 
 import torch
@@ -177,7 +178,7 @@ class TensorDict(TensorContainer, PytreeRegistered):
         metadata: Dict[str, Any] = {}
 
         for key, value in self.data.items():
-            if isinstance(value, TDCompatible):
+            if isinstance(value, get_args(TDCompatible)):
                 td_compatible_leaves.append(value)
                 td_compatible_keys.append(key)
             else:
