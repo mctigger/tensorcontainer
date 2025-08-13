@@ -27,7 +27,7 @@ from typing import (
     Union,
     cast,
     overload,
-    get_args
+    get_args,
 )
 
 import torch
