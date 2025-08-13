@@ -90,6 +90,6 @@ def test_uniform_compile(low, high, batch_shape):
 
 def test_uniform_validate_args():
     with raises(
-        ValueError, match="Uniform is not defined when low>= high"
-    ):  # Updated regex
+        ValueError, match=r"Expected parameter low.*to satisfy the constraint LessThan"
+    ):
         TensorUniform(torch.tensor([1.0]), torch.tensor([0.0]), validate_args=True)
