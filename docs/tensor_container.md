@@ -106,10 +106,10 @@ The [`__getitem__()`](src/tensorcontainer/tensor_container.py) method uses [`tra
 
 This section documents the base container's indexing and in-place assignment semantics and aligns with the implementations of [`__getitem__`](src/tensorcontainer/tensor_container.py) and [`__setitem__`](src/tensorcontainer/tensor_container.py).
 
-- Same-subclass, exact structure: Slice assignment requires the right-hand side (RHS) to be an instance of the same subclass with exactly matching structure (e.g., identical keys/fields). Assignment is performed leafwise.
-- Broadcasting scope: For each corresponding leaf, the RHS must be broadcastable to the addressed batch slice per PyTorch rules. Event dimensions are preserved; they are not consumed or reshaped by assignment.
-- No scalar/tensor RHS in base: Scalar values or raw torch.Tensors on the RHS are not supported by the base class. Such semantics are subclass-specific (e.g., TensorDict) and out of scope here.
-- Ellipsis handling: Ellipses in indices are normalized via [`transform_ellipsis_index()`](src/tensorcontainer/tensor_container.py), so assignment supports the same ellipsis behavior as PyTorch.
+- **Same-subclass, exact structure**: Slice assignment requires the right-hand side (RHS) to be an instance of the same subclass with exactly matching structure (e.g., identical keys/fields). Assignment is performed leafwise.
+- **Broadcasting scope**: For each corresponding leaf, the RHS must be broadcastable to the addressed batch slice per PyTorch rules. Event dimensions are preserved; they are not consumed or reshaped by assignment.
+- **No scalar/tensor RHS in base**: Scalar values or raw `torch.Tensor` objects on the RHS are not supported by the base class. Such semantics are subclass-specific (e.g., TensorDict) and out of scope here.
+- **Ellipsis handling**: Ellipses in indices are normalized via [python.transform_ellipsis_index()](src/tensorcontainer/tensor_container.py:371), so assignment supports the same ellipsis behavior as PyTorch.
 
 Example:
 
@@ -135,6 +135,23 @@ rhs_mask = MyContainer(shape=(2,))
 #   obs:    torch.Size([2, 128])
 #   action: torch.Size([2, 6])
 container[mask] = rhs_mask
+```
+
+```python
+# This will raise ValueError - scalar/tensor RHS not supported in base class
+container = MyContainer(shape=(4, 3))
+
+# Attempting scalar assignment
+try:
+    container[0] = 5.0  # ValueError: Invalid value. Expected value of type MyContainer
+except ValueError as e:
+    print(f"Error: {e}")
+
+# Attempting tensor assignment
+try:
+    container[:, 0] = torch.randn(4, 128)  # ValueError: Invalid value. Expected value of type MyContainer
+except ValueError as e:
+    print(f"Error: {e}")
 ```
 
 ## Design Decision 5: Path-Based Error Reporting
