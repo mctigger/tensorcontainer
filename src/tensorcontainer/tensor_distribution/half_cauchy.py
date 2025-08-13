@@ -15,7 +15,7 @@ class TensorHalfCauchy(TensorDistribution):
     # Annotated tensor parameters
     _scale: Tensor
 
-    def __init__(self, scale: float | Tensor, validate_args: bool | None = None):
+    def __init__(self, scale: float | Tensor, validate_args: bool | None = None) -> None:
         (self._scale,) = broadcast_all(scale)
 
         shape = self._scale.shape

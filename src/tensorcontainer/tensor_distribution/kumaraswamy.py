@@ -21,7 +21,7 @@ class TensorKumaraswamy(TensorDistribution):
         concentration1: float | Tensor,
         concentration0: float | Tensor,
         validate_args: bool | None = None,
-    ):
+    ) -> None:
         self._concentration1, self._concentration0 = broadcast_all(
             concentration1, concentration0
         )

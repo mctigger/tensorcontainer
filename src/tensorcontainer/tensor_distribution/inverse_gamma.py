@@ -20,7 +20,7 @@ class TensorInverseGamma(TensorDistribution):
         concentration: float | Tensor,
         rate: float | Tensor,
         validate_args: bool | None = None,
-    ):
+    ) -> None:
         self._concentration, self._rate = broadcast_all(concentration, rate)
 
         shape = self._concentration.shape

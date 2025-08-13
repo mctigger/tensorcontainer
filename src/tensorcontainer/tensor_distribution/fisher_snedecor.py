@@ -10,7 +10,7 @@ from .base import TensorDistribution
 
 
 class TensorFisherSnedecor(TensorDistribution):
-    def __init__(self, df1: Tensor, df2: Tensor, *, validate_args: bool | None = None):
+    def __init__(self, df1: Tensor, df2: Tensor, *, validate_args: bool | None = None) -> None:
         self._df1: Tensor
         self._df2: Tensor
         self._df1, self._df2 = broadcast_all(df1, df2)

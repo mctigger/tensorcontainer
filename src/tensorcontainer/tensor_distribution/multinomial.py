@@ -22,7 +22,7 @@ class TensorMultinomial(TensorDistribution):
         probs: Tensor | None = None,
         logits: Tensor | None = None,
         validate_args: bool | None = None,
-    ):
+    ) -> None:
         data = probs if probs is not None else logits
         if data is None:
             raise ValueError("Either 'probs' or 'logits' must be provided.")

@@ -19,7 +19,7 @@ class TensorExponential(TensorDistribution):
 
     _rate: Tensor
 
-    def __init__(self, rate: float | Tensor, validate_args: bool | None = None):
+    def __init__(self, rate: float | Tensor, validate_args: bool | None = None) -> None:
         (self._rate,) = broadcast_all(rate)
 
         shape = self._rate.shape

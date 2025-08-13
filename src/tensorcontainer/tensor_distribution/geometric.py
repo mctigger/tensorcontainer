@@ -22,7 +22,7 @@ class TensorGeometric(TensorDistribution):
         probs: Number | Tensor | None = None,
         logits: Number | Tensor | None = None,
         validate_args: bool | None = None,
-    ):
+    ) -> None:
         if (probs is None) == (logits is None):
             raise ValueError(
                 "Either `probs` or `logits` must be specified, but not both."

@@ -20,7 +20,7 @@ class TensorChi2(TensorDistribution):
 
     _df: Tensor
 
-    def __init__(self, df: float | Tensor, validate_args: bool | None = None):
+    def __init__(self, df: float | Tensor, validate_args: bool | None = None) -> None:
         # Use broadcast_all to handle Union[float, Tensor] and ensure tensor conversion
         (self._df,) = broadcast_all(df)
 

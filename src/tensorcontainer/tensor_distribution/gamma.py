@@ -27,7 +27,7 @@ class TensorGamma(TensorDistribution):
         concentration: float | Tensor,
         rate: float | Tensor,
         validate_args: bool | None = None,
-    ):
+    ) -> None:
         self._concentration, self._rate = broadcast_all(concentration, rate)
         super().__init__(
             self._concentration.shape, self._concentration.device, validate_args

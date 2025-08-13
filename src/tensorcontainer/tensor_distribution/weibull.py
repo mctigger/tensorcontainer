@@ -21,7 +21,7 @@ class TensorWeibull(TensorDistribution):
         scale: float | Tensor,
         concentration: float | Tensor,
         validate_args: bool | None = None,
-    ):
+    ) -> None:
         self._scale, self._concentration = broadcast_all(scale, concentration)
 
         shape = self._scale.shape

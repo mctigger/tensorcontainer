@@ -21,7 +21,7 @@ class TensorRelaxedOneHotCategorical(TensorDistribution):
         probs: Tensor | None = None,
         logits: Tensor | None = None,
         validate_args: bool | None = None,
-    ):
+    ) -> None:
         """
         There is a bug in RelaxedOneHotCategorical https://github.com/pytorch/pytorch/issues/37162
         That is why we only allowed scalar temperatures for now.

@@ -14,7 +14,7 @@ class TensorHalfNormal(TensorDistribution):
 
     _scale: Tensor
 
-    def __init__(self, scale: Tensor | float, validate_args: bool | None = None):
+    def __init__(self, scale: Tensor | float, validate_args: bool | None = None) -> None:
         (self._scale,) = broadcast_all(scale)
 
         shape = self._scale.shape

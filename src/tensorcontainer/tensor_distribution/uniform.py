@@ -18,7 +18,7 @@ class TensorUniform(TensorDistribution):
         low: float | Tensor,
         high: float | Tensor,
         validate_args: bool | None = None,
-    ):
+    ) -> None:
         low, high = broadcast_all(low, high)
         self._low = low
         self._high = high

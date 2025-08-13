@@ -73,7 +73,7 @@ class TensorTanhNormal(TensorDistribution):
         loc: Tensor,
         scale: Tensor,
         validate_args: bool | None = None,
-    ):
+    ) -> None:
         self._loc, self._scale = broadcast_all(loc, scale)
 
         shape = self._loc.shape

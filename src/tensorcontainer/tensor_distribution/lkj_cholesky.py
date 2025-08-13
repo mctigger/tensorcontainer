@@ -32,7 +32,7 @@ class TensorLKJCholesky(TensorDistribution):
         dim: int,
         concentration: float | Tensor = 1.0,
         validate_args: bool | None = None,
-    ):
+    ) -> None:
         self._dim = dim
         (self._concentration,) = broadcast_all(concentration)
         super().__init__(
