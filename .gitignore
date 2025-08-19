@@ -93,3 +93,7 @@ ipython_config.py
 # Poetry
 poetry.lock
 # If you want to ignore virtual
+
+
+# Claude
+CLAUDE.md
