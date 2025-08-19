@@ -1,480 +1,631 @@
-# TensorDistribution
-TensorDistribution adds tensor-like properties to torch.distributions and enable application of torch operations like `torch.stack()` or `torch.cat()` for distributions.
+# TensorDistribution Deep Dive
 
-## Key Benefits
-- **🔄 Drop-in torch.distributions replacement**: tensorcontainer.tensor_distribution is API-compatible with torch.distributions
-- **🏗️ TensorContainer integration**: Seamlessly works with TensorDict and TensorDataClass structures
-- **⚡ Unified tensor operations**: Indexing, slicing, reshaping, and device transfer work on entire distributions
-- **📦 Efficient batching**: Batch operations across multiple samples with consistent shape handling
-- **🚀 torch.compile compatibility**: PyTree support enables torch.compile compatability
+TensorDistribution bridges the gap between PyTorch's `torch.distributions` and TensorContainer's tensor-like operations. This guide covers distribution types, sampling strategies, and integration patterns that make TensorDistribution essential for probabilistic modeling and reinforcement learning.
 
-To see the benefits in action, here are two examples:
+## Distribution Types and Creation
 
-1. **Seamless Tensor Operations**: Apply `torch` operations like `view`, `permute`, and `detach` directly to `TensorDistribution` instances, simplifying batch and shape management.
-
+### Continuous Distributions
 
 ```python
 import torch
-
-from tensorcontainer.tensor_distribution import TensorNormal
-
-
-loc = torch.randn(2 * 3, 4)
-scale = torch.abs(torch.randn(2 * 3, 4))
-normal = TensorIndependent(TensorNormal(loc=loc, scale=scale))
-
-normal = normal.view(2, 3).permute(1, 0, 2).detach()
-```
-
-2. **Distribution-Agnostic Operations**: Implement generic functions that work with any `TensorDistribution` type, such as computing KL divergence, without needing type-specific parameter handling. This contrasts with `torch.distributions`, which often requires explicit checks for each distribution type.
-
-```python
-import torch
-from torch import nn
-from torch.distributions import kl_divergence
-
-
-class LossModule(nn.Module):
-    def __init__(self, weight):
-        self._weight = weight
-
-    def forward(self, p: TensorDistribution, q: TensorDistribution):
-        kl_p = kl_divergence(p, q.detach())
-        kl_q = kl_divergence(p.detach(), q)
-
-        return self._weight * kl_p + (1 - self._weight) * kl_q
-```
-
----
-
-`TensorDistribution` extends PyTorch's `torch.distributions` with tensor-like operations and structured data support. Instead of manually managing distribution parameters across different devices, batch dimensions, and nested structures, TensorDistribution provides a unified interface that works just like regular tensors.
-
----
-
-## 1. What `TensorDistribution` Adds to `torch.distributions`
-
-This section details how `TensorDistribution` enhances `torch.distributions` for structured, tensor-based workflows.
-
-### Core Enhancement: `tensorcontainer` Integration
-
-The main advantage of `TensorDistribution` is that it fully integrates `torch.distributions.Distribution` instances into the `tensorcontainer` ecosystem. By wrapping a distribution, you grant it tensor-like properties, including:
-
--   **Batching:** Treat a collection of distributions as a single, batch-aware entity.
--   **Indexing and Slicing:** Use standard `__getitem__` syntax to select subsets of your batched distributions.
--   **Shape Manipulation:** Apply operations like `.view()`, `.reshape()`, `.squeeze()`, and `.expand()` directly to the distribution batch.
--   **Device Portability:** Move distributions between devices (`.to()`, `.cuda()`, `.cpu()`) just like a tensor.
-
-This is especially useful in areas like VAEs or RL, where models frequently produce distributions for structured data. `TensorDistribution` ensures these outputs can be handled with the same tooling as regular tensor data.
-
-### When to Wrap with `TensorDistribution`
-
--   **Choose `TensorDistribution`** when your model's output is a *distribution* over a batch of data, and you need to apply tensor-like operations to that batch of distributions.
--   **Use `TensorDataClass` or `TensorDict`** when you are working with *concrete, realized data* that has already been sampled or observed.
-
----
-
-## 2. Advantages of TensorDistribution over torch.distributions
-
-This section demonstrates key advantages of using `TensorDistribution` compared to standard `torch.distributions`.
-
-### Unified API Across Distribution Types
-
-`TensorDistribution` provides a consistent interface for different distribution types, simplifying operations that would otherwise require type-specific handling with `torch.distributions`. This is particularly evident when performing operations like detaching parameters or applying transformations, where `TensorDistribution` abstracts away the underlying parameter structure.
-
-Consider the task of computing the KL divergence between a distribution and its detached version. With `torch.distributions`, this requires explicit checks for each distribution type to access and detach its specific parameters:
-
-```python
-import torch
-from torch.distributions import (
-    Bernoulli,
-    Categorical,
-    Distribution,
-    Normal,
-    kl_divergence,
+from tensorcontainer.tensor_distribution import (
+    TensorNormal, TensorBeta, TensorGamma, TensorExponential,
+    TensorTruncatedNormal, TensorTanhNormal
 )
 
+# Normal (Gaussian) distribution
+normal = TensorNormal(
+    loc=torch.zeros(32, 4),       # Mean
+    scale=torch.ones(32, 4),      # Standard deviation
+    shape=(32,),
+    device='cpu'
+)
 
-def partially_detached_kl_divergence_torch(p: Distribution, q: Distribution):
-    """
-    Compute KL divergence between p and a detached version of q using torch.distributions.
-    Requires type-specific handling due to varying parameter names and structures.
-    """
-    if isinstance(q, Normal):
-        detached_q = Normal(loc=q.loc.detach(), scale=q.scale.detach())
-    elif isinstance(q, Categorical):
-        detached_q = Categorical(logits=q.logits.detach())
-    elif isinstance(q, Bernoulli):
-        detached_q = Bernoulli(probs=q.probs.detach())
+# Beta distribution (values in [0, 1])
+beta = TensorBeta(
+    concentration1=torch.ones(32, 2),  # Alpha parameter
+    concentration0=torch.ones(32, 2),  # Beta parameter  
+    shape=(32,),
+    device='cpu'
+)
+
+# Truncated normal (bounded continuous)
+truncated_normal = TensorTruncatedNormal(
+    loc=torch.zeros(32, 2),
+    scale=torch.ones(32, 2),
+    low=-1.0,   # Lower bound
+    high=1.0,   # Upper bound
+    shape=(32,),
+    device='cpu'
+)
+
+# Tanh-transformed normal (squashed to [-1, 1])
+tanh_normal = TensorTanhNormal(
+    loc=torch.zeros(32, 2),
+    scale=torch.ones(32, 2),
+    shape=(32,),
+    device='cpu'
+)
+```
+
+### Discrete Distributions
+
+```python
+from tensorcontainer.tensor_distribution import (
+    TensorCategorical, TensorBernoulli, TensorBinomial,
+    TensorOneHotCategorical, TensorPoisson
+)
+
+# Categorical distribution (discrete choice)
+categorical = TensorCategorical(
+    logits=torch.randn(32, 6),    # Raw scores for 6 categories
+    shape=(32,),
+    device='cpu'
+)
+
+# Alternative: from probabilities
+categorical_probs = TensorCategorical(
+    probs=torch.softmax(torch.randn(32, 6), dim=-1),
+    shape=(32,),
+    device='cpu'
+)
+
+# Bernoulli distribution (binary)
+bernoulli = TensorBernoulli(
+    probs=torch.sigmoid(torch.randn(32, 1)),
+    shape=(32,),
+    device='cpu'
+)
+
+# One-hot categorical (returns one-hot vectors)
+one_hot = TensorOneHotCategorical(
+    logits=torch.randn(32, 6),
+    shape=(32,),
+    device='cpu'
+)
+
+# Binomial distribution
+binomial = TensorBinomial(
+    total_count=10,                    # Number of trials
+    probs=torch.rand(32, 1) * 0.5,    # Success probability
+    shape=(32,),
+    device='cpu'
+)
+```
+
+### Multivariate Distributions
+
+```python
+from tensorcontainer.tensor_distribution import (
+    TensorMultivariateNormal, TensorDirichlet, 
+    TensorLowRankMultivariateNormal
+)
+
+# Multivariate normal
+mv_normal = TensorMultivariateNormal(
+    loc=torch.zeros(32, 3),                    # Mean vector
+    covariance_matrix=torch.eye(3).expand(32, 3, 3),  # Covariance
+    shape=(32,),
+    device='cpu'
+)
+
+# Low-rank multivariate normal (efficient for high dimensions)
+low_rank_mv_normal = TensorLowRankMultivariateNormal(
+    loc=torch.zeros(32, 10),
+    cov_factor=torch.randn(32, 10, 3),        # Low-rank factor
+    cov_diag=torch.ones(32, 10),              # Diagonal component
+    shape=(32,),
+    device='cpu'
+)
+
+# Dirichlet distribution (probability simplex)
+dirichlet = TensorDirichlet(
+    concentration=torch.ones(32, 5),          # Concentration parameters
+    shape=(32,),
+    device='cpu'
+)
+```
+
+## Sampling and Probability Computation
+
+### Basic Operations
+
+```python
+# Sampling
+samples = normal.sample()                    # Shape: (32, 4)
+multiple_samples = normal.sample((10,))      # Shape: (10, 32, 4)
+
+# Probability density/mass
+log_probs = normal.log_prob(samples)         # Shape: (32, 4)
+probs = torch.exp(log_probs)                 # Actual probabilities
+
+# Statistical properties
+mean = normal.mean                           # Shape: (32, 4)
+variance = normal.variance                   # Shape: (32, 4)
+entropy = normal.entropy()                   # Shape: (32, 4)
+```
+
+### Advanced Sampling Strategies
+
+```python
+# Reparameterized sampling (for gradients)
+normal_rsample = normal.rsample()            # Differentiable sample
+normal_rsample.backward()                    # Gradients flow through
+
+# Sample with custom shapes
+batch_samples = normal.sample((5, 3))        # Shape: (5, 3, 32, 4)
+
+# Constrained sampling for discrete distributions
+def sample_with_temperature(dist, temperature=1.0):
+    """Sample from distribution with temperature scaling."""
+    if hasattr(dist, '_logits'):
+        # Scale logits by temperature
+        scaled_logits = dist._logits / temperature
+        temp_dist = TensorCategorical(logits=scaled_logits, shape=dist.shape)
+        return temp_dist.sample()
     else:
-        raise RuntimeError(
-            f"partially_detached_kl_divergence not implemented for distribution {type(q)}"
-        )
-    return kl_divergence(p, detached_q)
+        return dist.sample()
 
-# Example usage with torch.distributions
-normal_torch = Normal(
-    loc=torch.tensor([0.0, 1.0], requires_grad=True),
-    scale=torch.tensor([1.0, 0.5], requires_grad=True),
-)
-categorical_torch = Categorical(
-    logits=torch.tensor([[0.1, 0.9], [0.8, 0.2]], requires_grad=True)
-)
-bernoulli_torch = Bernoulli(probs=torch.tensor([0.2, 0.8], requires_grad=True))
-
-kl_normal_torch = partially_detached_kl_divergence_torch(normal_torch, normal_torch)
-kl_categorical_torch = partially_detached_kl_divergence_torch(categorical_torch, categorical_torch)
-kl_bernoulli_torch = partially_detached_kl_divergence_torch(bernoulli_torch, bernoulli_torch)
+# Usage
+hot_samples = sample_with_temperature(categorical, temperature=0.5)   # More peaked
+cold_samples = sample_with_temperature(categorical, temperature=2.0)  # More uniform
 ```
 
-In contrast, `TensorDistribution` provides a unified `detach()` method that works seamlessly across all distribution types, eliminating the need for conditional logic:
+### Probability Computation Patterns
 
 ```python
-import torch
+# Log probability computation for different action types
+def compute_log_probs(dist, actions):
+    """Compute log probabilities handling different action types."""
+    if isinstance(dist, TensorCategorical):
+        # Discrete actions: use gather or direct indexing
+        return dist.log_prob(actions.long())
+    elif isinstance(dist, TensorNormal):
+        # Continuous actions: direct log_prob
+        return dist.log_prob(actions).sum(dim=-1)  # Sum over action dims
+    elif isinstance(dist, TensorOneHotCategorical):
+        # One-hot actions: convert to indices first
+        action_indices = actions.argmax(dim=-1)
+        return dist.log_prob(actions)
+    else:
+        return dist.log_prob(actions)
+
+# Likelihood ratios for importance sampling
+def importance_weights(new_dist, old_dist, actions):
+    """Compute importance sampling weights."""
+    new_log_probs = compute_log_probs(new_dist, actions)
+    old_log_probs = compute_log_probs(old_dist, actions)
+    return torch.exp(new_log_probs - old_log_probs)
+```
+
+## Tensor-Like Operations
+
+### Shape and Device Operations
+
+```python
+# All standard tensor operations work
+gpu_dist = normal.to('cuda')
+reshaped_dist = normal.reshape(8, 4)
+squeezed_dist = normal.squeeze()
+expanded_dist = normal.expand(64, -1)
+
+# Indexing and slicing
+first_sample_dist = normal[0]                # Distribution for first sample
+subset_dist = normal[:16]                    # First 16 samples
+masked_dist = normal[mask]                   # Boolean masking
+
+# Concatenation and stacking
+stacked_dists = torch.stack([normal, normal])  # New batch dimension
+catted_dists = torch.cat([normal, normal])     # Extend batch dimension
+```
+
+### Advanced Transformations
+
+```python
+# Gradients and optimization
+normal_with_grads = TensorNormal(
+    loc=torch.zeros(32, 4, requires_grad=True),
+    scale=torch.ones(32, 4, requires_grad=True),
+    shape=(32,),
+    device='cpu'
+)
+
+# Loss computation with gradients
+samples = normal_with_grads.rsample()
+loss = (samples ** 2).mean()
+loss.backward()
+
+print(f"Loc gradients: {normal_with_grads._loc.grad}")
+print(f"Scale gradients: {normal_with_grads._scale.grad}")
+
+# Detachment for stop-gradient operations
+detached_dist = normal_with_grads.detach()
+detached_samples = detached_dist.sample()    # No gradients
+```
+
+### Distribution Arithmetic
+
+```python
+# KL divergence between distributions
 from torch.distributions import kl_divergence
 
-from tensorcontainer.tensor_distribution import (
-    TensorBernoulli,
-    TensorCategorical,
-    TensorDistribution,
-    TensorNormal,
-)
+kl_div = kl_divergence(normal, detached_dist)
+print(f"KL divergence shape: {kl_div.shape}")  # (32, 4)
 
+# Custom divergence computations
+def js_divergence(p, q):
+    """Jensen-Shannon divergence between two distributions."""
+    m_samples = 0.5 * (p.sample() + q.sample())
+    
+    kl_pm = kl_divergence(p, m_samples)
+    kl_qm = kl_divergence(q, m_samples)
+    
+    return 0.5 * (kl_pm + kl_qm)
 
-def partially_detached_kl_divergence_tensor(p: TensorDistribution, q: TensorDistribution):
-    """
-    Compute KL divergence between p and a detached version of q using TensorDistribution.
-    Simply calls .detach() on the distribution, regardless of its specific type.
-    """
-    return kl_divergence(p, q.detach())
-
-# Example usage with TensorDistribution
-normal_tensor = TensorNormal(
-    loc=torch.tensor([0.0, 1.0], requires_grad=True),
-    scale=torch.tensor([1.0, 0.5], requires_grad=True),
-)
-categorical_tensor = TensorCategorical(
-    logits=torch.tensor([[0.1, 0.9], [0.8, 0.2]], requires_grad=True)
-)
-bernoulli_tensor = TensorBernoulli(probs=torch.tensor([0.2, 0.8], requires_grad=True))
-
-kl_normal_tensor = partially_detached_kl_divergence_tensor(normal_tensor, normal_tensor)
-kl_categorical_tensor = partially_detached_kl_divergence_tensor(categorical_tensor, categorical_tensor)
-kl_bernoulli_tensor = partially_detached_kl_divergence_tensor(bernoulli_tensor, bernoulli_tensor)
+# Mixture distributions
+def create_mixture(dists, weights):
+    """Create mixture of distributions."""
+    # Sample component indices
+    component_dist = TensorCategorical(logits=torch.log(weights))
+    components = component_dist.sample()
+    
+    # Sample from selected components
+    samples = torch.stack([d.sample() for d in dists])
+    selected_samples = samples[components, torch.arange(len(components))]
+    
+    return selected_samples
 ```
 
-This unified API significantly reduces boilerplate code and improves the maintainability and extensibility of your probabilistic models, as new distribution types can be integrated without modifying existing generic functions.
+## Reinforcement Learning Integration
 
-### Operation Chaining
-
-TensorDistribution enables seamless chaining of tensor operations on distributions, allowing for cleaner and more readable code. This is particularly beneficial when working with complex tensor transformations that would otherwise require manual parameter extraction and re-instantiation for each operation.
-
-The following TensorDistribution example demonstrates how multiple tensor operations can be chained together in a single, unified function that works across different distribution types:
+### Policy Networks
 
 ```python
-import torch
+import torch.nn as nn
 
-from tensorcontainer.tensor_distribution import (
-    TensorBernoulli,
-    TensorNormal,
-)
-from tensorcontainer.tensor_distribution.base import TensorDistribution
+class ContinuousPolicyNetwork(nn.Module):
+    """Policy network outputting continuous action distributions."""
+    
+    def __init__(self, obs_dim, action_dim, hidden_dim=256):
+        super().__init__()
+        self.backbone = nn.Sequential(
+            nn.Linear(obs_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.ReLU()
+        )
+        
+        # Separate heads for mean and log_std
+        self.mean_head = nn.Linear(hidden_dim, action_dim)
+        self.log_std_head = nn.Linear(hidden_dim, action_dim)
+    
+    def forward(self, observations):
+        features = self.backbone(observations)
+        
+        mean = self.mean_head(features)
+        log_std = self.log_std_head(features)
+        std = torch.exp(log_std.clamp(-20, 2))  # Numerical stability
+        
+        return TensorNormal(
+            loc=mean,
+            scale=std,
+            shape=observations.shape[:1],  # Batch shape
+            device=observations.device
+        )
 
+class DiscretePolicyNetwork(nn.Module):
+    """Policy network outputting discrete action distributions."""
+    
+    def __init__(self, obs_dim, num_actions, hidden_dim=256):
+        super().__init__()
+        self.network = nn.Sequential(
+            nn.Linear(obs_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, num_actions)
+        )
+    
+    def forward(self, observations):
+        logits = self.network(observations)
+        
+        return TensorCategorical(
+            logits=logits,
+            shape=observations.shape[:1],
+            device=observations.device
+        )
 
-def chain(distribution: TensorDistribution):
-    distribution = distribution.view(2, 3, 4)
-    distribution = distribution.permute(1, 0, 2)
-    distribution = distribution.detach()
+# Usage
+obs = torch.randn(32, 128)
 
-    return distribution
+continuous_policy = ContinuousPolicyNetwork(128, 4)
+discrete_policy = DiscretePolicyNetwork(128, 6)
 
+action_dist_continuous = continuous_policy(obs)
+action_dist_discrete = discrete_policy(obs)
 
-# Create a TensorNormal
-loc = torch.randn(2 * 3 * 4)
-scale = torch.abs(torch.randn(2 * 3 * 4))
-normal = TensorNormal(loc=loc, scale=scale)
-
-# Execute the chain for TensorNormal
-chain(normal)
-
-# Execute the chain for TensorBernoulli
-bernoulli = TensorBernoulli(logits=torch.randn(2, 3, 4))
-
-chain(bernoulli)  # Works perfectly fine!
+# Sample actions
+continuous_actions = action_dist_continuous.sample()  # Shape: (32, 4)
+discrete_actions = action_dist_discrete.sample()      # Shape: (32,)
 ```
 
-In contrast, the equivalent torch.distributions approach requires separate functions for each operation, with type-specific parameter handling. Each transformation must manually extract parameters, apply the transformation, and reconstruct the distribution:
+### Value Function Training
 
 ```python
-import torch
-from torch.distributions import Bernoulli, Normal
+class DistributionalValueNetwork(nn.Module):
+    """Value network using distributional RL."""
+    
+    def __init__(self, obs_dim, num_atoms=51, v_min=-10, v_max=10):
+        super().__init__()
+        self.num_atoms = num_atoms
+        self.v_min = v_min
+        self.v_max = v_max
+        
+        self.network = nn.Sequential(
+            nn.Linear(obs_dim, 256),
+            nn.ReLU(),
+            nn.Linear(256, 256),
+            nn.ReLU(),
+            nn.Linear(256, num_atoms)
+        )
+        
+        # Support atoms for value distribution
+        self.register_buffer('support', torch.linspace(v_min, v_max, num_atoms))
+    
+    def forward(self, observations):
+        logits = self.network(observations)
+        
+        return TensorCategorical(
+            logits=logits,
+            shape=observations.shape[:1],
+            device=observations.device
+        )
+    
+    def get_values(self, observations):
+        """Get expected values from distribution."""
+        value_dist = self.forward(observations)
+        probs = torch.softmax(value_dist._logits, dim=-1)
+        return (probs * self.support).sum(dim=-1, keepdim=True)
 
-
-# Extract parameters, transform them, create new distribution
-def view(normal):
-    # Careful! Do not change the event dimension!
-    viewed_loc = normal.loc.view(2, 3, 4)
-    viewed_scale = normal.scale.view(2, 3, 4)
-    return Normal(loc=viewed_loc, scale=viewed_scale)
-
-
-# Extract parameters, permute them, create new distribution
-def permute(normal):
-    # Careful! Do not change the event dimension!
-    permuted_loc = normal.loc.permute(1, 0, 2)
-    permuted_scale = normal.scale.permute(1, 0, 2)
-    return Normal(loc=permuted_loc, scale=permuted_scale)
-
-
-# Extract parameters, detach them, create new distribution
-def detach(normal):
-    detached_loc = normal.loc.detach()
-    detached_scale = normal.scale.detach()
-    return Normal(loc=detached_loc, scale=detached_scale)
-
-
-def chain(normal):
-    normal = view(normal)
-    normal = permute(normal)
-    normal = detach(normal)
-
-    return normal
-
-
-# Create a for torch.distributions.Normal with one event dimension
-# For the purposes of this tutorial we do not use Independent, although it
-# would make sense here. See the section on Independent.
-loc = torch.randn(2 * 3 * 4)
-scale = torch.abs(torch.randn(2 * 3 * 4))
-normal = Normal(loc=loc, scale=scale)
-
-# Execute the chain for torch.distributions.Normal
-chain(normal)
-
-# Try to execute the chain for torch.distributions.Bernoulli
-bernoulli = Bernoulli(logits=torch.randn(2, 3, 4))
-
-chain(bernoulli)  # AttributeError: 'Bernoulli' object has no attribute 'loc'
+# Training with distributional loss
+def distributional_loss(pred_dist, target_values, gamma=0.99):
+    """Compute distributional RL loss."""
+    # Project target values onto support
+    batch_size = target_values.shape[0]
+    support = pred_dist.support if hasattr(pred_dist, 'support') else torch.linspace(-10, 10, 51)
+    
+    # Bellman target distribution
+    target_support = target_values + gamma * support.unsqueeze(0)
+    target_probs = torch.zeros(batch_size, len(support))
+    
+    # Project onto support (simplified)
+    for i in range(batch_size):
+        target_probs[i] = torch.softmax(target_support[i], dim=0)
+    
+    # Cross-entropy loss
+    pred_log_probs = pred_dist.log_prob(torch.arange(len(support)).float())
+    return -torch.sum(target_probs * pred_log_probs, dim=-1).mean()
 ```
 
-The torch.distributions approach requires distribution-specific functions because each distribution type has different parameter names (`loc`/`scale` for Normal vs `logits` for Bernoulli). This leads to verbose, error-prone code that breaks when applied to different distribution types.
-
-### Nested Distributions
-
-TensorDistribution simplifies working with nested distributions, such as those created using `Independent`. This is particularly useful when you need to apply tensor transformations to distributions that have both batch and event dimensions, as TensorDistribution automatically handles the complexity of preserving event dimensions while transforming batch dimensions.
-
-The following TensorDistribution example shows how nested distributions can be manipulated with a simple, direct interface:
+### PPO and Policy Optimization
 
 ```python
-import torch
+def ppo_loss(old_dist, new_dist, actions, advantages, clip_epsilon=0.2):
+    """Proximal Policy Optimization loss."""
+    # Compute probability ratios
+    old_log_probs = old_dist.log_prob(actions)
+    new_log_probs = new_dist.log_prob(actions)
+    
+    # Handle multi-dimensional actions
+    if len(old_log_probs.shape) > 1:
+        old_log_probs = old_log_probs.sum(dim=-1)
+        new_log_probs = new_log_probs.sum(dim=-1)
+    
+    ratio = torch.exp(new_log_probs - old_log_probs)
+    
+    # Clipped objective
+    clipped_ratio = torch.clamp(ratio, 1 - clip_epsilon, 1 + clip_epsilon)
+    
+    policy_loss = -torch.min(
+        ratio * advantages,
+        clipped_ratio * advantages
+    ).mean()
+    
+    return policy_loss
 
-from tensorcontainer.tensor_distribution.independent import TensorIndependent
-from tensorcontainer.tensor_distribution.normal import TensorNormal
+def entropy_bonus(dist, coefficient=0.01):
+    """Entropy regularization for exploration."""
+    entropy = dist.entropy()
+    if len(entropy.shape) > 1:
+        entropy = entropy.sum(dim=-1)
+    return coefficient * entropy.mean()
 
-# Create a TensorNormal with one event dimension
-loc = torch.randn(2 * 3, 4)
-scale = torch.abs(torch.randn(2 * 3, 4))
-
-# Use TensorIndependent to create a TensorNormal with one event dimension
-independent_normal = TensorIndependent(TensorNormal(loc=loc, scale=scale), 1)
-
-# We do not need to care about Independent or even the type of distribution that
-# Independent wraps, it just works. The last dimension is an event dimension
-# so we must not pass it to .view()
-independent_normal = independent_normal.view(2, 3)
+# Training loop integration
+def train_policy(policy, old_policy, observations, actions, advantages):
+    """Train policy with PPO."""
+    # Get new action distribution
+    new_action_dist = policy(observations)
+    
+    # Get old action distribution (detached)
+    with torch.no_grad():
+        old_action_dist = old_policy(observations).detach()
+    
+    # Compute losses
+    policy_loss = ppo_loss(old_action_dist, new_action_dist, actions, advantages)
+    entropy_loss = entropy_bonus(new_action_dist)
+    
+    total_loss = policy_loss - entropy_loss
+    
+    return total_loss, {
+        'policy_loss': policy_loss.item(),
+        'entropy': entropy_loss.item()
+    }
 ```
 
-In contrast, the torch.distributions approach requires a multi-step process to achieve the same result. You must manually extract the base distribution, transform its parameters while carefully preserving event dimensions, and then reconstruct the nested structure:
+## Advanced Applications
+
+### Bayesian Neural Networks
 
 ```python
-import torch
-from torch.distributions import Independent, Normal
+class BayesianLinear(nn.Module):
+    """Bayesian linear layer with weight distributions."""
+    
+    def __init__(self, in_features, out_features):
+        super().__init__()
+        
+        # Weight distribution parameters
+        self.weight_mean = nn.Parameter(torch.randn(out_features, in_features) * 0.1)
+        self.weight_log_std = nn.Parameter(torch.full((out_features, in_features), -3.0))
+        
+        # Bias distribution parameters  
+        self.bias_mean = nn.Parameter(torch.zeros(out_features))
+        self.bias_log_std = nn.Parameter(torch.full((out_features,), -3.0))
+    
+    def forward(self, x, sample=True):
+        if sample:
+            # Sample weights and biases
+            weight_dist = TensorNormal(
+                loc=self.weight_mean,
+                scale=torch.exp(self.weight_log_std),
+                shape=self.weight_mean.shape[:1],
+                device=x.device
+            )
+            
+            bias_dist = TensorNormal(
+                loc=self.bias_mean,
+                scale=torch.exp(self.bias_log_std),
+                shape=self.bias_mean.shape[:1],
+                device=x.device
+            )
+            
+            weight = weight_dist.rsample()
+            bias = bias_dist.rsample()
+        else:
+            # Use mean values
+            weight = self.weight_mean
+            bias = self.bias_mean
+        
+        return F.linear(x, weight, bias)
 
-loc = torch.randn(2 * 3, 4)
-scale = torch.abs(torch.randn(2 * 3, 4))
-
-# Use Independent to create a Normal with one event dimension
-normal = Independent(Normal(loc=loc, scale=scale), 1)
-
-# 1. Extract the base distribution
-base_dist = normal.base_dist
-
-# 2. Extract the parameters
-loc = base_dist.loc
-scale = base_dist.scale
-
-# 3. Reshape the parameters
-# Note that we can't touch the event dimension, so we only reshape the batch dimensions
-new_loc = loc.view(2, 3, 4)
-new_scale = scale.view(2, 3, 4)
-
-# 4. Create a new distribution
-new_normal = Independent(Normal(loc=new_loc, scale=new_scale), 1)
+# Uncertainty quantification
+def predict_with_uncertainty(model, x, num_samples=100):
+    """Get predictions with uncertainty estimates."""
+    predictions = []
+    
+    model.eval()
+    with torch.no_grad():
+        for _ in range(num_samples):
+            pred = model(x, sample=True)
+            predictions.append(pred)
+    
+    predictions = torch.stack(predictions)
+    
+    mean_prediction = predictions.mean(dim=0)
+    uncertainty = predictions.std(dim=0)
+    
+    return mean_prediction, uncertainty
 ```
 
-The torch.distributions approach requires explicit knowledge of the nested structure and careful handling of batch versus event dimensions. Each step must be performed manually, making the code verbose and error-prone, especially when working with complex nested distribution hierarchies.
-
----
-
-## 3. How-To Guides (Practical Recipes)
-
-This section provides goal-oriented examples of `TensorDistribution`'s added capabilities.
-
-### How to Sample from a TensorDistribution
-
-The `.sample()` and `.rsample()` methods mirror their `torch.distributions` counterparts but are called on the `TensorDistribution` wrapper. They return a `torch.Tensor` of sampled values.
+### Generative Models
 
 ```python
-import torch
-from torch.distributions import Normal
-from tensorcontainer.tensor_distribution import TensorNormal
+class VAE(nn.Module):
+    """Variational Autoencoder with TensorDistribution."""
+    
+    def __init__(self, input_dim, latent_dim, hidden_dim=256):
+        super().__init__()
+        
+        # Encoder
+        self.encoder = nn.Sequential(
+            nn.Linear(input_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.ReLU()
+        )
+        
+        self.encoder_mean = nn.Linear(hidden_dim, latent_dim)
+        self.encoder_log_std = nn.Linear(hidden_dim, latent_dim)
+        
+        # Decoder
+        self.decoder = nn.Sequential(
+            nn.Linear(latent_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, input_dim),
+            nn.Sigmoid()
+        )
+    
+    def encode(self, x):
+        """Encode input to latent distribution."""
+        features = self.encoder(x)
+        
+        mean = self.encoder_mean(features)
+        log_std = self.encoder_log_std(features)
+        std = torch.exp(log_std.clamp(-20, 2))
+        
+        return TensorNormal(
+            loc=mean,
+            scale=std,
+            shape=x.shape[:1],
+            device=x.device
+        )
+    
+    def decode(self, z):
+        """Decode latent variables to reconstruction."""
+        return self.decoder(z)
+    
+    def forward(self, x):
+        # Encode to latent distribution
+        latent_dist = self.encode(x)
+        
+        # Sample latent variables
+        z = latent_dist.rsample()
+        
+        # Decode to reconstruction
+        reconstruction = self.decode(z)
+        
+        return reconstruction, latent_dist
 
-# Create a batch of Normal distributions using TensorNormal
-means = torch.tensor([0.0, 1.0])
-std_devs = torch.tensor([1.0, 0.5])
-tdist = TensorNormal(loc=means, scale=std_devs)
-
-# Sample from the distribution
-sample = tdist.sample()
-# sample is a torch.Tensor
-# Values will vary
-
-# Resample (reparameterized sample)
-rsample = tdist.rsample()
-# rsample is a torch.Tensor
-# Values will vary
+def vae_loss(recon, target, latent_dist, beta=1.0):
+    """VAE loss with KL divergence regularization."""
+    # Reconstruction loss
+    recon_loss = F.binary_cross_entropy(recon, target, reduction='mean')
+    
+    # KL divergence with standard normal prior
+    prior = TensorNormal(
+        loc=torch.zeros_like(latent_dist._loc),
+        scale=torch.ones_like(latent_dist._scale),
+        shape=latent_dist.shape,
+        device=latent_dist.device
+    )
+    
+    kl_loss = kl_divergence(latent_dist, prior).sum(dim=-1).mean()
+    
+    return recon_loss + beta * kl_loss
 ```
 
-### How to Compute Log Probability
+## Best Practices
 
-The `.log_prob()` method works as expected, computing the log probability of a given sample.
+### Performance Optimization
 
-```python
-import torch
-from torch.distributions import Normal
-from tensorcontainer.tensor_distribution import TensorNormal
+1. **Batch Operations**: Apply operations to entire distributions rather than individual samples
+2. **Memory Efficiency**: Use `rsample()` for gradients, `sample()` for inference
+3. **Numerical Stability**: Clamp log_std parameters and use stable implementations
+4. **Device Consistency**: Keep distribution parameters on the same device as input data
 
-# Create a batch of Normal distributions
-means = torch.tensor([0.0, 1.0])
-std_devs = torch.tensor([1.0, 0.5])
-tdist = TensorNormal(loc=means, scale=std_devs)
+### Design Patterns
 
-# Generate some samples (can be from tdist.sample() or external)
-samples = torch.tensor([-0.1, 1.2])
+1. **Parameter Sharing**: Use shared networks for distribution parameters when appropriate
+2. **Temperature Scaling**: Implement temperature parameters for controlling randomness
+3. **Gradient Flow**: Be aware of when gradients flow through samples vs. parameters
+4. **Validation**: Always validate distribution parameters during development
 
-# Compute log probability
-log_probs = tdist.log_prob(samples)
-# log_probs is a tensor with log probabilities
-# Values will vary
-```
+### Integration Guidelines
 
-### How to Apply Tensor-like Transformations
+1. **Model Interfaces**: Design models to return TensorDistribution instances directly
+2. **Loss Functions**: Implement custom loss functions that work with distribution objects
+3. **Metric Tracking**: Monitor entropy, KL divergence, and other distributional properties
+4. **Debugging**: Use distribution properties (mean, variance) for debugging and validation
 
-This is a key advantage of `TensorDistribution`. Operations like `clone()`, `to(device)`, `cpu()`, and `cuda()` are applied to all underlying parameters of the distribution simultaneously.
-
-```python
-import torch
-from torch.distributions import Normal
-from tensorcontainer.tensor_distribution import TensorNormal
-
-mean = torch.tensor([0.0, 1.0])
-stddev = torch.tensor([1.0, 0.5])
-tdist = TensorNormal(loc=mean, scale=stddev)
-
-# Clone the parameter tensors
-cloned_tdist = tdist.clone()
-# Move parameter to GPU
-cuda_tdist = tdist.to("cuda")
-```
-
-### How to Index and Slice a TensorDistribution
-
-Standard `__getitem__` indexing can be used to slice the batch dimension of your distribution. This operation is applied uniformly to the underlying parameters.
-
-```python
-import torch
-from torch.distributions import Normal
-from tensorcontainer.tensor_distribution import TensorNormal
-
-means = torch.tensor([0.0, 1.0, 2.0])
-std_devs = torch.tensor([1.0, 0.5, 0.2])
-tdist = TensorNormal(loc=means, scale=std_devs)
-
-# Original batch shape is torch.Size([3])
-
-# Slicing the first element
-sliced_tdist = tdist[0]
-# sliced_tdist.shape is torch.Size([])
-
-# Slicing a range
-range_sliced_tdist = tdist[1:3]
-# range_sliced_tdist.shape is torch.Size([2])
-```
-
-### How to Manipulate Batch Shapes
-
-`TensorDistribution` provides tensor-like methods (`view()`, `reshape()`, `permute()`, `squeeze()`, `unsqueeze()`, `expand()`) to manipulate the batch shape of the underlying distribution's parameters.
-
-```python
-import torch
-from torch.distributions import Normal
-from tensorcontainer.tensor_distribution import TensorNormal
-
-means = torch.randn(1, 4, 5)
-std_devs = torch.ones(1, 4, 5)
-tdist = TensorNormal(loc=means, scale=std_devs)
-
-# Original batch_size: torch.Size([1, 4, 5])
-
-# Reshape the batch dimensions
-reshaped_tdist = tdist.reshape(4, 5)
-# Reshaped batch_size: torch.Size([4, 5])
-
-# Squeeze a dimension
-squeezed_tdist = tdist.squeeze(0)
-# Squeezed batch_size: torch.Size([4, 5])
-```
----
-
-## 4. API Reference
-
-This section provides a technical description of the `TensorDistribution` API.
-
-### Initialization & Core Attributes
-
-*   `__init__(self, dist: torch.distributions.Distribution)`: Constructor. Wraps a `torch.distributions.Distribution` instance.
-*   `dist`: The underlying `torch.distributions.Distribution` instance.
-*   `shape`: The `torch.Size` of the batch dimensions of the wrapped distribution.
-*   `device`: The `torch.device` where the distribution's parameters reside.
-
-### Sampling Methods
-
-*   `sample(self, sample_shape=torch.Size())`: Generates samples. Returns a `torch.Tensor`.
-*   `rsample(self, sample_shape=torch.Size())`: Generates reparameterized samples. Returns a `torch.Tensor`.
-
-### Probability Methods
-
-*   `log_prob(self, value)`: Returns the log probability of `value`.
-
-### Tensor-like Operations
-
-*   `clone()`: Returns a deep copy.
-*   `to(device)`: Moves parameters to the specified device.
-*   `cpu()`: Moves parameters to CPU memory.
-*   `cuda()`: Moves parameters to CUDA memory.
-*   `detach()`: Detaches parameters from the computation graph.
-
-### Shape Manipulation
-
-*   `view(*shape)`: Reshapes batch dimensions.
-*   `reshape(*shape)`: Reshapes batch dimensions (non-contiguous memory safe).
-*   `permute(*dims)`: Permutes batch dimensions.
-*   `squeeze(*dims)`: Removes singleton dimensions.
-*   `unsqueeze(*dims)`: Adds singleton dimensions.
-*   `expand(*sizes)`: Expands batch dimensions.
-
----
-
-## 5. Limitations
-
-*   **Implementation-Dependent:** Behavior is determined by the underlying `torch.distributions.Distribution` instance.
-*   **Parameter Immutability:** `TensorDistribution` methods should be preferred for transformations over direct manipulation of distribution parameters (e.g., `tdist.dist.loc = new_loc`), which can cause inconsistencies.
+TensorDistribution excels in probabilistic modeling scenarios where you need the flexibility of PyTorch distributions combined with the operational convenience of tensor-like objects. Its seamless integration with TensorContainer operations makes it particularly valuable for reinforcement learning, Bayesian modeling, and other uncertainty-aware applications.

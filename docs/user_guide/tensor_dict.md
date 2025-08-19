@@ -1,150 +1,481 @@
-# TensorDict
+# TensorDict Deep Dive
 
-A dictionary-like, batched tensor container for structured data with shared batch dimensions.
+TensorDict provides a dictionary-like interface for managing collections of tensors with shared batch dimensions. This guide covers advanced usage patterns, nested structures, and specialized operations that make TensorDict ideal for dynamic data scenarios.
 
-## Key Benefits
+## Creation and Initialization
 
-- Unified batch ops: index, slice, and transform all tensors as one object
-- Shape safety: enforces consistent leading batch dims across leaves
-- Efficient views: zero-copy reshape/slice on batch dims when possible
-- Device/dtype consistency: move/cast the entire container at once
-- PyTree- and compile-ready: integrates with tree utilities and torch.compile
-- Nested mappings: hierarchical data with the same batch semantics
-
-## When to Use
-
-### Use TensorDict when you:
-- Need a dynamic mapping of tensors sharing batch dimensions
-- Want container-wide operations (indexing, reshape, device/dtype)
-- Require nested structures with consistent batch semantics
-- Need PyTree compatibility or torch.compile(fullgraph=True)
-
-### Prefer alternatives when you:
-- Plain dict: you don’t need batch validation or container-wide behavior
-- TensorDataClass: you have a fixed schema with typed, attribute-access fields
-- Individual tensors: you operate on a single tensor without a container
-
-## Mental Model
-
-- Batch dimensions: leading dims identical across all leaves
-- Event dimensions: trailing dims may differ per leaf
-- Container ops affect batch dims only; event dims are preserved
-- Validation ensures batch shape (and device if set) match across leaves
-
-## Quick Start
+### Basic Construction
 
 ```python
-from tensorcontainer import TensorDict
 import torch
+from tensorcontainer import TensorDict
 
-td = TensorDict({"obs": torch.randn(32, 128), "act": torch.randn(32, 4)}, shape=(32,))
-mini = td[:8]  # new TensorDict with shape (8,)
+# Simple key-value construction
+data = TensorDict({
+    'observations': torch.randn(32, 128),
+    'actions': torch.randint(0, 4, (32,)),
+    'rewards': torch.randn(32, 1)
+}, shape=(32,), device='cpu')
 ```
 
-## Core Operations
+### From Existing Data Structures
 
-### Indexing / Slicing
 ```python
-from tensorcontainer import TensorDict
-import torch
+# Convert from regular dictionary
+raw_data = {
+    'states': torch.randn(16, 64),
+    'next_states': torch.randn(16, 64),
+    'actions': torch.randn(16, 4)
+}
+td = TensorDict(raw_data, shape=(16,), device='cpu')
 
-td = TensorDict({"x": torch.arange(4)}, shape=(4,))
-td0 = td[0]    # shape: ()
-head = td[:2]  # shape: (2,)
+# Empty initialization for dynamic filling
+empty_td = TensorDict({}, shape=(32,), device='cuda')
+empty_td['observations'] = torch.randn(32, 128, device='cuda')
+empty_td['actions'] = torch.randn(32, 4, device='cuda')
 ```
 
-### Shape Ops (view / reshape / permute)
+## Dictionary Operations
+
+### Key Management
+
 ```python
-from tensorcontainer import TensorDict
-import torch
+# Check if key exists
+if 'rewards' in data:
+    rewards = data['rewards']
 
-td = TensorDict({"x": torch.randn(2, 3, 5)}, shape=(2, 3))
-td1 = td.view(6)        # (2,3) -> (6,)
-td2 = td1.reshape(3, 2) # -> (3,2)
-td3 = td2.permute(1, 0) # -> (2,3)
+# Get all keys
+all_keys = list(data.keys())
+print(f"Available keys: {all_keys}")
+
+# Get values and items
+values = list(data.values())
+items = list(data.items())
+
+# Length returns number of top-level keys
+print(f"Number of fields: {len(data)}")
 ```
 
-### Device / Dtype
+### Dynamic Field Assignment
+
 ```python
-from tensorcontainer import TensorDict
-import torch
+# Add new fields dynamically
+data['next_observations'] = torch.randn(32, 128)
+data['done'] = torch.randint(0, 2, (32, 1))
 
-td = TensorDict({"x": torch.randn(2, 3)}, shape=(2,))
-td_f16 = td.to(torch.float16)
-td_f32 = td.float()
+# Remove fields
+del data['rewards']
+
+# Update multiple fields
+data.update({
+    'values': torch.randn(32, 1),
+    'log_probs': torch.randn(32, 4)
+})
 ```
 
-### Stack / Cat
+### Safe Access Patterns
+
 ```python
-from tensorcontainer import TensorDict
-import torch
+# Get with default value
+rewards = data.get('rewards', torch.zeros(32, 1))
 
-td1 = TensorDict({"x": torch.zeros(2, 3)}, shape=(2,))
-td2 = TensorDict({"x": torch.ones(2, 3)}, shape=(2,))
-stk = torch.stack([td1, td2], dim=0)  # shape: (2,2)
-cat = torch.cat([td1, td2], dim=0)    # shape: (4,)
+# Pop with default
+old_actions = data.pop('old_actions', torch.zeros(32, 4))
+
+# Set default if key doesn't exist
+data.setdefault('episode_id', torch.arange(32))
 ```
 
-### Elementwise Math
+## Nested Structures
+
+### Creating Nested TensorDicts
+
 ```python
-from tensorcontainer import TensorDict
-import torch
+# Nested dictionary construction
+nested_data = TensorDict({
+    'agent': {
+        'position': torch.randn(32, 3),
+        'velocity': torch.randn(32, 3),
+        'health': torch.randint(0, 100, (32, 1))
+    },
+    'environment': {
+        'obstacles': torch.randn(32, 10, 2),
+        'goals': torch.randn(32, 2),
+        'lighting': torch.randn(32, 1)
+    },
+    'game_state': {
+        'score': torch.randint(0, 1000, (32, 1)),
+        'level': torch.randint(1, 10, (32, 1))
+    }
+}, shape=(32,), device='cpu')
 
-a = TensorDict({"x": torch.tensor([[1., 2.], [3., 4.]])}, shape=(2,))
-b = TensorDict({"x": torch.tensor([[10., 20.], [30., 40.]])}, shape=(2,))
-s = a + b
-z = a * 0.5
+# Access nested values
+agent_pos = nested_data['agent']['position']
+obstacle_count = nested_data['environment']['obstacles'].shape[1]  # 10
 ```
 
-### Flatten Keys
+### Deep Nesting Operations
+
 ```python
-from tensorcontainer import TensorDict
-import torch
+# Create deeply nested structure
+deep_nested = TensorDict({
+    'level1': {
+        'level2': {
+            'level3': {
+                'data': torch.randn(32, 64)
+            }
+        }
+    }
+}, shape=(32,), device='cpu')
 
-td = TensorDict({"x": {"a": torch.tensor([1, 2]), "b": torch.tensor([3, 4])}}, shape=(2,))
-flat = td.flatten_keys()  # keys: "x.a", "x.b"; values are views (no copy)
+# Access deep values
+deep_data = deep_nested['level1']['level2']['level3']['data']
+
+# Add to deep structure
+deep_nested['level1']['level2']['more_data'] = torch.randn(32, 32)
 ```
 
-## Interop
+### Nested Batch Operations
 
-- PyTree: flattens to leaf tensors + context; works with tree utilities
-- torch.compile: compatible, including indexing and shape ops (fullgraph=True)
-- torch ops: `torch.stack` and `torch.cat` dispatch via `__torch_function__`
+```python
+# All nested tensors are affected by batch operations
+reshaped_nested = nested_data.reshape(8, 4)
+# agent.position becomes (8, 4, 3)
+# environment.obstacles becomes (8, 4, 10, 2)
 
-## Limitations and Caveats
+moved_nested = nested_data.to('cuda')
+# All nested tensors moved to CUDA
 
-- Keys must be strings; non-tensor values don’t participate in tensor ops
-- All leaves must share the exact leading batch shape
-- If device is set/inferred, all leaves must be on that device
-- Slice assignment: RHS must be a TensorDict with a compatible slice shape
-- `view()` requires contiguous layout; use `reshape()` if unsure
-- `permute()/transpose()/t()` operate on batch dims only
-- `flatten_keys()` returns view-like values; edits affect the original
-- Key collisions possible if original keys contain the separator
-- Zero-dim containers require tuple indexing: `td[()]`
-- Changing string keys in compiled code may trigger recompilation
+indexed_nested = nested_data[0]
+# All nested tensors indexed, batch shape becomes ()
+```
 
-## API Summary (selected)
+## Key Flattening
 
-- Construction and mapping
-  - `TensorDict(mapping, shape, device=None, dtype=None)`
-  - `td[key]`, `td[key] = value`, `td.update(mapping_or_td)`
-  - `td.keys()`, `td.values()`, `td.items()`
-  - `td.flatten_keys(separator=".")`
-- Indexing and shape
-  - `td[idx]`, `td[idx] = other_td`
-  - `td.view(*shape)`, `td.reshape(*shape)`, `td.expand(*sizes)`
-- Transforms
-  - `td.permute(*dims)`, `td.transpose(dim0, dim1)`, `td.t()`
-  - `td.squeeze(dim=None)`, `td.unsqueeze(dim)`
-- Device/dtype and copy
-  - `td.to(device_or_dtype)`, `td.cpu()`
-  - `td.clone()`, `td.copy()`, `td.detach()`
-- Torch ops
-  - `torch.stack([td1, td2, ...], dim=...)`
-  - `torch.cat([td1, td2, ...], dim=...)`
+### Basic Flattening
 
-## References
+```python
+# Flatten nested keys with dot notation
+flat_data = nested_data.flatten_keys()
+print(list(flat_data.keys()))
+# ['agent.position', 'agent.velocity', 'agent.health', 
+#  'environment.obstacles', 'environment.goals', 'environment.lighting',
+#  'game_state.score', 'game_state.level']
 
-- [src/tensorcontainer/tensor_dict.py](src/tensorcontainer/tensor_dict.py)
-- [tests/tensor_dict/](tests/tensor_dict/)
+# Access flattened keys
+agent_pos = flat_data['agent.position']
+env_goals = flat_data['environment.goals']
+```
+
+### Custom Separators
+
+```python
+# Use custom separator
+flat_custom = nested_data.flatten_keys(separator='/')
+print(list(flat_custom.keys()))
+# ['agent/position', 'agent/velocity', 'agent/health', ...]
+
+# Or use underscore
+flat_underscore = nested_data.flatten_keys(separator='_')
+print(list(flat_underscore.keys()))
+# ['agent_position', 'agent_velocity', 'agent_health', ...]
+```
+
+### Working with Flattened Data
+
+```python
+# Flattened data is still a TensorDict
+assert isinstance(flat_data, TensorDict)
+
+# All tensor operations work normally
+flattened_reshaped = flat_data.reshape(8, 4)
+flattened_cuda = flat_data.to('cuda')
+
+# Can still add new flattened keys
+flat_data['new.deeply.nested.value'] = torch.randn(32, 16)
+```
+
+## Advanced Indexing and Slicing
+
+### Boolean Masking
+
+```python
+# Create boolean mask
+active_mask = torch.randint(0, 2, (32,)).bool()
+
+# Apply mask to entire TensorDict
+active_data = data[active_mask]
+print(f"Active data shape: {active_data.shape}")  # Shape varies based on mask
+
+# Works with nested structures
+active_nested = nested_data[active_mask]
+# All nested tensors are masked consistently
+```
+
+### Advanced Indexing Patterns
+
+```python
+# Multi-dimensional indexing (for higher-dimensional batch shapes)
+time_series_data = TensorDict({
+    'states': torch.randn(8, 10, 64),    # (batch, time, features)
+    'actions': torch.randn(8, 10, 4),
+    'rewards': torch.randn(8, 10, 1)
+}, shape=(8, 10), device='cpu')
+
+# Index specific episodes and timesteps
+episode_subset = time_series_data[:4, :5]  # First 4 episodes, first 5 timesteps
+last_timestep = time_series_data[:, -1]    # All episodes, last timestep
+middle_episodes = time_series_data[2:6, :] # Episodes 2-5, all timesteps
+```
+
+### Ellipsis and Complex Indexing
+
+```python
+# Use ellipsis for complex indexing
+complex_data = TensorDict({
+    'multi_dim': torch.randn(4, 8, 6, 128),
+    'simple': torch.randn(4, 8, 6, 1)
+}, shape=(4, 8, 6), device='cpu')
+
+# Ellipsis indexing
+subset = complex_data[..., :3]  # Last batch dimension sliced
+middle = complex_data[:, ..., 2:4]  # Middle slice of second-to-last dimension
+```
+
+## Memory and Performance Optimization
+
+### Sharing Memory
+
+```python
+# TensorDict shares memory with original tensors
+original_tensor = torch.randn(32, 128)
+data = TensorDict({'obs': original_tensor}, shape=(32,), device='cpu')
+
+# Modifying original affects TensorDict
+original_tensor[0] = 999
+assert data['obs'][0, 0] == 999
+
+# Views also share memory
+reshaped_data = data.reshape(8, 4)
+reshaped_data['obs'][0, 0, 0] = 777
+assert data['obs'][0, 0] == 777
+```
+
+### Efficient Updates
+
+```python
+# Batch updates are more efficient than individual assignments
+updates = {
+    'new_obs': torch.randn(32, 128),
+    'new_actions': torch.randn(32, 4),
+    'new_rewards': torch.randn(32, 1)
+}
+data.update(updates)  # Single operation
+
+# Avoid inefficient patterns
+# BAD: Multiple individual assignments in loop
+# for key, value in updates.items():
+#     data[key] = value  # Less efficient
+```
+
+### Memory-Conscious Construction
+
+```python
+# Use unsafe_construction for performance-critical paths
+from tensorcontainer import TensorContainer
+
+with TensorContainer.unsafe_construction():
+    batches = []
+    for batch_idx in range(1000):
+        batch_data = TensorDict({
+            'obs': torch.randn(32, 128),
+            'actions': torch.randn(32, 4)
+        }, shape=(32,), device='cpu')
+        batches.append(batch_data)
+```
+
+## Serialization and Persistence
+
+### Dictionary Conversion
+
+```python
+# Convert to regular Python dictionary
+python_dict = dict(data.items())
+nested_python_dict = {k: v.cpu().numpy() for k, v in data.items()}
+
+# Reconstruct from dictionary
+reconstructed = TensorDict(python_dict, shape=data.shape, device=data.device)
+```
+
+### State Management
+
+```python
+# Extract state for serialization
+state = {
+    'data': {k: v.cpu() for k, v in data.items()},
+    'shape': data.shape,
+    'device': str(data.device)
+}
+
+# Restore from state
+restored_data = TensorDict(
+    state['data'], 
+    shape=state['shape'], 
+    device=state['device']
+)
+```
+
+## Integration Patterns
+
+### PyTree Operations
+
+```python
+import torch.utils._pytree as pytree
+
+# Apply functions to all tensors
+def normalize(x):
+    return (x - x.mean()) / (x.std() + 1e-8)
+
+normalized_data = pytree.tree_map(normalize, data)
+
+# Combine multiple TensorDicts
+def weighted_average(x, y, weight=0.5):
+    return weight * x + (1 - weight) * y
+
+averaged = pytree.tree_map(weighted_average, data1, data2)
+```
+
+### DataLoader Integration
+
+```python
+from torch.utils.data import DataLoader, Dataset
+
+class TensorDictDataset(Dataset):
+    def __init__(self, tensor_dict):
+        self.data = tensor_dict
+        self.length = tensor_dict.shape[0]
+    
+    def __len__(self):
+        return self.length
+    
+    def __getitem__(self, idx):
+        return self.data[idx]
+
+# Create dataset and dataloader
+dataset = TensorDictDataset(data)
+dataloader = DataLoader(dataset, batch_size=8, shuffle=True)
+
+for batch in dataloader:
+    # Each batch is a TensorDict with batch_size samples
+    assert isinstance(batch, TensorDict)
+    process_batch(batch)
+```
+
+### Model Integration
+
+```python
+import torch.nn as nn
+
+class TensorDictProcessor(nn.Module):
+    def __init__(self, obs_dim, action_dim):
+        super().__init__()
+        self.obs_encoder = nn.Linear(obs_dim, 64)
+        self.action_encoder = nn.Linear(action_dim, 32)
+        self.combiner = nn.Linear(96, 1)
+    
+    def forward(self, data):
+        # Process TensorDict directly
+        obs_features = self.obs_encoder(data['observations'])
+        action_features = self.action_encoder(data['actions'])
+        combined = torch.cat([obs_features, action_features], dim=-1)
+        return self.combiner(combined)
+
+# Model can process TensorDict directly
+model = TensorDictProcessor(128, 4)
+output = model(data)
+```
+
+## Error Handling and Debugging
+
+### Common Error Patterns
+
+```python
+# Shape mismatch errors provide detailed paths
+try:
+    invalid_data = TensorDict({
+        'good_tensor': torch.randn(32, 64),
+        'bad_tensor': torch.randn(16, 64),  # Wrong batch size
+        'nested': {
+            'also_bad': torch.randn(8, 32)   # Also wrong batch size
+        }
+    }, shape=(32,), device='cpu')
+except ValueError as e:
+    print(f"Detailed error: {e}")
+    # Shows exact path to problematic tensor
+```
+
+### Validation Utilities
+
+```python
+# Check shape consistency
+def validate_tensordict(td):
+    for key, value in td.items():
+        if isinstance(value, torch.Tensor):
+            expected_prefix = td.shape
+            actual_prefix = value.shape[:len(expected_prefix)]
+            if actual_prefix != expected_prefix:
+                print(f"Shape mismatch at {key}: expected {expected_prefix}, got {actual_prefix}")
+
+# Check device consistency
+def validate_devices(td):
+    if td.device is not None:
+        for key, value in td.items():
+            if isinstance(value, torch.Tensor) and value.device != td.device:
+                print(f"Device mismatch at {key}: expected {td.device}, got {value.device}")
+```
+
+## Best Practices
+
+### Naming Conventions
+
+```python
+# Use descriptive, hierarchical keys
+good_names = TensorDict({
+    'agent.observations.visual': torch.randn(32, 3, 84, 84),
+    'agent.observations.proprioception': torch.randn(32, 12),
+    'agent.actions.discrete': torch.randint(0, 4, (32,)),
+    'agent.actions.continuous': torch.randn(32, 2),
+    'environment.rewards.dense': torch.randn(32, 1),
+    'environment.rewards.sparse': torch.randn(32, 1)
+}, shape=(32,), device='cpu')
+```
+
+### Structure Design
+
+```python
+# Group related data logically
+well_structured = TensorDict({
+    'inputs': {
+        'observations': torch.randn(32, 128),
+        'previous_actions': torch.randn(32, 4)
+    },
+    'targets': {
+        'actions': torch.randn(32, 4),
+        'values': torch.randn(32, 1)
+    },
+    'metadata': {
+        'episode_ids': torch.arange(32),
+        'timesteps': torch.randint(0, 1000, (32,))
+    }
+}, shape=(32,), device='cpu')
+```
+
+### Performance Guidelines
+
+1. **Use batch operations**: Apply operations to entire TensorDict rather than individual tensors
+2. **Minimize key changes**: Avoid frequently adding/removing keys in performance-critical code
+3. **Consider flattening**: For ML pipelines, flattened keys often provide better performance
+4. **Memory sharing**: Be aware of when tensors share memory vs. when they're copied
+5. **Device consistency**: Keep related tensors on the same device when possible
+
+TensorDict excels in scenarios requiring flexible, dynamic data structures with the safety and performance benefits of the TensorContainer framework. Its dictionary-like interface makes it intuitive for developers familiar with Python dictionaries while providing the advanced tensor management capabilities needed for complex ML workflows.
