@@ -2,6 +2,82 @@
 
 *A comprehensive introduction to structured tensor management in PyTorch*
 
+## Quick Start
+
+TensorContainer helps you manage structured tensor data with unified operations. Here's a practical example:
+
+```python
+import torch
+from tensorcontainer import TensorDict
+
+# Create a container with related tensors
+batch = TensorDict({
+    'observations': torch.randn(32, 64, 64),  # 32 images of 64x64
+    'actions': torch.randn(32, 4),            # 32 action vectors
+    'rewards': torch.randn(32, 1)             # 32 reward values
+}, shape=(32,))  # Batch dimension: 32 samples
+
+# Apply operations to ALL tensors at once
+batch = batch.to('cuda')          # Move all tensors to GPU
+batch = batch.reshape(16, 2)      # Reshape batch to 16x2
+batch = batch.detach()            # Detach all tensors from computation graph
+
+# Access individual tensors
+obs = batch['observations']       # Shape: (16, 2, 64, 64)
+actions = batch['actions']        # Shape: (16, 2, 4)
+
+print(f"Batch shape: {batch.shape}")
+print(f"Available keys: {list(batch.keys())}")
+```
+
+For working with probability distributions as tensors, TensorDistribution enables batch operations on distribution parameters:
+
+```python
+import torch
+from tensorcontainer.tensor_distribution import TensorNormal
+
+# Create a normal distribution with batch dimensions
+dist = TensorNormal(
+    loc=torch.zeros(16, 2),      # Mean: 16 batches, 2 dimensions
+    scale=torch.ones(16, 2),     # Std dev: 16 batches, 2 dimensions
+    shape=(16,),                 # Batch dimension: 16 samples
+    device='cpu'
+)
+
+# Sample values and compute log probabilities
+samples = dist.sample()                    # Shape: (16, 2)
+log_probs = dist.log_prob(samples)         # Shape: (16, 2)
+
+# Apply tensor operations to the entire distribution
+dist = dist.to('cuda')                     # Move all parameters to GPU
+dist = dist.reshape(4, 4)                  # Reshape batch dimensions
+
+print(f"Distribution batch shape: {dist.shape}")
+print(f"Samples shape: {samples.shape}")
+```
+
+**Key Benefits:**
+- **Unified Operations**: Apply `.to()`, `.reshape()`, `.detach()` to all tensors simultaneously
+- **Batch Safety**: All tensors maintain consistent batch dimensions automatically
+- **Flexible Structure**: Mix different tensor shapes while keeping batch dimensions aligned
+- **Distribution Operations**: TensorDistribution enables tensor operations on entire probability distributions
+- **Batch Sampling**: Sample values and compute log probabilities with automatic batch handling
+- **Parameter Management**: Access distribution parameters (mean, variance) with tensor-like operations
+
+## How to Use This Guide
+
+This guide is organized to help you progressively learn TensorContainer:
+
+1. **Core Concepts** - Essential concepts that apply to all container types
+2. **Container Types** - Choose the right container for your needs:
+   - Use **TensorDict** for dynamic, flexible data structures
+   - Use **TensorDataClass** for static, type-safe data structures
+   - Use **TensorDistribution** for probabilistic modeling
+3. **Advanced Patterns** - Nested containers, optimization techniques
+4. **Integration** - Working with PyTorch ecosystem
+
+Read the Core Concepts section, then jump to the container type that best matches your use case.
+
 ## Introduction
 
 TensorContainer is a PyTorch library that transforms how you work with structured tensor data. Instead of manually managing collections of individual tensors, TensorContainer provides unified containers that behave like single tensors while organizing complex, heterogeneous data structures.
@@ -43,6 +119,16 @@ def process_batch(batch, batch_size):
 - **PyTorch Integration**: Seamless compatibility with `torch.compile`, PyTree operations, and existing workflows
 - **Type Safety**: Static typing support with IDE autocomplete and error checking
 
+## Choosing the Right Container
+
+TensorContainer offers three main container types, each designed for specific use cases:
+
+**TensorDict** provides dictionary-style containers with dynamic key-based access. It's ideal for exploratory development, prototyping, and scenarios where your data structure changes during runtime. TensorDict supports nested dictionaries and offers flexible key management.
+
+**TensorDataClass** offers type-safe dataclass-based containers with static typing and IDE support. It's best suited for production code with well-defined, stable data structures. TensorDataClass provides compile-time type checking, excellent IDE autocomplete, and optimized memory layout.
+
+**TensorDistribution** wraps PyTorch distributions with tensor-like operations while maintaining full compatibility with the `torch.distributions` API. It's designed for probabilistic modeling, reinforcement learning policy networks, and scenarios where you need to apply tensor transformations to entire distributions.
+
 ## Core Concepts
 
 Before diving into specific container types, let's understand the fundamental concepts that apply to all TensorContainer implementations.
@@ -71,11 +157,18 @@ print(f"Container batch shape: {data.shape}")  # (4, 3)
 # but have different event dimensions
 ```
 
+> ### Key Takeaways: Batch vs Event Dimensions
+> 
+> - **Batch dimensions** are leading dimensions that must be consistent across all tensors
+> - **Event dimensions** are trailing dimensions that can vary between tensors
+> - Shape operations only affect batch dimensions, preserving event dimensions
+
 ### Shape Operations
 
 All shape operations (like `view`, `reshape`, `permute`) only affect batch dimensions, preserving event dimensions:
 
 ```python
+# Note: 'data' was defined earlier with batch shape (4, 3)
 # Reshape batch dimensions from (4, 3) to (12,)
 reshaped = data.reshape(12)
 print(f"Reshaped batch shape: {reshaped.shape}")  # (12,)
@@ -89,6 +182,7 @@ print(f"Reshaped batch shape: {reshaped.shape}")  # (12,)
 Containers enforce device consistency across all tensors (unless `device=None`):
 
 ```python
+# Note: 'data' was defined earlier with batch shape (4, 3) on CPU
 # Move entire container to CUDA
 cuda_data = data.to('cuda')
 print(f"Device: {cuda_data.device}")  # cuda:0
@@ -115,6 +209,7 @@ print(f"GPU tensor device: {mixed_device_data['gpu_data'].device}")  # cuda:0
 Indexing operates on batch dimensions only:
 
 ```python
+# Note: 'data' was defined earlier with batch shape (4, 3)
 # Index into the first batch dimension
 first_sample = data[0]
 print(f"First sample shape: {first_sample.shape}")  # (3,)
@@ -164,7 +259,12 @@ first_sample = data[0]
 # Both containers indexed together
 ```
 
-This demonstrates that TensorDict and TensorDataClass work seamlessly together, with operations propagating uniformly across all nested containers regardless of type.
+> ### Key Takeaways: Core Concepts
+> 
+> - All operations (`.to()`, `.view()`, etc.) affect only batch dimensions
+> - Containers can be nested, and operations propagate automatically
+> - Use `device=None` to allow mixed-device tensors in a container
+> - Indexing operates on batch dimensions only
 
 ### Stacking and Concatenation
 
@@ -190,7 +290,6 @@ print(f"Stacked shape: {stacked.shape}")  # (2, 16)
 concatenated = torch.cat([batch1, batch2])  # Extended batch dim: (32,)
 print(f"Concatenated shape: {concatenated.shape}")  # (32,)
 ```
-
 
 ## Container Types
 
@@ -383,6 +482,7 @@ detached_dist = action_dist.detach()
 ### Distribution Operations
 
 ```python
+# Note: 'action_dist' was defined earlier as a TensorIndependent distribution
 # All the standard torch.distributions operations work
 mean = action_dist.mean
 variance = action_dist.variance
@@ -407,12 +507,13 @@ cuda_dist = action_dist.to('cuda')
 All TensorContainer types work seamlessly with PyTorch's `torch.compile` for optimized execution:
 
 ```python
+# Note: 'batch' and 'action_dist' were defined in earlier examples
 @torch.compile
 def process_batch(batch):
     # All tensor operations compile efficiently
     return batch.to('cuda').reshape(-1).detach()
 
-@torch.compile  
+@torch.compile
 def policy_forward(dist):
     # Distribution operations are compile-safe
     actions = dist.sample()
@@ -424,17 +525,55 @@ compiled_batch = process_batch(batch)
 actions, log_probs = policy_forward(action_dist)
 ```
 
+## Common Pitfalls
+
+### Mixing Batch and Event Dimensions
+A common mistake is trying to apply operations to event dimensions:
+
+```python
+# INCORRECT: This will fail
+data = TensorDict({
+    'obs': torch.randn(32, 64, 64),
+    'action': torch.randn(32, 4)
+}, shape=(32,))
+
+# This fails because it tries to reshape event dimensions
+data.reshape(32, 16, 16)  # Error!
+```
+
+**Solution**: Remember that shape operations only affect batch dimensions:
+
+```python
+# CORRECT: Only reshape batch dimensions
+data = data.reshape(16, 2)  # Now shape is (16, 2)
+```
+
+### Device Inconsistency
+Forgetting that containers enforce device consistency by default:
+
+```python
+# INCORRECT: This will raise an error
+data = TensorDict({
+    'cpu_tensor': torch.randn(32, 64),
+    'gpu_tensor': torch.randn(32, 64).cuda()
+}, shape=(32,))  # Error: Mixed devices!
+```
+
+**Solution**: Use `device=None` to allow mixed devices:
+
+```python
+# CORRECT: Allow mixed devices
+data = TensorDict({
+    'cpu_tensor': torch.randn(32, 64),
+    'gpu_tensor': torch.randn(32, 64).cuda()
+}, shape=(32,), device=None)
+```
+
 ## Next Steps
 
-This overview covers the core concepts and basic usage of TensorContainer. For more detailed information:
+- [TensorDict Deep Dive](tensor_dict.md) - For dynamic, flexible data structures
+- [TensorDataClass Deep Dive](tensor_dataclass.md) - For type-safe, production-ready code
+- [TensorDistribution Deep Dive](tensor_distribution.md) - For torch.distribution with tensor functionality
 
-- **[TensorDict Deep Dive](tensor_dict.md)** - Advanced TensorDict patterns, nested structures, and performance optimization
-- **[TensorDataClass Deep Dive](tensor_dataclass.md)** - Type-safe containers, inheritance, and integration patterns  
-- **[TensorDistribution Deep Dive](tensor_distribution.md)** - Probabilistic modeling, RL integration, and advanced distributions
 
-## Conclusion
-
-TensorContainer transforms PyTorch workflows by providing tensor-like operations for structured data. Whether you need the flexibility of TensorDict, the type safety of TensorDataClass, or the probabilistic modeling of TensorDistribution, all containers share the same intuitive semantics while providing specialized functionality for different use cases.
-
-> **Academic Project**: TensorContainer is an academic research project. For production use, consider the official [torch/tensordict](https://github.com/pytorch/tensordict) library.
 
