@@ -243,9 +243,11 @@ class TensorContainer:
         """Context manager to disable validation during construction.
 
         This context manager temporarily disables the validation that normally
-        occurs during TensorContainer construction. Use this for performance-critical
-        scenarios where you are certain that the tensor shapes and devices are
-        compatible, and validation overhead is unacceptable.
+        occurs during TensorContainer construction. This is for example use in
+        TensorContainer.to() that changes the device of all children. This would
+        lead to device validation error when we unflatten the TensorContainer. 
+        As we expect the device to change, we use unsafe_construction to disable
+        validation here.
 
         Warning:
             Using unsafe construction can lead to runtime errors if tensors
