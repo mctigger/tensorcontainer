@@ -11,30 +11,32 @@ import torch
 from tensorcontainer import TensorDataClass
 
 # 1. Define a schema using class annotations
-class RLBatch(TensorDataClass):
+class SimpleData(TensorDataClass):
     observations: torch.Tensor
     actions: torch.Tensor
 
 # 2. Instantiate with tensors and a shared batch shape
-batch = RLBatch(
-    observations=torch.randn(32, 64),  # (B, F)
-    actions=torch.randint(0, 4, (32,)), # (B,)
-    shape=(32,),                       # Shared batch dimension
+obs_tensor = torch.rand(2, 3)
+act_tensor = torch.rand(2)
+data = SimpleData(
+    observations=obs_tensor,
+    actions=act_tensor,
+    shape=(2,),  # Batch dimensions shared by all fields
     device="cpu",
 )
 
 # 3. Access fields with type-safe attribute access
-obs = batch.observations
-assert obs.shape == (32, 64)
+print(f"Observations shape: {data.observations.shape}")
+print(f"Actions shape: {data.actions.shape}")
 
 # 4. Apply unified operations to all tensors
-batch_gpu = batch.to("cuda")      # -> [TensorContainer.to()](src/tensorcontainer/tensor_container.py:599)
-batch_reshaped = batch.reshape(4, 8) # -> [TensorContainer.reshape()](src/tensorcontainer/tensor_container.py:573)
-batch_detached = batch.detach()    # -> [TensorContainer.detach()](src/tensorcontainer/tensor_container.py:617)
+data_gpu = data.to("cuda")
+data_reshaped = data.reshape(1, 2)
+data_detached = data.detach()
 
-print(f"Batch shape: {batch.shape}")
-print(f"Reshaped shape: {batch_reshaped.shape}")
-print(f"Device: {batch_gpu.device}")
+print(f"Original shape: {data.shape}")
+print(f"Reshaped shape: {data_reshaped.shape}")
+print(f"Device: {data_gpu.device}")
 ```
 
 ---
@@ -50,16 +52,16 @@ When you inherit from `TensorDataClass`, it is automatically transformed into a 
 
 ```python
 # This class definition...
-class MyData(TensorDataClass):
-    features: torch.Tensor
-    labels: torch.Tensor
+class SimpleData(TensorDataClass):
+    observations: torch.Tensor
+    actions: torch.Tensor
 
 # ...is automatically transformed to a dataclass, as if you wrote:
 #
 # @dataclass(eq=False, slots=True)
-# class MyData:
-#     features: torch.Tensor
-#     labels: torch.Tensor
+# class SimpleData:
+#     observations: torch.Tensor
+#     actions: torch.Tensor
 #     shape: torch.Size
 #     device: torch.device
 ```
@@ -69,7 +71,7 @@ class MyData(TensorDataClass):
 #### Basic Tensor Fields
 The most common use case is defining required tensor fields. Annotate each field with `torch.Tensor`.
 ```python
-class BasicData(TensorDataClass):
+class SimpleData(TensorDataClass):
     # observations and actions are required tensor fields
     observations: torch.Tensor
     actions: torch.Tensor
@@ -104,26 +106,24 @@ class FlexibleData(TensorDataClass):
 
 ```python
 class Base(TensorDataClass):
-    observations: torch.Tensor
+    x: torch.Tensor
 
-# Child inherits 'observations' and adds 'actions'
 class Child(Base):
-    actions: torch.Tensor
+    y: torch.Tensor
 
-# GrandChild inherits 'observations', 'actions', and adds 'rewards'
-class GrandChild(Child):
-    rewards: torch.Tensor
+# Create tensors with shared batch dimension
+x = torch.rand(2, 3)
+y = torch.rand(2, 5)
 
-# Instance of GrandChild has all three fields
-data = GrandChild(
-    observations=torch.randn(4, 10),
-    actions=torch.randn(4, 1),
-    rewards=torch.randn(4, 1),
-    shape=(4,),
-    device="cpu",
-)
+# Child inherits all fields from Base
+data = Child(x=x, y=y, shape=(2,), device="cpu")
+
+# Verify inheritance works correctly
+print(f"Shape: {data.shape}")
+print(f"X shape: {data.x.shape}")
+print(f"Y shape: {data.y.shape}")
 ```
-Example available at: [`examples/tensor_dataclass/06_nested_inheritance.py`](../../examples/tensor_dataclass/06_nested_inheritance.py)
+Example available at: [`examples/tensor_dataclass/06_inheritance.py`](../../examples/tensor_dataclass/06_inheritance.py)
 
 ---
 
@@ -136,22 +136,24 @@ To create an instance, you must provide values for all annotated tensor fields, 
 
 ```python
 # Valid construction
-data = RLBatch(
-    observations=torch.randn(32, 64, device="cpu"),
-    actions=torch.randn(32, 4, device="cpu"),
-    shape=(32,),
+obs_tensor = torch.rand(2, 3)
+act_tensor = torch.rand(2)
+data = SimpleData(
+    observations=obs_tensor,
+    actions=act_tensor,
+    shape=(2,),  # Batch dimensions shared by all fields
     device="cpu",
 )
 
-# Invalid shape: raises an error because actions.shape[0] is not 32
+# Invalid shape: raises an error because the shape argument must be a prefix of every field's shape
 try:
-    RLBatch(
-        observations=torch.randn(32, 64),
-        actions=torch.randn(16, 4), # Mismatched batch dim
-        shape=(32,),
+    SimpleData(
+        observations=obs_tensor,
+        actions=act_tensor,
+        shape=(3,),  # This shape (3,) is not a prefix of (2, 3) or (2,)
         device="cpu",
     )
-except RuntimeError as e:
+except Exception as e:
     print(e)
 ```
 
@@ -164,39 +166,46 @@ Access tensor fields using standard attribute dot-notation (`obj.field`). This p
 
 ```python
 # Access
-obs = batch.observations
+obs = data.observations
+actions = data.actions
 
 # Assignment
-new_actions = torch.randn(32, 8)
-batch.actions = new_actions
+new_actions = torch.randn(2, 8)
+data.actions = new_actions
 ```
 
 ### Indexing and Slicing
 Indexing operates exclusively on the batch dimensions, leaving event dimensions untouched. It mirrors `torch.Tensor` indexing and returns a new `TensorDataClass` instance that is a **view** of the original data.
-- **Integer Indexing**: `batch[0]` - reduces rank.
-- **Slice Indexing**: `batch[:16]` - creates a sub-batch.
-- **Boolean Masking**: `batch[mask]` - filters the batch.
+- **Integer Indexing**: `data[0]` - reduces rank.
+- **Slice Indexing**: `data[1:3]` - creates a sub-batch.
+- **Assignment**: You can assign a `TensorDataClass` instance to a slice of another.
 
 ```python
-# Create data with batch shape (32,)
-data = RLBatch(
-    observations=torch.randn(32, 64),
-    actions=torch.randn(32, 4),
-    shape=(32,),
-    device="cpu"
+# Create batch of tensors
+x = torch.rand(3, 4)
+y = torch.rand(3)
+data = DataPair(x=x, y=y, shape=(3,), device="cpu")
+
+# Test indexing returns correct shapes
+single_item = data[0]
+print(f"Single item shape: {single_item.shape}") # ()
+print(f"Single item x shape: {single_item.x.shape}") # (4,)
+print(f"Single item y shape: {single_item.y.shape}") # ()
+
+# Test slicing returns correct shapes
+slice_data = data[1:3]
+print(f"Slice shape: {slice_data.shape}") # (2,)
+print(f"Slice x shape: {slice_data.x.shape}") # (2, 4)
+print(f"Slice y shape: {slice_data.y.shape}") # (2,)
+
+# You can assign to an indexed TensorDataClass using another instance with matching batch shape
+replacement = DataPair(
+    x=torch.rand(2, 4),
+    y=torch.rand(2),
+    shape=(2,),
+    device="cpu",
 )
-
-# Integer index: returns a new instance with no batch dims
-sample = data[0] 
-print(f"Sample shape: {sample.shape}") # ()
-
-# Slice index: returns a new instance with shape (16,)
-sub_batch = data[:16]
-print(f"Sub-batch shape: {sub_batch.shape}") # (16,)
-
-# Changes to the view are reflected in the original
-sub_batch.observations[0] = 0.0
-assert data.observations[0].sum() == 0.0
+data[1:3] = replacement
 ```
 Example available at: [`examples/tensor_dataclass/02_indexing.py`](../../examples/tensor_dataclass/02_indexing.py)
 
@@ -204,20 +213,23 @@ Example available at: [`examples/tensor_dataclass/02_indexing.py`](../../example
 Shape operations like `reshape()`, `view()`, `squeeze()`, and `unsqueeze()` apply only to the **batch dimensions**. Event dimensions are automatically preserved.
 
 ```python
-data = RLBatch(
-    observations=torch.randn(32, 64), # event shape is (64,)
-    actions=torch.randn(32, 4),    # event shape is (4,)
-    shape=(32,),
-    device="cpu"
+x_tensor = torch.rand(2, 3, 4)
+y_tensor = torch.rand(2, 3, 5)
+
+data = Data(
+    x=x_tensor,
+    y=y_tensor,
+    shape=(2, 3),
+    device="cpu",
 )
 
-# Reshape batch from (32,) to (4, 8)
-reshaped = data.reshape(4, 8)
-print(f"Reshaped batch shape: {reshaped.shape}") # (4, 8)
+# Reshape batch dimensions while preserving event dimensions
+reshaped_data = data.reshape(6)
 
-# Event dimensions are preserved
-print(f"Reshaped observations shape: {reshaped.observations.shape}") # (4, 8, 64)
-print(f"Reshaped actions shape: {reshaped.actions.shape}")       # (4, 8, 4)
+# Verify reshape preserves total elements and event dimensions
+print(f"Reshaped batch shape: {reshaped_data.shape}") # (6,)
+print(f"Reshaped x shape: {reshaped_data.x.shape}") # (6, 4) - Event dimension (4,) preserved
+print(f"Reshaped y shape: {reshaped_data.y.shape}") # (6, 5) - Event dimension (5,) preserved
 ```
 Example available at: [`examples/tensor_dataclass/03_shape_ops.py`](../../examples/tensor_dataclass/03_shape_ops.py)
 
@@ -229,18 +241,48 @@ Example available at: [`examples/tensor_dataclass/03_shape_ops.py`](../../exampl
 
 ```python
 # Device transfer
-data_gpu = data.to("cuda")
+x = torch.rand(2, 2)
+y = torch.rand(2, 5)
+data_cpu = MyData(x=x, y=y, shape=(2,), device="cpu")
+data_cuda = data_cpu.to(device="cuda")
+
+# Verify all tensors moved to CUDA
+print(f"Device: {data_cuda.device}")
+print(f"X device: {data_cuda.x.device}")
+print(f"Y device: {data_cuda.y.device}")
 
 # Create a clone for independent modification
-cloned_data = data_gpu.clone()
-cloned_data.observations[0] = 42.0 # original data_gpu is not modified
+x = torch.rand(3, 3)
+y = torch.rand(3, 5)
+original = DataPair(x=x, y=y, shape=(3,), device="cpu")
+cloned = original.clone()
+
+# Deep clone creates independent tensor storage
+print(f"X is same object: {cloned.x is not original.x}")
+print(f"Y is same object: {cloned.y is not original.y}")
 
 # Create a shallow copy
-shallow_copy = copy.copy(data) 
-shallow_copy.observations[0] = 99.0 # original data is modified
+copied = original.copy()
+# Shallow copy shares tensor storage
+print(f"X is same object: {copied.x is original.x}")
+print(f"Y is same object: {copied.y is original.y}")
+
+# Detach gradients
+batch = TrainingBatch(
+    observations=torch.randn(4, 10, requires_grad=True),
+    actions=torch.randn(4, 3, requires_grad=True),
+    shape=(4,),
+    device="cpu",
+)
+detached_batch = batch.detach()
+
+# Verify gradients are no longer tracked
+print(f"Original requires grad: {batch.observations.requires_grad}")
+print(f"Detached requires grad: {detached_batch.observations.requires_grad}")
 ```
 Device example: [`examples/tensor_dataclass/05_device.py`](../../examples/tensor_dataclass/05_device.py)
 Copy/Clone example: [`examples/tensor_dataclass/07_copy_clone.py`](../../examples/tensor_dataclass/07_copy_clone.py)
+Detach example: [`examples/tensor_dataclass/08_detach_gradients.py`](../../examples/tensor_dataclass/08_detach_gradients.py)
 
 
 ---
@@ -259,17 +301,29 @@ You can combine multiple `TensorDataClass` instances using `torch.stack` and `to
 - `torch.cat`: Concatenates along an existing batch dimension.
 
 ```python
-instances = [
-    RLBatch(obs, act, shape=(32,), device="cpu") for obs, act in ...
-]
+point1 = DataPoint(
+    x=torch.rand(3, 4),
+    y=torch.rand(3, 5),
+    shape=(3,),
+    device="cpu",
+)
 
-# Stack 10 instances to create a new batch dim: shape becomes (10, 32)
-stacked_batch = torch.stack(instances, dim=0)
+point2 = DataPoint(
+    x=torch.rand(3, 4),
+    y=torch.rand(3, 5),
+    shape=(3,),
+    device="cpu",
+)
 
-# Concatenate 10 instances along the existing batch dim: shape remains (320,)
-catted_batch = torch.cat(instances, dim=0)
+# Stack instances along new leading dimension
+stacked = torch.stack([point1, point2], dim=0)
+
+# Verify stacking creates new batch dimension
+print(f"Stacked shape: {stacked.shape}") # (2, 3)
+print(f"Stacked x shape: {stacked.x.shape}") # (2, 3, 4)
+print(f"Stacked y shape: {stacked.y.shape}") # (2, 3, 5)
 ```
-Example available at: [`examples/tensor_dataclass/04_stack_cat.py`](../../examples/tensor_dataclass/04_stack_cat.py)
+Example available at: [`examples/tensor_dataclass/04_stack.py`](../../examples/tensor_dataclass/04_stack.py)
 
 ### Nested Structures
 You can nest `TensorDataClass` instances or other `TensorContainer` types (like `TensorDict`) within each other. All operations will propagate through the nested structure correctly.
@@ -284,8 +338,19 @@ class FullState(TensorDataClass):
     agent_state: AgentState # Nested TensorDataClass
 
 # Operations on 'full' will propagate to 'agent_state'
-full = FullState(...)
-full_gpu = full.to("cuda") 
+# Create with appropriate tensors and shapes
+full = FullState(
+    env_state=torch.randn(4, 10),
+    agent_state=AgentState(
+        actor_params=torch.randn(4, 20),
+        critic_params=torch.randn(4, 15),
+        shape=(4,),
+        device="cpu"
+    ),
+    shape=(4,),
+    device="cpu"
+)
+full_gpu = full.to("cuda")
 ```
 
 ---
