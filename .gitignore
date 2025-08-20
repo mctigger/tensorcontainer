@@ -95,5 +95,6 @@ poetry.lock
 # If you want to ignore virtual
 
 
-# Claude
+# AI assistants
 CLAUDE.md
+.kilocode
