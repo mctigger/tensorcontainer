@@ -1,611 +1,306 @@
 # TensorDataClass Deep Dive
 
-TensorDataClass provides a dataclass-based approach to tensor containers with static typing, automatic field generation, and comprehensive IDE support. This guide covers advanced field definitions, inheritance patterns, and integration strategies that make TensorDataClass ideal for production workflows.
+TensorDataClass is a dataclass-based TensorContainer that combines Python's dataclass system with tensor operations, providing type-safe, attribute-based access to collections of tensors with shared batch dimensions. Use it when you need static schemas, IDE support, and compile-time type checking.
 
-## Class Definition and Field Types
+## Quick Start
 
-### Basic Field Definitions
+Get started with `TensorDataClass` by defining a class with type-annotated tensor fields. The container automatically generates a constructor and applies tensor operations to all fields at once.
 
 ```python
 import torch
 from tensorcontainer import TensorDataClass
 
-class MLBatch(TensorDataClass):
-    # Required tensor fields
+# 1. Define a schema using class annotations
+class RLBatch(TensorDataClass):
+    observations: torch.Tensor
+    actions: torch.Tensor
+
+# 2. Instantiate with tensors and a shared batch shape
+batch = RLBatch(
+    observations=torch.randn(32, 64),  # (B, F)
+    actions=torch.randint(0, 4, (32,)), # (B,)
+    shape=(32,),                       # Shared batch dimension
+    device="cpu",
+)
+
+# 3. Access fields with type-safe attribute access
+obs = batch.observations
+assert obs.shape == (32, 64)
+
+# 4. Apply unified operations to all tensors
+batch_gpu = batch.to("cuda")      # -> [TensorContainer.to()](src/tensorcontainer/tensor_container.py:599)
+batch_reshaped = batch.reshape(4, 8) # -> [TensorContainer.reshape()](src/tensorcontainer/tensor_container.py:573)
+batch_detached = batch.detach()    # -> [TensorContainer.detach()](src/tensorcontainer/tensor_container.py:617)
+
+print(f"Batch shape: {batch.shape}")
+print(f"Reshaped shape: {batch_reshaped.shape}")
+print(f"Device: {batch_gpu.device}")
+```
+
+---
+
+## TensorDataClass-Specific Features
+
+### Automatic Dataclass Generation
+When you inherit from `TensorDataClass`, it is automatically transformed into a Python `dataclass` with optimized settings for tensor operations. This behavior is enabled by the [`TensorDataClass.__init_subclass__()`](../../src/tensorcontainer/tensor_dataclass.py:191) method, which provides:
+- A generated `__init__` based on your type annotations.
+- IDE support for autocomplete and type-checking, thanks to `@dataclass_transform`.
+- Memory efficiency via `slots=True` by default.
+- Disabled `eq=True` to avoid ambiguity with tensor equality.
+
+```python
+# This class definition...
+class MyData(TensorDataClass):
     features: torch.Tensor
     labels: torch.Tensor
-    
-    # TensorDataClass automatically:
-    # - Creates __init__ with these fields + shape/device
-    # - Enables field access via dot notation
-    # - Provides dataclass features (repr, etc.)
-    # - Validates tensor shapes against batch dimensions
 
-# Usage
-batch = MLBatch(
-    features=torch.randn(32, 128),
-    labels=torch.randint(0, 10, (32,)),
-    shape=(32,),  # Required: batch dimensions
-    device='cpu'  # Optional: device constraint
-)
-
-# Type-safe field access
-features = batch.features  # IDE knows this is torch.Tensor
-batch.labels = torch.randint(0, 5, (32,))  # Type-checked assignment
+# ...is automatically transformed to a dataclass, as if you wrote:
+#
+# @dataclass(eq=False, slots=True)
+# class MyData:
+#     features: torch.Tensor
+#     labels: torch.Tensor
+#     shape: torch.Size
+#     device: torch.device
 ```
 
-### Advanced Field Types with dataclasses.field
+### Field Definition Patterns
+
+#### Basic Tensor Fields
+The most common use case is defining required tensor fields. Annotate each field with `torch.Tensor`.
+```python
+class BasicData(TensorDataClass):
+    # observations and actions are required tensor fields
+    observations: torch.Tensor
+    actions: torch.Tensor
+```
+
+#### Optional Fields and Defaults
+You can define optional fields and non-tensor metadata using `Optional` and `dataclasses.field`.
+- **Optional Tensors**: Use `Optional[torch.Tensor] = None`.
+- **Non-Tensor Metadata**: Use `field(default_factory=...)` to provide default values for mutable types like `list` or `dict`.
+- **Default Tensors**: Use `field(default_factory=...)` to generate a default tensor value.
 
 ```python
 from dataclasses import field
-from typing import Optional, Dict, List, Any, Union
+from typing import Optional, List, Dict, Any
 
-class AdvancedBatch(TensorDataClass):
-    # Required tensor fields
-    observations: torch.Tensor
-    actions: torch.Tensor
+class FlexibleData(TensorDataClass):
+    # Required tensor
+    features: torch.Tensor
     
-    # Optional tensor fields
-    next_observations: Optional[torch.Tensor] = None
-    rewards: Optional[torch.Tensor] = None
+    # Optional tensor, defaults to None
+    labels: Optional[torch.Tensor] = None
     
-    # Non-tensor metadata fields
+    # Non-tensor metadata
     episode_ids: List[int] = field(default_factory=list)
-    metadata: Dict[str, Any] = field(default_factory=dict)
-    algorithm_config: Dict[str, Union[int, float, str]] = field(default_factory=dict)
     
-    # Tensor fields with default values
-    done: torch.Tensor = field(default_factory=lambda: torch.zeros(1, dtype=torch.bool))
-    info: torch.Tensor = field(default_factory=lambda: torch.empty(0))
-    
-    # Private fields (not processed by TensorContainer operations)
-    _internal_state: Any = field(default=None, init=False)
-
-# Usage with partial initialization
-batch = AdvancedBatch(
-    observations=torch.randn(16, 84, 84, 3),
-    actions=torch.randint(0, 4, (16,)),
-    episode_ids=[1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8],
-    shape=(16,),
-    device='cpu'
-)
-
-# Add optional fields later
-batch.rewards = torch.randn(16, 1)
-batch.next_observations = torch.randn(16, 84, 84, 3)
+    # Default tensor value
+    rewards: torch.Tensor = field(default_factory=lambda: torch.zeros(1))
 ```
 
-### Field Validation and Constraints
+### Inheritance and Composition
+`TensorDataClass` supports standard Python inheritance, allowing you to build complex data schemas by extending base classes. Fields from all parent classes are automatically merged.
 
 ```python
-from dataclasses import field
-import torch.nn.functional as F
-
-class ValidatedBatch(TensorDataClass):
-    probabilities: torch.Tensor  # Should sum to 1 along last dim
-    logits: torch.Tensor        # Raw network outputs
-    
-    def __post_init__(self):
-        super().__post_init__()  # Always call parent first
-        
-        # Custom validation logic
-        if self.probabilities is not None:
-            prob_sums = self.probabilities.sum(dim=-1)
-            if not torch.allclose(prob_sums, torch.ones_like(prob_sums), atol=1e-5):
-                raise ValueError("Probabilities must sum to 1 along last dimension")
-        
-        # Ensure logits and probabilities are consistent
-        if self.logits is not None and self.probabilities is not None:
-            expected_probs = F.softmax(self.logits, dim=-1)
-            if not torch.allclose(self.probabilities, expected_probs, atol=1e-5):
-                raise ValueError("Probabilities don't match softmax of logits")
-
-# Usage with validation
-logits = torch.randn(32, 10)
-probs = F.softmax(logits, dim=-1)
-
-validated_batch = ValidatedBatch(
-    probabilities=probs,
-    logits=logits,
-    shape=(32,),
-    device='cpu'
-)
-```
-
-## Inheritance and Composition
-
-### Single Inheritance
-
-```python
-class BaseBatch(TensorDataClass):
-    """Base class for all RL batches."""
+class Base(TensorDataClass):
     observations: torch.Tensor
+
+# Child inherits 'observations' and adds 'actions'
+class Child(Base):
     actions: torch.Tensor
 
-class PolicyBatch(BaseBatch):
-    """Extends base with policy-specific fields."""
-    log_probs: torch.Tensor
-    values: torch.Tensor
-    advantages: torch.Tensor
-
-class OffPolicyBatch(BaseBatch):
-    """Extends base with off-policy specific fields."""
-    next_observations: torch.Tensor
+# GrandChild inherits 'observations', 'actions', and adds 'rewards'
+class GrandChild(Child):
     rewards: torch.Tensor
-    done: torch.Tensor
-    q_values: torch.Tensor
 
-# All parent fields are available
-policy_batch = PolicyBatch(
-    observations=torch.randn(32, 128),
-    actions=torch.randn(32, 4),
-    log_probs=torch.randn(32, 4),
-    values=torch.randn(32, 1),
-    advantages=torch.randn(32, 1),
-    shape=(32,),
-    device='cpu'
+# Instance of GrandChild has all three fields
+data = GrandChild(
+    observations=torch.randn(4, 10),
+    actions=torch.randn(4, 1),
+    rewards=torch.randn(4, 1),
+    shape=(4,),
+    device="cpu",
 )
 ```
+Example available at: [`examples/tensor_dataclass/06_nested_inheritance.py`](../../examples/tensor_dataclass/06_nested_inheritance.py)
 
-### Multiple Inheritance Patterns
+---
+
+## Construction and Initialization
+
+### Constructor and Validation
+To create an instance, you must provide values for all annotated tensor fields, along with the mandatory `shape` and `device` arguments. The [`__post_init__()`](../../src/tensorcontainer/tensor_dataclass.py:241) method validates two principal constraints:
+1. **Shape Consistency**: Every tensor's leading dimensions must match the `shape` argument.
+2. **Device Consistency**: Every tensor must reside on the specified `device`.
 
 ```python
-class TimestampedMixin(TensorDataClass):
-    """Mixin for adding timestamp information."""
-    timestamps: torch.Tensor
-    
-class RewardMixin(TensorDataClass):
-    """Mixin for adding reward information."""
-    rewards: torch.Tensor
-    discounted_rewards: torch.Tensor
-
-class CompleteRLBatch(BaseBatch, TimestampedMixin, RewardMixin):
-    """Combines multiple mixins with base functionality."""
-    values: torch.Tensor
-
-# All fields from all parent classes are available
-complete_batch = CompleteRLBatch(
-    # From BaseBatch
-    observations=torch.randn(32, 128),
-    actions=torch.randn(32, 4),
-    # From TimestampedMixin
-    timestamps=torch.arange(32, dtype=torch.float),
-    # From RewardMixin  
-    rewards=torch.randn(32, 1),
-    discounted_rewards=torch.randn(32, 1),
-    # From CompleteRLBatch
-    values=torch.randn(32, 1),
+# Valid construction
+data = RLBatch(
+    observations=torch.randn(32, 64, device="cpu"),
+    actions=torch.randn(32, 4, device="cpu"),
     shape=(32,),
-    device='cpu'
+    device="cpu",
 )
+
+# Invalid shape: raises an error because actions.shape[0] is not 32
+try:
+    RLBatch(
+        observations=torch.randn(32, 64),
+        actions=torch.randn(16, 4), # Mismatched batch dim
+        shape=(32,),
+        device="cpu",
+    )
+except RuntimeError as e:
+    print(e)
 ```
 
-### Abstract Base Classes
+---
+
+## Core Operations
+
+### Attribute Access and Assignment
+Access tensor fields using standard attribute dot-notation (`obj.field`). This provides a type-safe and IDE-friendly way to interact with your data. Assignment is also supported and will be validated at runtime.
 
 ```python
-from abc import ABC, abstractmethod
+# Access
+obs = batch.observations
 
-class AbstractBatch(TensorDataClass, ABC):
-    """Abstract base for defining batch interfaces."""
-    observations: torch.Tensor
-    
-    @abstractmethod
-    def compute_loss(self) -> torch.Tensor:
-        """Compute loss for this batch type."""
-        pass
-    
-    @abstractmethod
-    def get_action_dim(self) -> int:
-        """Return the action dimensionality."""
-        pass
-
-class DiscreteBatch(AbstractBatch):
-    """Concrete implementation for discrete action spaces."""
-    actions: torch.Tensor  # Shape: (batch_size,)
-    
-    def compute_loss(self) -> torch.Tensor:
-        # Implement discrete action loss
-        return F.cross_entropy(self.logits, self.actions)
-    
-    def get_action_dim(self) -> int:
-        return self.actions.max().item() + 1
-
-class ContinuousBatch(AbstractBatch):
-    """Concrete implementation for continuous action spaces."""
-    actions: torch.Tensor  # Shape: (batch_size, action_dim)
-    
-    def compute_loss(self) -> torch.Tensor:
-        # Implement continuous action loss
-        return F.mse_loss(self.predicted_actions, self.actions)
-    
-    def get_action_dim(self) -> int:
-        return self.actions.shape[-1]
+# Assignment
+new_actions = torch.randn(32, 8)
+batch.actions = new_actions
 ```
 
-## Advanced Usage Patterns
-
-### Factory Methods and Class Methods
+### Indexing and Slicing
+Indexing operates exclusively on the batch dimensions, leaving event dimensions untouched. It mirrors `torch.Tensor` indexing and returns a new `TensorDataClass` instance that is a **view** of the original data.
+- **Integer Indexing**: `batch[0]` - reduces rank.
+- **Slice Indexing**: `batch[:16]` - creates a sub-batch.
+- **Boolean Masking**: `batch[mask]` - filters the batch.
 
 ```python
-class ExperienceBatch(TensorDataClass):
-    states: torch.Tensor
-    actions: torch.Tensor
-    rewards: torch.Tensor
-    next_states: torch.Tensor
-    done: torch.Tensor
-    
-    @classmethod
-    def from_trajectory(cls, trajectory: List[Dict[str, torch.Tensor]], 
-                       device: str = 'cpu'):
-        """Create batch from a list of trajectory steps."""
-        states = torch.stack([step['state'] for step in trajectory])
-        actions = torch.stack([step['action'] for step in trajectory])
-        rewards = torch.stack([step['reward'] for step in trajectory])
-        next_states = torch.stack([step['next_state'] for step in trajectory])
-        done = torch.stack([step['done'] for step in trajectory])
-        
-        return cls(
-            states=states,
-            actions=actions,
-            rewards=rewards,
-            next_states=next_states,
-            done=done,
-            shape=(len(trajectory),),
-            device=device
-        )
-    
-    @classmethod
-    def empty(cls, batch_size: int, state_dim: int, action_dim: int, 
-              device: str = 'cpu'):
-        """Create empty batch with specified dimensions."""
-        return cls(
-            states=torch.empty(batch_size, state_dim, device=device),
-            actions=torch.empty(batch_size, action_dim, device=device),
-            rewards=torch.empty(batch_size, 1, device=device),
-            next_states=torch.empty(batch_size, state_dim, device=device),
-            done=torch.empty(batch_size, 1, dtype=torch.bool, device=device),
-            shape=(batch_size,),
-            device=device
-        )
-    
-    def split_episodes(self) -> List['ExperienceBatch']:
-        """Split batch by episode boundaries based on done flags."""
-        episode_starts = torch.cat([
-            torch.tensor([0], device=self.device),
-            (self.done[:-1] == True).nonzero(as_tuple=True)[0] + 1
-        ])
-        episode_ends = torch.cat([
-            (self.done == True).nonzero(as_tuple=True)[0] + 1,
-            torch.tensor([len(self.done)], device=self.device)
-        ])
-        
-        episodes = []
-        for start, end in zip(episode_starts, episode_ends):
-            episodes.append(self[start:end])
-        
-        return episodes
+# Create data with batch shape (32,)
+data = RLBatch(
+    observations=torch.randn(32, 64),
+    actions=torch.randn(32, 4),
+    shape=(32,),
+    device="cpu"
+)
 
-# Usage
-trajectory_data = [
-    {'state': torch.randn(128), 'action': torch.randn(4), 
-     'reward': torch.tensor(1.0), 'next_state': torch.randn(128), 
-     'done': torch.tensor(False)},
-    # ... more steps
+# Integer index: returns a new instance with no batch dims
+sample = data[0] 
+print(f"Sample shape: {sample.shape}") # ()
+
+# Slice index: returns a new instance with shape (16,)
+sub_batch = data[:16]
+print(f"Sub-batch shape: {sub_batch.shape}") # (16,)
+
+# Changes to the view are reflected in the original
+sub_batch.observations[0] = 0.0
+assert data.observations[0].sum() == 0.0
+```
+Example available at: [`examples/tensor_dataclass/02_indexing.py`](../../examples/tensor_dataclass/02_indexing.py)
+
+### Shape Operations
+Shape operations like `reshape()`, `view()`, `squeeze()`, and `unsqueeze()` apply only to the **batch dimensions**. Event dimensions are automatically preserved.
+
+```python
+data = RLBatch(
+    observations=torch.randn(32, 64), # event shape is (64,)
+    actions=torch.randn(32, 4),    # event shape is (4,)
+    shape=(32,),
+    device="cpu"
+)
+
+# Reshape batch from (32,) to (4, 8)
+reshaped = data.reshape(4, 8)
+print(f"Reshaped batch shape: {reshaped.shape}") # (4, 8)
+
+# Event dimensions are preserved
+print(f"Reshaped observations shape: {reshaped.observations.shape}") # (4, 8, 64)
+print(f"Reshaped actions shape: {reshaped.actions.shape}")       # (4, 8, 4)
+```
+Example available at: [`examples/tensor_dataclass/03_shape_ops.py`](../../examples/tensor_dataclass/03_shape_ops.py)
+
+### Device and Memory Operations
+- **`.to(device)`**: Moves all contained tensors to the specified device. See [`TensorContainer.to()`](../../src/tensorcontainer/tensor_container.py:599).
+- **`.detach()`**: Creates a new instance with all tensors detached from the computation graph.
+- **`.clone()`**: Creates a deep copy of the instance with new, independent tensor storage.
+- **`copy.copy()`**: [`__copy__()`](../../src/tensorcontainer/tensor_dataclass.py:258) creates a shallow copy (new instance, shared tensors).
+
+```python
+# Device transfer
+data_gpu = data.to("cuda")
+
+# Create a clone for independent modification
+cloned_data = data_gpu.clone()
+cloned_data.observations[0] = 42.0 # original data_gpu is not modified
+
+# Create a shallow copy
+shallow_copy = copy.copy(data) 
+shallow_copy.observations[0] = 99.0 # original data is modified
+```
+Device example: [`examples/tensor_dataclass/05_device.py`](../../examples/tensor_dataclass/05_device.py)
+Copy/Clone example: [`examples/tensor_dataclass/07_copy_clone.py`](../../examples/tensor_dataclass/07_copy_clone.py)
+
+
+---
+
+## Advanced Features
+
+### PyTree Integration
+`TensorDataClass` is a registered PyTree, which means it works seamlessly with `torch.stack`, `torch.cat`, and other functions that operate on nested structures.
+- **Tensor Fields** are treated as leaves of the tree.
+- **Non-Tensor Metadata** is preserved.
+This integration is handled by the [`_pytree_flatten()`](../../src/tensorcontainer/tensor_annotated.py:82) and [`_pytree_unflatten()`](../../src/tensorcontainer/tensor_annotated.py:104) methods.
+
+### Stacking and Concatenation
+You can combine multiple `TensorDataClass` instances using `torch.stack` and `torch.cat`.
+- `torch.stack`: Creates a new batch dimension.
+- `torch.cat`: Concatenates along an existing batch dimension.
+
+```python
+instances = [
+    RLBatch(obs, act, shape=(32,), device="cpu") for obs, act in ...
 ]
 
-batch = ExperienceBatch.from_trajectory(trajectory_data, device='cuda')
-empty_batch = ExperienceBatch.empty(32, 128, 4, device='cuda')
-episodes = batch.split_episodes()
-```
+# Stack 10 instances to create a new batch dim: shape becomes (10, 32)
+stacked_batch = torch.stack(instances, dim=0)
 
-### Integration with Neural Networks
+# Concatenate 10 instances along the existing batch dim: shape remains (320,)
+catted_batch = torch.cat(instances, dim=0)
+```
+Example available at: [`examples/tensor_dataclass/04_stack_cat.py`](../../examples/tensor_dataclass/04_stack_cat.py)
+
+### Nested Structures
+You can nest `TensorDataClass` instances or other `TensorContainer` types (like `TensorDict`) within each other. All operations will propagate through the nested structure correctly.
 
 ```python
-import torch.nn as nn
+class AgentState(TensorDataClass):
+    actor_params: torch.Tensor
+    critic_params: torch.Tensor
 
-class NetworkBatch(TensorDataClass):
-    """Batch optimized for neural network processing."""
-    inputs: torch.Tensor
-    targets: torch.Tensor
-    weights: Optional[torch.Tensor] = None
-    
-    def apply_network(self, network: nn.Module) -> torch.Tensor:
-        """Apply network to batch inputs."""
-        return network(self.inputs)
-    
-    def compute_weighted_loss(self, predictions: torch.Tensor, 
-                            loss_fn: nn.Module) -> torch.Tensor:
-        """Compute loss with optional sample weights."""
-        loss = loss_fn(predictions, self.targets)
-        
-        if self.weights is not None:
-            loss = loss * self.weights.squeeze()
-        
-        return loss.mean()
+class FullState(TensorDataClass):
+    env_state: torch.Tensor
+    agent_state: AgentState # Nested TensorDataClass
 
-class PolicyNetworkBatch(NetworkBatch):
-    """Specialized for policy network training."""
-    actions: torch.Tensor
-    old_log_probs: torch.Tensor
-    advantages: torch.Tensor
-    
-    def compute_ppo_loss(self, new_log_probs: torch.Tensor, 
-                        clip_epsilon: float = 0.2) -> torch.Tensor:
-        """Compute PPO clipped objective loss."""
-        ratio = torch.exp(new_log_probs - self.old_log_probs)
-        clipped_ratio = torch.clamp(ratio, 1 - clip_epsilon, 1 + clip_epsilon)
-        
-        loss = -torch.min(
-            ratio * self.advantages,
-            clipped_ratio * self.advantages
-        ).mean()
-        
-        return loss
-
-# Usage with models
-class PolicyNetwork(nn.Module):
-    def __init__(self, input_dim, action_dim):
-        super().__init__()
-        self.net = nn.Sequential(
-            nn.Linear(input_dim, 128),
-            nn.ReLU(),
-            nn.Linear(128, action_dim)
-        )
-    
-    def forward(self, x):
-        return self.net(x)
-
-model = PolicyNetwork(128, 4)
-batch = PolicyNetworkBatch(
-    inputs=torch.randn(32, 128),
-    targets=torch.randn(32, 4),
-    actions=torch.randn(32, 4),
-    old_log_probs=torch.randn(32),
-    advantages=torch.randn(32),
-    shape=(32,),
-    device='cpu'
-)
-
-predictions = batch.apply_network(model)
-loss = batch.compute_ppo_loss(predictions)
+# Operations on 'full' will propagate to 'agent_state'
+full = FullState(...)
+full_gpu = full.to("cuda") 
 ```
 
-### Serialization and State Management
+---
 
-```python
-import pickle
-from pathlib import Path
+## Comparison and Decision Guide
 
-class SerializableBatch(TensorDataClass):
-    data: torch.Tensor
-    labels: torch.Tensor
-    metadata: Dict[str, Any] = field(default_factory=dict)
-    
-    def save(self, path: Union[str, Path]) -> None:
-        """Save batch to disk."""
-        path = Path(path)
-        
-        # Save tensors separately for efficiency
-        torch.save({
-            'data': self.data,
-            'labels': self.labels,
-            'shape': self.shape,
-            'device': str(self.device)
-        }, path.with_suffix('.pt'))
-        
-        # Save metadata separately  
-        with open(path.with_suffix('.pkl'), 'wb') as f:
-            pickle.dump(self.metadata, f)
-    
-    @classmethod
-    def load(cls, path: Union[str, Path]) -> 'SerializableBatch':
-        """Load batch from disk."""
-        path = Path(path)
-        
-        # Load tensors
-        tensor_data = torch.load(path.with_suffix('.pt'))
-        
-        # Load metadata
-        with open(path.with_suffix('.pkl'), 'rb') as f:
-            metadata = pickle.load(f)
-        
-        return cls(
-            data=tensor_data['data'],
-            labels=tensor_data['labels'],
-            metadata=metadata,
-            shape=tensor_data['shape'],
-            device=tensor_data['device']
-        )
-    
-    def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary for JSON serialization."""
-        return {
-            'data': self.data.cpu().numpy().tolist(),
-            'labels': self.labels.cpu().numpy().tolist(),
-            'metadata': self.metadata,
-            'shape': list(self.shape),
-            'device': str(self.device)
-        }
-    
-    @classmethod
-    def from_dict(cls, data_dict: Dict[str, Any]) -> 'SerializableBatch':
-        """Create from dictionary."""
-        return cls(
-            data=torch.tensor(data_dict['data']),
-            labels=torch.tensor(data_dict['labels']),
-            metadata=data_dict['metadata'],
-            shape=tuple(data_dict['shape']),
-            device=data_dict['device']
-        )
+### TensorDataClass vs. TensorDict
 
-# Usage
-batch = SerializableBatch(
-    data=torch.randn(16, 64),
-    labels=torch.randint(0, 10, (16,)),
-    metadata={'experiment': 'run_1', 'epoch': 5},
-    shape=(16,),
-    device='cpu'
-)
+| Feature          | TensorDataClass                     | TensorDict                        |
+|------------------|-------------------------------------|-----------------------------------|
+| **Access**       | `obj.field` (attribute)             | `obj["key"]` (dictionary)         |
+| **Schema**       | Static, defined at class level      | Dynamic, keys added at runtime    |
+| **Type Safety**  | Compile-time (static analysis)      | Runtime                           |
+| **IDE Support**  | Full autocomplete & refactoring     | Limited to string keys            |
+| **Inheritance**  | Natural OOP inheritance           | Composition-based nesting         |
+| **Use Case**     | Stable, production-ready schemas    | Exploratory, dynamic structures   |
 
-# Save and load
-batch.save('experiment_data')
-loaded_batch = SerializableBatch.load('experiment_data')
-
-# JSON serialization
-import json
-data_dict = batch.to_dict()
-json_str = json.dumps(data_dict)
-restored_batch = SerializableBatch.from_dict(json.loads(json_str))
-```
-
-## Memory Optimization and Performance
-
-### Slots and Memory Efficiency
-
-```python
-# TensorDataClass automatically uses slots=True for memory efficiency
-class EfficientBatch(TensorDataClass):
-    features: torch.Tensor
-    labels: torch.Tensor
-    
-    # With slots=True (automatic), instances use less memory
-    # and have faster attribute access
-
-# Memory comparison
-import sys
-
-# Regular class
-class RegularClass:
-    def __init__(self, features, labels):
-        self.features = features
-        self.labels = labels
-
-# TensorDataClass with slots
-batch_data = torch.randn(1000, 128)
-batch_labels = torch.randint(0, 10, (1000,))
-
-regular = RegularClass(batch_data, batch_labels)
-efficient = EfficientBatch(batch_data, batch_labels, shape=(1000,), device='cpu')
-
-print(f"Regular class size: {sys.getsizeof(regular)} bytes")
-print(f"TensorDataClass size: {sys.getsizeof(efficient)} bytes")
-# TensorDataClass typically uses 30-50% less memory
-```
-
-### Lazy Loading and Computed Properties
-
-```python
-class LazyBatch(TensorDataClass):
-    raw_data: torch.Tensor
-    _processed_cache: Optional[torch.Tensor] = field(default=None, init=False)
-    
-    @property
-    def processed_data(self) -> torch.Tensor:
-        """Lazily compute and cache processed data."""
-        if self._processed_cache is None:
-            # Expensive computation only done once
-            self._processed_cache = F.normalize(self.raw_data, dim=-1)
-        return self._processed_cache
-    
-    def invalidate_cache(self):
-        """Clear cached computations when raw data changes."""
-        self._processed_cache = None
-    
-    def update_raw_data(self, new_data: torch.Tensor):
-        """Update raw data and invalidate dependent caches."""
-        self.raw_data = new_data
-        self.invalidate_cache()
-
-# Usage
-batch = LazyBatch(
-    raw_data=torch.randn(32, 128),
-    shape=(32,),
-    device='cpu'
-)
-
-# First access computes and caches
-processed1 = batch.processed_data  # Computation happens here
-processed2 = batch.processed_data  # Returns cached result
-
-# Update invalidates cache
-batch.update_raw_data(torch.randn(32, 128))
-processed3 = batch.processed_data  # Recomputes
-```
-
-### Batch Processing Utilities
-
-```python
-class ProcessingBatch(TensorDataClass):
-    data: torch.Tensor
-    
-    def chunk(self, chunk_size: int) -> List['ProcessingBatch']:
-        """Split batch into smaller chunks."""
-        chunks = []
-        for i in range(0, self.shape[0], chunk_size):
-            end_idx = min(i + chunk_size, self.shape[0])
-            chunks.append(self[i:end_idx])
-        return chunks
-    
-    def shuffle(self, generator: Optional[torch.Generator] = None) -> 'ProcessingBatch':
-        """Return shuffled version of batch."""
-        indices = torch.randperm(self.shape[0], generator=generator)
-        return self[indices]
-    
-    def sample(self, n: int, replace: bool = False) -> 'ProcessingBatch':
-        """Sample n items from batch."""
-        if replace:
-            indices = torch.randint(0, self.shape[0], (n,))
-        else:
-            indices = torch.randperm(self.shape[0])[:n]
-        return self[indices]
-    
-    def filter(self, mask: torch.Tensor) -> 'ProcessingBatch':
-        """Filter batch using boolean mask."""
-        return self[mask]
-
-# Usage
-large_batch = ProcessingBatch(
-    data=torch.randn(1000, 128),
-    shape=(1000,),
-    device='cpu'
-)
-
-# Process in chunks to manage memory
-for chunk in large_batch.chunk(100):
-    process_chunk(chunk)
-
-# Random sampling
-sample_batch = large_batch.sample(50)
-
-# Filtering
-valid_mask = (large_batch.data.sum(dim=1) > 0)
-filtered_batch = large_batch.filter(valid_mask)
-```
-
-## Best Practices
-
-### Design Guidelines
-
-1. **Field Organization**: Group related fields logically and use descriptive names
-2. **Type Annotations**: Always provide explicit type annotations for better IDE support
-3. **Default Values**: Use `field(default_factory=...)` for mutable defaults
-4. **Validation**: Implement `__post_init__` for custom validation logic
-5. **Documentation**: Add docstrings to classes and complex fields
-
-### Performance Considerations
-
-1. **Memory Sharing**: Be aware that operations create views, not copies
-2. **Batch Operations**: Apply operations to entire TensorDataClass instances rather than individual fields
-3. **Device Consistency**: Keep related tensors on the same device
-4. **Caching**: Use computed properties for expensive derived values
-5. **Serialization**: Consider separate tensor and metadata serialization for efficiency
-
-### Integration Tips
-
-1. **Model Compatibility**: Design batches to match your model's expected inputs
-2. **DataLoader Integration**: Implement `__getitem__` for custom indexing if needed
-3. **Metric Collection**: Include fields for tracking training metrics
-4. **Debugging**: Add utility methods for inspection and validation
-5. **Extensibility**: Use inheritance and mixins for reusable functionality
-
-TensorDataClass excels in production environments where type safety, performance, and maintainability are crucial. Its static structure and comprehensive IDE support make it ideal for large codebases and team development scenarios.
+Choose `TensorDataClass` when you have a well-defined, stable data structure and can benefit from static type checking and IDE support. Choose `TensorDict` for more dynamic scenarios where the contents might change during execution.
