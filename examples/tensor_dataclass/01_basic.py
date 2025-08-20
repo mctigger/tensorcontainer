@@ -1,3 +1,22 @@
+"""
+This example showcases the basic usage of `TensorDataClass`.
+
+`TensorDataClass` is a powerful tool for creating tensor containers with a
+dataclass-like API. It automatically generates a constructor from annotated
+fields, similar to Python's built-in `dataclasses`.
+
+Key concepts demonstrated in this example:
+- Auto-generated constructor: How `TensorDataClass` simplifies object
+  instantiation based on type hints.
+- `shape` and `device` parameters: The necessity of providing `shape` and
+  `device` during construction, which define the leading batch dimensions
+  shared by all tensors within the `TensorDataClass` instance.
+- Shape prefix requirement: The `shape` argument must be a prefix of every
+  tensor's shape within the `TensorDataClass`. This ensures consistency and
+  facilitates batch operations.
+- Field access: How to access individual tensor fields using dot notation.
+"""
+
 import torch
 from tensorcontainer import TensorDataClass
 
@@ -8,39 +27,37 @@ class SimpleData(TensorDataClass):
 
 
 def main() -> None:
-    # What this example shows:
-    # - The constructor is auto-generated from the annotated fields (like Python dataclasses).
-    # - Unlike plain dataclasses, you must also pass `shape` and `device` when constructing.
-    #   `shape` gives the leading batch dimensions shared by all fields and MUST be a prefix
-    #   of each tensor's shape.
-    # - You can access fields via dot notation.
+    """
+    Demonstrates the basic functionalities of `SimpleData` (a TensorDataClass).
+    """
+    # Create two example tensors with a shared leading batch dimension of size 2.
+    obs_tensor = torch.rand(2, 3) 
+    act_tensor = torch.rand(2) 
 
-    # Two toy tensors with a shared leading batch of size 2.
-    obs_tensor = torch.tensor([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])  # (2, 3)
-    act_tensor = torch.tensor([0, 1])  # (2,)
-
-    # Construction: same feel as dataclasses, but we additionally pass `shape` and `device`.
+    # Construct a SimpleData instance.
+    # The constructor is auto-generated from the annotated fields.
+    # Unlike plain dataclasses, `shape` and `device` must also be passed.
+    # `shape` defines the leading batch dimensions shared by all fields and
+    # MUST be a prefix of each tensor's shape.
     data = SimpleData(
         observations=obs_tensor,
         actions=act_tensor,
-        shape=(2,),  # batch prefix shared by all fields
+        shape=(2,),  # Batch prefix shared by all fields
         device="cpu",
     )
 
-    # Concise output: repr + a quick dot-notation access.
-    print("Instance:", data)  # dataclass-style repr
-    print("First action via dot notation:", data.actions[0].item())
-
-    # Shape must be a prefix of every field. This mismatched shape will raise.
+    # Attempt to construct with a mismatched shape to demonstrate error handling.
+    # The `shape` argument must be a prefix of every field's shape.
     try:
-        _ = SimpleData(
+        SimpleData(
             observations=obs_tensor,
             actions=act_tensor,
-            shape=(3,),  # not a prefix of (2, 3) or (2,)
+            shape=(3,),  # This shape (3,) is not a prefix of (2, 3) or (2,)
             device="cpu",
         )
-    except Exception as err:  # noqa: BLE001
-        print(f"Shape mismatch detected: {type(err).__name__}")
+    except Exception as e:
+        # An error is expected here due to the shape mismatch.
+        print(e)
 
 
 if __name__ == "__main__":

@@ -1,47 +1,35 @@
-"""Moving a TensorDataClass to a device using .to()
-
-This example demonstrates how to use the .to() method to move all tensor fields
-of a TensorDataClass instance to a specified device.
+"""
+This example demonstrates how to move a TensorDataClass instance to a specified device
+using the `.to()` method.
 """
 
 import torch
 from tensorcontainer import TensorDataClass
 
 
-class DataClass(TensorDataClass):
-    """Simple TensorDataClass with two tensor fields."""
+class MyData(TensorDataClass):
+    """
+    A simple TensorDataClass with two tensor fields, `x` and `y`.
+    """
 
     x: torch.Tensor
     y: torch.Tensor
 
 
 def main():
-    # Define deterministic tensors on CPU
-    x = torch.tensor([[1.0, 2.0], [3.0, 4.0]])
-    y = torch.tensor([10, 20])
+    x = torch.rand(2, 2)
+    y = torch.rand(2, 5)
 
-    # Create TensorDataClass instance with CPU tensors
-    # The shape parameter defines the batch dimensions (leading dimensions)
-    data_cpu = DataClass(x=x, y=y, shape=(2,), device="cpu")
-    print(f"Original data on: {data_cpu.x.device}")
-    # cpu
-    print(f"Original y on: {data_cpu.y.device}")
-    # cpu
+    # Create a TensorDataClass instance with the CPU tensors.
+    # The `shape` parameter defines the batch dimensions (leading dimensions) of the tensors.
+    data_cpu = MyData(x=x, y=y, shape=(2,), device="cpu")
 
-    # Move the entire TensorDataClass to CPU (demonstrating .to() method)
-    # Note: For CUDA, you would use .to("cuda") if torch.cuda.is_available()
-    data_on_cpu = data_cpu.to(device="cpu")
+    data_cuda = data_cpu.to(device="cuda")
 
-    # Verify all tensor fields are on the target device
-    print(f"After .to('cpu'), x device: {data_on_cpu.x.device}")
-    # cpu
-    print(f"After .to('cpu'), y device: {data_on_cpu.y.device}")
-    # cpu
-
-    # Print the full instance representation
-    print(f"Full instance: {data_on_cpu}")
-    # Full instance: DataClass(shape=torch.Size([2]), device=device(type='cpu'), x=tensor([[1., 2.],
-    #         [3., 4.]]), y=tensor([10, 20]))
+    # The TensorDataClass and all its tensors are moved to the device
+    assert data_cuda.device == torch.device("cuda:0")
+    assert data_cuda.x.device == torch.device("cuda:0")
+    assert data_cuda.y.device == torch.device("cuda:0")
 
 
 if __name__ == "__main__":
