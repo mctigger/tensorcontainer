@@ -13,4 +13,5 @@ Index:
 - 06_inheritance.py — Inheritance patterns
 - 07_copy_clone.py — Deep clone and copy operations
 - 08_detach_gradients.py — Detach tensors and manage gradients
+- 09_nested.py — Nest `TensorDataClass` instances
 

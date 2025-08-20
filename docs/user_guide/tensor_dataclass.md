@@ -339,6 +339,7 @@ full = FullState(
 # Operations on 'full' will propagate to 'agent_state'
 full_gpu = full.to("cuda")
 ```
+*Example available at: [examples/tensor_dataclass/09_nested.py](../../examples/tensor_dataclass/09_nested.py)*
 
 ---
 
