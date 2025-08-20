@@ -2,12 +2,12 @@
 Detaching gradients in TensorDataClass instances.
 
 This example demonstrates how to detach gradients from TensorDataClass
-instances to stop gradient flow while preserving tensor data.
+instances using the `detach()` method, which stops gradient flow while
+preserving the tensor data and structure of the original instance.
 
 Key concepts demonstrated:
-- Gradient tracking in tensor fields
-- Detach operation on TensorDataClass
-- Independent gradient flow control
+- Detach operation: How the `detach()` method creates a new TensorDataClass
+  instance with the same data but without gradient tracking.
 """
 
 import torch
@@ -15,12 +15,6 @@ from tensorcontainer import TensorDataClass
 
 
 class TrainingBatch(TensorDataClass):
-    """Training batch with observation and action tensors.
-
-    Args:
-        observations: Observation tensor data
-        actions: Action tensor data
-    """
     observations: torch.Tensor
     actions: torch.Tensor
 

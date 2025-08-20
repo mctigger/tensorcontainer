@@ -1,13 +1,17 @@
 """
 Moving TensorDataClass instances between devices.
 
-This example demonstrates how to move TensorDataClass instances to different
-devices using the `.to()` method.
+This example demonstrates how to move TensorDataClass instances between
+different devices (CPU, GPU) using the `.to()` method, ensuring all tensor
+fields are moved consistently while maintaining the TensorDataClass structure.
 
 Key concepts demonstrated:
-- Device movement with .to() method
-- Automatic device synchronization for all tensor fields
-- Device consistency across the entire instance
+- Device movement: How the `.to()` method moves all tensor fields to a
+  specified device while preserving the TensorDataClass structure.
+- Automatic synchronization: How all tensor fields are automatically moved
+  to the target device in a single operation.
+- Device consistency: How the TensorDataClass ensures all fields remain
+  on the same device after movement operations.
 """
 
 import torch
@@ -19,7 +23,7 @@ class MyData(TensorDataClass):
     y: torch.Tensor
 
 
-def main():
+def main() -> None:
     """Demonstrate device movement operations."""
     x = torch.rand(2, 2)
     y = torch.rand(2, 5)

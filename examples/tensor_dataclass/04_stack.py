@@ -1,13 +1,19 @@
 """
 Stacking TensorDataClass instances.
 
-This example demonstrates stacking multiple TensorDataClass instances
-along a new dimension.
+This example demonstrates how to stack multiple TensorDataClass instances
+along a new dimension using torch.stack, creating a new batch dimension
+while preserving the TensorDataClass structure.
 
 Key concepts demonstrated:
-- Creating new batch dimension with torch.stack
-- Maintaining TensorDataClass structure
-- Shape and value combination during stacking
+- Stacking multiple instances: How `torch.stack` can combine multiple
+  TensorDataClass instances along a new leading dimension.
+- Batch dimension creation: How stacking creates a new batch dimension
+  that becomes the leading dimension of all tensor fields.
+- Structure preservation: How the TensorDataClass structure and field
+  relationships are maintained during the stacking operation.
+- Shape consistency: How stacking ensures all tensor fields are combined
+  with consistent shapes and dimensions.
 """
 
 import torch
@@ -19,7 +25,7 @@ class DataPoint(TensorDataClass):
     y: torch.Tensor
 
 
-def main():
+def main() -> None:
     """Demonstrate stacking TensorDataClass instances."""
     point1 = DataPoint(
         x=torch.rand(3, 4),
