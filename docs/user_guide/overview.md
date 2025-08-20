@@ -2,9 +2,29 @@
 
 *A comprehensive introduction to structured tensor management in PyTorch*
 
+
+## Table of Contents
+
+- [Overview](#tensorcontainer-user-guide)
+- [TensorDict Deep Dive](tensor_dict.md)
+- [TensorDataClass Deep Dive](tensor_dataclass.md)
+- [TensorDistribution Deep Dive](tensor_distribution.md)
+
 ## Quick Start
 
-TensorContainer helps you manage structured tensor data with unified operations. Here's a practical example:
+TensorContainer helps you manage structured tensor data with unified operations. Here's how to get started:
+
+### Installation
+
+You can install TensorContainer using pip:
+
+```bash
+pip install tensorcontainer
+```
+
+### Basic Usage
+
+Here's a practical example:
 
 ```python
 import torch
@@ -64,20 +84,6 @@ print(f"Samples shape: {samples.shape}")
 - **Batch Sampling**: Sample values and compute log probabilities with automatic batch handling
 - **Parameter Management**: Access distribution parameters (mean, variance) with tensor-like operations
 
-## How to Use This Guide
-
-This guide is organized to help you progressively learn TensorContainer:
-
-1. **Core Concepts** - Essential concepts that apply to all container types
-2. **Container Types** - Choose the right container for your needs:
-   - Use **TensorDict** for dynamic, flexible data structures
-   - Use **TensorDataClass** for static, type-safe data structures
-   - Use **TensorDistribution** for probabilistic modeling
-3. **Advanced Patterns** - Nested containers, optimization techniques
-4. **Integration** - Working with PyTorch ecosystem
-
-Read the Core Concepts section, then jump to the container type that best matches your use case.
-
 ## Introduction
 
 TensorContainer is a PyTorch library that transforms how you work with structured tensor data. Instead of manually managing collections of individual tensors, TensorContainer provides unified containers that behave like single tensors while organizing complex, heterogeneous data structures.
@@ -121,13 +127,13 @@ def process_batch(batch, batch_size):
 
 ## Choosing the Right Container
 
-TensorContainer offers three main container types, each designed for specific use cases:
+TensorContainer offers three main container types:
 
-**TensorDict** provides dictionary-style containers with dynamic key-based access. It's ideal for exploratory development, prototyping, and scenarios where your data structure changes during runtime. TensorDict supports nested dictionaries and offers flexible key management.
+**TensorDict** provides dictionary-style containers with dynamic key-based access. It supports nested dictionaries and offers flexible key management.
 
-**TensorDataClass** offers type-safe dataclass-based containers with static typing and IDE support. It's best suited for production code with well-defined, stable data structures. TensorDataClass provides compile-time type checking, excellent IDE autocomplete, and optimized memory layout.
+**TensorDataClass** offers type-safe dataclass-based containers with static typing and IDE support. It provides compile-time type checking and IDE autocomplete.
 
-**TensorDistribution** wraps PyTorch distributions with tensor-like operations while maintaining full compatibility with the `torch.distributions` API. It's designed for probabilistic modeling, reinforcement learning policy networks, and scenarios where you need to apply tensor transformations to entire distributions.
+**TensorDistribution** wraps PyTorch distributions with tensor-like operations while maintaining full compatibility with the `torch.distributions` API.
 
 ## Core Concepts
 
