@@ -1,13 +1,10 @@
 """
-This example showcases how `TensorDataClass` instances can be indexed and sliced
-in a manner similar to `torch.Tensor`.
+Indexing and slicing TensorDataClass instances.
 
-Indexing `TensorDataClass` instances allows for flexible access to sub-batches
-or individual items, while maintaining the `TensorDataClass` structure.
-This is crucial for operations that require processing parts of a batch,
-such as mini-batching in training loops or selecting specific data points.
+This example demonstrates tensor-like indexing and slicing operations
+on TensorDataClass instances.
 
-Key concepts demonstrated in this example:
+Key concepts demonstrated:
 - Tensor-like indexing: How `TensorDataClass` supports integer and slice
   indexing, behaving consistently with `torch.Tensor`.
 - View semantics: Indexing a `TensorDataClass` returns a new instance whose
@@ -27,17 +24,23 @@ class DataPair(TensorDataClass):
 
 
 def main() -> None:
-    """
-    Demonstrates indexing and slicing functionalities of `TensorDataClass`.
-    """
-    # Create a small batch of tensors. The leading dimension is the batch (B).
-    # Indexing behaves like with torch.Tensor and returns a TensorDataClass.
-    x = torch.rand(3, 4) 
-    y = torch.rand(3)  
+    """Demonstrate indexing and slicing operations."""
+    # Create batch of tensors
+    x = torch.rand(3, 4)
+    y = torch.rand(3)
     data = DataPair(x=x, y=y, shape=(3,), device="cpu")
 
-    data[0] # Return a DataPair of shape ()
-    data[1:3] # Return a DataPair of shape (2,)
+    # Test indexing returns correct shapes
+    single_item = data[0]
+    assert single_item.shape == ()
+    assert single_item.x.shape == (4,)
+    assert single_item.y.shape == ()
+
+    # Test slicing returns correct shapes
+    slice_data = data[1:3]
+    assert slice_data.shape == (2,)
+    assert slice_data.x.shape == (2, 4)
+    assert slice_data.y.shape == (2,)
 
     # You can assign to an indexed TensorDataClass using another instance with
     # matching batch shape.
@@ -48,7 +51,6 @@ def main() -> None:
         device="cpu",
     )
     data[1:3] = replacement
-
 
 if __name__ == "__main__":
     main()

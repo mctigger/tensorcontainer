@@ -1,6 +1,13 @@
 """
-This example demonstrates how to inherit from a TensorDataClass to extend it
-with additional tensor fields while preserving all base class behavior and fields.
+Inheritance patterns with TensorDataClass.
+
+This example demonstrates how to inherit from TensorDataClass to extend
+functionality while preserving base class behavior.
+
+Key concepts demonstrated:
+- Field inheritance from parent classes
+- Automatic field merging in subclasses
+- Consistent shape and device handling
 """
 
 import torch
@@ -8,23 +15,22 @@ from tensorcontainer import TensorDataClass
 
 
 class Base(TensorDataClass):
-    """
-    A base TensorDataClass with a single tensor field.
-    """
     x: torch.Tensor
 
 
 class Child(Base):
-    """
-    A subclass of Base that adds an additional tensor field.
-    """
     y: torch.Tensor
 
 
 if __name__ == "__main__":
-    # Define tensor values for instantiation.
+    # Create tensors with shared batch dimension
     x = torch.rand(2, 3)
     y = torch.rand(2, 5)
 
-    # Create an instance of Child, which includes fields from both Base and Child.
+    # Child inherits all fields from Base
     data = Child(x=x, y=y, shape=(2,), device="cpu")
+
+    # Verify inheritance works correctly
+    assert data.shape == (2,)
+    assert data.x.shape == (2, 3)
+    assert data.y.shape == (2, 5)

@@ -1,11 +1,10 @@
 """
-This example showcases the basic usage of `TensorDataClass`.
+Basic usage of TensorDataClass.
 
-`TensorDataClass` is a powerful tool for creating tensor containers with a
-dataclass-like API. It automatically generates a constructor from annotated
-fields, similar to Python's built-in `dataclasses`.
+This example demonstrates how to define and instantiate a TensorDataClass
+with shape and device parameters.
 
-Key concepts demonstrated in this example:
+Key concepts demonstrated:
 - Auto-generated constructor: How `TensorDataClass` simplifies object
   instantiation based on type hints.
 - `shape` and `device` parameters: The necessity of providing `shape` and
@@ -27,22 +26,16 @@ class SimpleData(TensorDataClass):
 
 
 def main() -> None:
-    """
-    Demonstrates the basic functionalities of `SimpleData` (a TensorDataClass).
-    """
-    # Create two example tensors with a shared leading batch dimension of size 2.
-    obs_tensor = torch.rand(2, 3) 
-    act_tensor = torch.rand(2) 
+    """Demonstrate basic TensorDataClass functionality."""
+    # Create tensors with shared batch dimension
+    obs_tensor = torch.rand(2, 3)
+    act_tensor = torch.rand(2)
 
-    # Construct a SimpleData instance.
-    # The constructor is auto-generated from the annotated fields.
-    # Unlike plain dataclasses, `shape` and `device` must also be passed.
-    # `shape` defines the leading batch dimensions shared by all fields and
-    # MUST be a prefix of each tensor's shape.
+    # Construct instance with required shape and device
     data = SimpleData(
         observations=obs_tensor,
         actions=act_tensor,
-        shape=(2,),  # Batch prefix shared by all fields
+        shape=(2,),  # Batch dimensions shared by all fields
         device="cpu",
     )
 
@@ -58,7 +51,6 @@ def main() -> None:
     except Exception as e:
         # An error is expected here due to the shape mismatch.
         print(e)
-
 
 if __name__ == "__main__":
     main()

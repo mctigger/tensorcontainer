@@ -1,48 +1,39 @@
 """
-Cloning a TensorDataClass to create independent tensor storage.
+Copying and cloning TensorDataClass instances.
 
-This example demonstrates how to use `clone()` to create a new `TensorDataClass`
-instance with detached tensor storage but identical values. The cloned instance
-is completely independent - mutations to its tensors do not affect the original.
+This example demonstrates the difference between copy() and clone() methods
+for creating new TensorDataClass instances.
 
-Note: `copy()` provides a deepcopy-like alternative but is not shown here.
+Key concepts demonstrated:
+- Shallow copy with shared tensor storage
+- Deep clone with independent tensor storage
+- Memory sharing behavior
 """
 
 import torch
 from tensorcontainer import TensorDataClass
 
 
-# Define a simple TensorDataClass with two tensor fields
 class DataPair(TensorDataClass):
-    """
-    A simple data container with two tensor fields.
-
-    Args:
-        x (torch.Tensor): The first tensor field.
-        y (torch.Tensor): The second tensor field.
-    """
-
     x: torch.Tensor
     y: torch.Tensor
 
 
 def main():
-    # Create deterministic tensors for our example
+    """Demonstrate copy vs clone operations."""
+    # Create tensors
     x = torch.rand(3, 3)
     y = torch.rand(3, 5)
-    # Instantiate the original TensorDataClass
     original = DataPair(x=x, y=y, shape=(3,), device="cpu")
 
-    # Copy the original to create a shallow copy
+    # Shallow copy shares tensor storage
     copied = original.copy()
-    # Shares tensors with original
-    assert copied.x is original.x
+    assert copied.x is original.x  # Same tensor objects
     assert copied.y is original.y
 
-    # Clone the original to create an independent copy
+    # Deep clone creates independent tensor storage
     cloned = original.clone()
-    # Does not share tensors with original. Tensors have also been cloned.
-    assert cloned.x is not original.x
+    assert cloned.x is not original.x  # Different tensor objects
     assert cloned.y is not original.y
 
 
