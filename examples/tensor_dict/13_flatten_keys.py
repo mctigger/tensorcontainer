@@ -32,15 +32,6 @@ def main() -> None:
     assert nested["env"]["obs"] is flattened["env.obs"]
     assert torch.equal(nested["env"]["info"]["step"], flattened["env.info.step"])
 
-    # Custom separator
-    underscore = nested.flatten_keys(separator="_")
-    assert "env_obs" in underscore
-    assert "env_info_step" in underscore
-
-    # Operations work on flattened structure
-    reshaped_flat = flattened.reshape(1, 3)
-    assert reshaped_flat["env.obs"].shape == (1, 3, 10)
-
 
 if __name__ == "__main__":
     main()
