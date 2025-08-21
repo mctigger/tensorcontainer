@@ -40,5 +40,6 @@ def main() -> None:
     assert not detached_batch.observations.requires_grad
     assert not detached_batch.actions.requires_grad
 
+
 if __name__ == "__main__":
     main()

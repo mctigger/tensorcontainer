@@ -15,7 +15,7 @@ def main() -> None:
         shape=(4,),
         device="cpu",
     )
-    
+
     # Add keys dynamically
     data["actions"] = torch.randn(4, 3)
     data["rewards"] = torch.randn(4)
@@ -26,7 +26,9 @@ def main() -> None:
 
     # Attribute shapes must be compatible with TensorDict shape
     try:
-        data["wrong_shape"] = torch.randn(3, 2)  # Wrong batch shape (3,) instead of (4,)
+        data["wrong_shape"] = torch.randn(
+            3, 2
+        )  # Wrong batch shape (3,) instead of (4,)
     except Exception as e:
         print(e)
 

@@ -17,7 +17,7 @@ def main() -> None:
                 "observations": torch.randn(3, 10),
                 "info": {
                     "step_count": torch.tensor([10, 15, 20]),
-                }
+                },
             },
             "agent": {
                 "policy": torch.randn(3, 6),
@@ -37,7 +37,7 @@ def main() -> None:
     # Access nested data
     assert data["env"]["observations"].shape == (3, 10)
     assert data["env"]["info"]["step_count"].shape == (3,)
-    
+
     # Operations propagate through automatic nesting
     reshaped = data.reshape(1, 3)
     assert reshaped["env"]["info"]["step_count"].shape == (1, 3)

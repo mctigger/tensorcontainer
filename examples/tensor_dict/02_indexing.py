@@ -18,7 +18,7 @@ def main() -> None:
         shape=(6,),
         device="cpu",
     )
-    
+
     # Index a single item - removes batch dimension
     single_item = data[0]
     assert single_item.shape == ()

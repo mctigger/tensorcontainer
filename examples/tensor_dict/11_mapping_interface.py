@@ -27,8 +27,7 @@ def main() -> None:
 
     # Update from another TensorDict
     z = torch.randn(3, 1)
-    other = TensorDict({"z": z}, shape=(3,), device="cpu"
-                       )
+    other = TensorDict({"z": z}, shape=(3,), device="cpu")
     data.update(other)
     assert data["z"] is z
 

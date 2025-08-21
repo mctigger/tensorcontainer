@@ -19,12 +19,12 @@ def main() -> None:
 
     # Shallow copy shares tensor memory
     shallow_copy = copy.copy(original)
-    assert shallow_copy["x"] is original["x"] # Same tensor objects
+    assert shallow_copy["x"] is original["x"]  # Same tensor objects
     assert shallow_copy["y"] is original["y"]
 
     # Clone creates independent tensors
     cloned = original.clone()
-    assert cloned["x"] is not original["x"] # Different tensor objects
+    assert cloned["x"] is not original["x"]  # Different tensor objects
     assert cloned["y"] is not original["y"]
 
 

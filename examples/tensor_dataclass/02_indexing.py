@@ -52,6 +52,6 @@ def main() -> None:
     )
     data[1:3] = replacement
 
+
 if __name__ == "__main__":
     main()
-

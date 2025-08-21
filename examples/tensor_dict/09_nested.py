@@ -28,7 +28,7 @@ def main() -> None:
         shape=(4,),
         device="cpu",
     )
-    
+
     full = TensorDict(
         {
             "env_state": torch.randn(4, 10),

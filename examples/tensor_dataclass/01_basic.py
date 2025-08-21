@@ -32,7 +32,7 @@ def main() -> None:
     act_tensor = torch.rand(2)
 
     # Construct instance with required shape and device
-    data = SimpleData(
+    SimpleData(
         observations=obs_tensor,
         actions=act_tensor,
         shape=(2,),  # Batch dimensions shared by all fields
@@ -51,6 +51,7 @@ def main() -> None:
     except Exception as e:
         # An error is expected here due to the shape mismatch.
         print(e)
+
 
 if __name__ == "__main__":
     main()

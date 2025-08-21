@@ -27,7 +27,7 @@ def main() -> None:
     assert "env.obs" in flattened
     assert "env.info.step" in flattened
     assert "agent.policy" in flattened
-    
+
     # Memory is shared between original and flattened
     assert nested["env"]["obs"] is flattened["env.obs"]
     assert torch.equal(nested["env"]["info"]["step"], flattened["env.info.step"])
