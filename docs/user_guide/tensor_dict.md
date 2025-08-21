@@ -361,6 +361,5 @@ assert torch.equal(nested['env']['info']['step'], flattened['env.info.step'])
 | **Type Safety**  | Runtime                             | Compile-time (static analysis)    |
 | **IDE Support**  | Limited to string keys              | Full autocomplete & refactoring   |
 | **Flexibility**  | High - modify structure at runtime  | Low - fixed schema               |
-| **Use Case**     | Exploratory, dynamic structures     | Stable, production-ready schemas  |
 
 Choose `TensorDict` for dynamic scenarios where the contents might change during execution, prototyping, or when you need dictionary-like flexibility. Choose `TensorDataClass` when you have a well-defined, stable data structure and can benefit from static type checking and IDE support.

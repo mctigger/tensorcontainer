@@ -354,6 +354,5 @@ full_gpu = full.to("cuda")
 | **Type Safety**  | Compile-time (static analysis)      | Runtime                           |
 | **IDE Support**  | Full autocomplete & refactoring     | Limited to string keys            |
 | **Inheritance**  | Natural OOP inheritance           | Composition-based nesting         |
-| **Use Case**     | Stable, production-ready schemas    | Exploratory, dynamic structures   |
 
 Choose `TensorDataClass` when you have a well-defined, stable data structure and can benefit from static type checking and IDE support. Choose `TensorDict` for more dynamic scenarios where the contents might change during execution.
