@@ -35,6 +35,7 @@ from .relaxed_bernoulli import TensorRelaxedBernoulli
 from .relaxed_one_hot_categorical import TensorRelaxedOneHotCategorical
 from .soft_bernoulli import TensorSoftBernoulli
 from .student_t import TensorStudentT
+from .symlog import TensorSymLog
 from .tanh_normal import TensorTanhNormal
 from .transformed_distribution import TransformedDistribution
 from .truncated_normal import TensorTruncatedNormal
@@ -81,6 +82,7 @@ __all__ = [
     "TensorRelaxedOneHotCategorical",
     "TensorSoftBernoulli",
     "TensorStudentT",
+    "TensorSymLog",
     "TensorTanhNormal",
     "TransformedDistribution",
     "TensorTruncatedNormal",
