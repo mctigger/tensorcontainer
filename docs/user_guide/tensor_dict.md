@@ -1,306 +1,366 @@
 # TensorDict Deep Dive
 
-TensorDict is a dictionary-style TensorContainer for managing collections of tensors that share the same leading batch shape, with flexible event dimensions. Use it when your schema changes during development or when you need key-based access.
+TensorDict is a dictionary-style TensorContainer that combines Python's dictionary interface with tensor operations, providing dynamic, key-based access to collections of tensors with shared batch dimensions. Use it when your schema changes during development or when you need flexible key-based access.
 
-## Quick start
+## Quick Start
+
+Get started with `TensorDict` by creating a dictionary-like container for your tensors. The container automatically manages shape consistency and applies tensor operations to all values at once.
 
 ```python
 import torch
 from tensorcontainer import TensorDict
 
-# Create a TensorDict with related tensors
+# 1. Create a TensorDict with related tensors
+data = TensorDict({
+    'observations': torch.randn(4, 10),
+    'actions': torch.randn(4, 3),
+    'rewards': torch.randn(4),
+}, shape=(4,), device='cpu')
+
+# 2. Dictionary-style access
+obs = data['observations']
+data['values'] = torch.randn(4)
+
+# 3. Apply unified operations to all tensors
+data_cuda = data.to('cuda')
+data_reshaped = data.reshape(2, 2)
+data_detached = data.detach()
+
+# 4. Dictionary-like interface
+assert len(data) == 3
+assert 'observations' in data
+```
+*Example available at: [examples/tensor_dict/01_basic.py](../../examples/tensor_dict/01_basic.py)*
+
+
+## Construction and Validation
+
+To create a `TensorDict`, you provide a dictionary of tensors along with the mandatory `shape` and `device` arguments. The class validates two principal constraints on initialization:
+
+1. **Shape Consistency**: Every tensor's leading dimensions must match the `shape` argument.
+2. **Device Consistency**: Every tensor must reside on the specified `device` (unless `device=None`).
+
+```python
+# Invalid shape: raises an error because the shape argument must be a prefix of every tensor's shape
+try:
+    TensorDict({
+        'x': torch.randn(4, 10),
+        'y': torch.randn(3, 5),  # Wrong batch size (3 vs 4)
+    }, shape=(4,), device='cpu')
+except Exception as e:
+    # An error is expected here due to the shape mismatch
+    print(e)
+```
+*Example available at: [examples/tensor_dict/01_basic.py](../../examples/tensor_dict/01_basic.py)*
+
+
+## Indexing and Slicing
+
+Indexing operates exclusively on the batch dimensions, leaving event dimensions untouched. It mirrors `torch.Tensor` indexing and returns a new `TensorDict` instance that is a **view** of the original data.
+
+```python
+import torch
+from tensorcontainer import TensorDict
+
+# Create batch of tensors
+data = TensorDict({
+    'x': torch.randn(6, 4),
+    'y': torch.randn(6, 2),
+}, shape=(6,), device='cpu')
+
+# Test indexing returns correct shapes
+single_item = data[0]
+assert single_item.shape == ()
+assert single_item['x'].shape == (4,)
+
+# Test slicing returns correct shapes
+slice_data = data[2:5]
+assert slice_data.shape == (3,)
+
+# You can assign to an indexed TensorDict using another instance with matching batch shape
+replacement = TensorDict({
+    'x': torch.ones(3, 4),
+    'y': torch.zeros(3, 2)
+}, shape=(3,), device='cpu')
+data[2:5] = replacement
+```
+*Example available at: [examples/tensor_dict/02_indexing.py](../../examples/tensor_dict/02_indexing.py)*
+
+
+## Shape Operations
+
+Shape operations like `reshape()`, `view()`, `squeeze()`, and `unsqueeze()` apply only to the **batch dimensions**. Event dimensions are automatically preserved.
+
+```python
+import torch
+from tensorcontainer import TensorDict
+
+data = TensorDict({
+    'observations': torch.randn(2, 3, 128),
+    'actions': torch.randn(2, 3, 6),
+    'rewards': torch.randn(2, 3),
+}, shape=(2, 3), device='cpu')
+
+# Reshape only affects batch dimensions
+reshaped = data.reshape(6)
+assert reshaped.shape == (6,)
+assert reshaped['observations'].shape == (6, 128)  # Event dimension preserved
+
+# Unsqueeze adds batch dimension
+unsqueezed = data.unsqueeze(0)
+assert unsqueezed.shape == (1, 2, 3)
+```
+*Example available at: [examples/tensor_dict/03_shape_ops.py](../../examples/tensor_dict/03_shape_ops.py)*
+
+
+## Stacking and Concatenation
+
+You can combine multiple `TensorDict` instances using `torch.stack` and `torch.cat`.
+
+- `torch.stack`: Creates a new batch dimension.
+- `torch.cat`: Concatenates along an existing batch dimension.
+
+```python
+import torch
+from tensorcontainer import TensorDict
+
+batch1 = TensorDict({'x': torch.randn(3, 4), 'y': torch.randn(3, 2)}, shape=(3,), device='cpu')
+batch2 = TensorDict({'x': torch.randn(3, 4), 'y': torch.randn(3, 2)}, shape=(3,), device='cpu')
+
+# Stack creates new batch dimension
+stacked = torch.stack([batch1, batch2], dim=0)
+assert stacked.shape == (2, 3)
+assert stacked['x'].shape == (2, 3, 4)
+
+# Concatenate along existing dimension
+concatenated = torch.cat([batch1, batch2], dim=0)
+assert concatenated.shape == (6,)
+```
+*Example available at: [examples/tensor_dict/04_stack.py](../../examples/tensor_dict/04_stack.py)*
+
+
+## Device Operations
+
+The `.to()` method provides a convenient way to move all tensor values in a `TensorDict` instance to a different device (CPU, GPU, etc.) in a single operation.
+
+```python
+import torch
+from tensorcontainer import TensorDict
+
+# Create instance on CPU
+data_cpu = TensorDict({'x': torch.rand(2, 2), 'y': torch.rand(2, 5)}, shape=(2,), device='cpu')
+
+# Move to CUDA device
+data_cuda = data_cpu.to(device='cuda')
+
+# Verify all tensors moved to CUDA
+assert data_cuda.device == torch.device('cuda:0')
+assert data_cuda['x'].device == torch.device('cuda:0')
+assert data_cuda['y'].device == torch.device('cuda:0')
+```
+*Example available at: [examples/tensor_dict/05_device.py](../../examples/tensor_dict/05_device.py)*
+
+
+## Copy and Clone Operations
+
+- **`copy.copy()`**: Creates a shallow copy of the instance (new instance, shared tensors).
+- **`.clone()`**: Creates a deep copy of the instance with new, independent tensor storage.
+
+```python
+import torch
+import copy
+from tensorcontainer import TensorDict
+
+original = TensorDict({'x': torch.randn(3, 4), 'y': torch.randn(3, 2)}, shape=(3,), device='cpu')
+
+# Shallow copy shares tensor memory
+shallow_copy = copy.copy(original)
+assert shallow_copy['x'] is original['x']  # Same tensor objects
+
+# Clone creates independent tensors
+cloned = original.clone()
+assert cloned['x'] is not original['x']  # Different tensor objects
+```
+*Example available at: [examples/tensor_dict/07_copy_clone.py](../../examples/tensor_dict/07_copy_clone.py)*
+
+
+## Gradient Management
+
+The `detach()` method is essential for gradient management in training scenarios. It creates a new `TensorDict` instance with the same data but stops gradient flow.
+
+```python
+import torch
+from tensorcontainer import TensorDict
+
+# Create batch with gradient tracking
 batch = TensorDict({
-    'observations': torch.randn(32, 64, 64),  # 32 images of 64x64
-    'actions': torch.randn(32, 4),            # 32 action vectors
-    'rewards': torch.randn(32, 1)             # 32 reward values
-}, shape=(32,))  # Batch dimension: 32 samples
+    'observations': torch.randn(4, 10, requires_grad=True),
+    'actions': torch.randn(4, 3, requires_grad=True),
+}, shape=(4,), device='cpu')
 
-# Dictionary-style access
-obs = batch['observations']
-batch['next_observations'] = torch.randn(32, 64, 64)
+# Verify gradients are initially tracked
+assert batch['observations'].requires_grad
+assert batch['actions'].requires_grad
 
-# Apply operations to ALL tensors at once (batch dims only)
-batch = batch.to('cuda')          # Move all tensors to GPU  -> [`TensorContainer.to()`](src/tensorcontainer/tensor_container.py:599)
-batch = batch.reshape(16, 2)      # Reshape batch to 16x2    -> [`TensorContainer.reshape()`](src/tensorcontainer/tensor_container.py:573)
-batch = batch.detach()            # Detach from autograd     -> [`TensorContainer.detach()`](src/tensorcontainer/tensor_container.py:617)
+# Detach to stop gradient flow
+detached_batch = batch.detach()
 
-print(f"Batch shape: {batch.shape}")
-print(f"Keys: {list(batch.keys())}")
+# Verify gradients are no longer tracked
+assert not detached_batch['observations'].requires_grad
+assert not detached_batch['actions'].requires_grad
 ```
+*Example available at: [examples/tensor_dict/08_detach_gradients.py](../../examples/tensor_dict/08_detach_gradients.py)*
 
----
-
-# TensorDict-Specific Features
-
-TensorDict builds on the shared TensorContainer mechanics to provide dynamic, key-based collections, nested conversions, and key flattening tailored for real-world pipelines.
-
-## Dictionary Semantics
-
-TensorDict provides a full dictionary-like interface for managing tensor collections with shared batch dimensions.
-
-### Key-Based Access
-
-- Mapping methods:
-  - Keys/Values/Items: [`TensorDict.keys()`](src/tensorcontainer/tensor_dict.py:322), [`TensorDict.values()`](src/tensorcontainer/tensor_dict.py:325), [`TensorDict.items()`](src/tensorcontainer/tensor_dict.py:328)
-  - Size/Len: `len(td)` delegates to [`TensorDict.__len__()`](src/tensorcontainer/tensor_dict.py:316)
-  - Membership: [`TensorDict.__contains__()`](src/tensorcontainer/tensor_dict.py:319)
-- Get/Set by string key:
-  - Get: [`TensorDict.__getitem__()`](src/tensorcontainer/tensor_dict.py:275) routes string keys to the underlying mapping
-  - Set: [`TensorDict.__setitem__()`](src/tensorcontainer/tensor_dict.py:291) validates shape/device and auto-wraps nested dicts
-- Bulk update:
-  - [`TensorDict.update()`](src/tensorcontainer/tensor_dict.py:331) applies validations and nested wrapping
-
-```python
-td = TensorDict({
-    'states': torch.randn(32, 128),
-    'actions': torch.randn(32, 4),
-}, shape=(32,))
-
-states = td['states']              # key-based
-td['values'] = torch.randn(32, 1)  # add new field
-del td['actions']                  # remove field
-
-# Bulk update
-td.update({'logp': torch.randn(32, 1), 'entropy': torch.randn(32, 1)})
-```
-
-## Construction and Initialization
-
-TensorDict offers flexible initialization options with automatic validation and nested structure support.
-
-### Constructor Options
-
-Constructor: [`TensorDict.__init__()`](src/tensorcontainer/tensor_dict.py:95)
-
-Inputs:
-- `data`: mapping from `str -> Tensor | TensorDict | dict`
-- `shape`: batch shape prefix shared by all tensors
-- `device`: optional device constraint; if `None`, mixed-device leaves are allowed (compat controlled via [`TensorContainer._is_device_compatible()`](src/tensorcontainer/tensor_container.py:321))
-
-Nested `dict` values are normalized into TensorDict recursively via: [`TensorDict.data_from_dict()`](src/tensorcontainer/tensor_dict.py:116)
-
-```python
-# Basic
-td = TensorDict({
-    'obs': torch.randn(32, 128),
-    'act': torch.randint(0, 4, (32,))
-}, shape=(32,), device='cpu')
-
-# From existing dict (auto-nested)
-raw = {'agent': {'pos': torch.randn(16, 3), 'vel': torch.randn(16, 3)}}
-agent_td = TensorDict(raw, shape=(16,), device='cpu')
-assert isinstance(agent_td['agent'], TensorDict)
-
-# Empty + dynamic fill
-empty = TensorDict({}, shape=(8,), device='cuda')
-empty['x'] = torch.randn(8, 2, device='cuda')
-```
-
-Shape semantics (enforced centrally by TensorContainer):
-- Every leaf tensor must have at least `len(shape)` dims and its first `len(shape)` dims equal to `shape`. See: [`TensorContainer._validate_shape()`](src/tensorcontainer/tensor_container.py:328)
-- Scalar and zero-sized support:
-  - Scalar leaves are valid with `shape=()` (see tests: tests/tensor_dict/test_init.py)
-  - Zero batch size accepted (see tests: tests/tensor_dict/test_shape.py)
-
-Invalid examples (see tests):
-- Wrong batch prefix -> error: tests/tensor_dict/test_init.py, tests/tensor_dict/test_shape.py
-- Leaf has too few dims for specified `shape` -> error: tests/tensor_dict/test_shape.py
 
 ## Nested Structures
 
-TensorDict automatically handles nested dictionaries, converting them to nested TensorDict instances for hierarchical data organization.
-
-### Automatic Nesting
-
-Nested Python dicts become nested TensorDicts automatically. This is consistently enforced on:
-- Construction: [`TensorDict.data_from_dict()`](src/tensorcontainer/tensor_dict.py:116)
-- Assignment of a dict to a key: [`TensorDict.__setitem__()`](src/tensorcontainer/tensor_dict.py:291) auto-wraps the dict using the parent's shape/device.
+You can nest `TensorDict` instances within each other to create complex, hierarchical data structures. All operations will propagate through the nested structure correctly.
 
 ```python
+import torch
+from tensorcontainer import TensorDict
+
+# Create with appropriate tensors and shapes
+agent_state = TensorDict({
+    'actor_params': torch.randn(4, 20),
+    'critic_params': torch.randn(4, 15),
+}, shape=(4,), device='cpu')
+
+full = TensorDict({
+    'env_state': torch.randn(4, 10),
+    'agent_state': agent_state,  # Nested TensorDict
+}, shape=(4,), device='cpu')
+
+# Operations on 'full' will propagate to 'agent_state'
+# For example, moving to a different device
+full_cuda = full.to('cuda')
+assert full_cuda.device == torch.device('cuda:0')
+assert full_cuda['agent_state'].device == torch.device('cuda:0')
+assert full_cuda['agent_state']['actor_params'].device == torch.device('cuda:0')
+```
+*Example available at: [examples/tensor_dict/09_nested.py](../../examples/tensor_dict/09_nested.py)*
+
+
+## TensorDict-Specific Features
+
+TensorDict provides unique capabilities not available in other TensorContainer types, making it ideal for dynamic scenarios and exploratory development.
+
+### Dynamic Key Management
+
+Unlike `TensorDataClass`, `TensorDict` allows you to add and remove keys dynamically at runtime, providing flexibility for evolving schemas.
+
+```python
+import torch
+from tensorcontainer import TensorDict
+
+data = TensorDict({'observations': torch.randn(4, 10)}, shape=(4,), device='cpu')
+
+# Add keys dynamically
+data['actions'] = torch.randn(4, 3)
+data['rewards'] = torch.randn(4)
+
+# Remove keys dynamically
+del data['rewards']
+assert 'rewards' not in data
+```
+*Example available at: [examples/tensor_dict/10_dynamic_keys.py](../../examples/tensor_dict/10_dynamic_keys.py)*
+
+
+### Dictionary Interface
+
+TensorDict implements the full `MutableMapping` interface, providing familiar dictionary-like methods and iteration patterns.
+
+```python
+import torch
+from tensorcontainer import TensorDict
+
+data = TensorDict({'x': torch.randn(3, 4), 'y': torch.randn(3, 2)}, shape=(3,), device='cpu')
+
+# Dictionary-like access methods
+assert 'x' in data.keys()
+assert 'y' in data.keys()
+assert len(data) == 2
+
+# Dictionary-like iteration
+for key in data:
+    assert key in ['x', 'y']
+
+for key, value in data.items():
+    assert isinstance(value, torch.Tensor)
+
+# Update from another TensorDict or dictionary
+other = TensorDict({'z': torch.randn(3, 1)}, shape=(3,), device='cpu')
+data.update(other)
+assert 'z' in data
+```
+*Example available at: [examples/tensor_dict/11_mapping_interface.py](../../examples/tensor_dict/11_mapping_interface.py)*
+
+
+### Automatic Dict Conversion
+
+TensorDict automatically converts nested Python dictionaries into nested TensorDict instances, simplifying the construction of hierarchical data structures.
+
+```python
+import torch
+from tensorcontainer import TensorDict
+
+# Nested dictionaries are automatically converted to TensorDict instances
+data = TensorDict({
+    'agent': {
+        'position': torch.randn(3, 2),
+        'velocity': torch.randn(3, 2),
+    },
+    'tensor': torch.randn(3, 5),
+}, shape=(3,), device='cpu')
+
+# Verify nested structure
+assert isinstance(data['agent'], TensorDict)
+assert data['agent']['position'].shape == (3, 2)
+```
+*Example available at: [examples/tensor_dict/12_nested_dict_handling.py](../../examples/tensor_dict/12_nested_dict_handling.py)*
+
+
+### Key Flattening
+
+TensorDict provides powerful key flattening capabilities to convert nested structures into flat namespaces with dot-separated keys while sharing tensor memory.
+
+```python
+import torch
+from tensorcontainer import TensorDict
+
 nested = TensorDict({
-    'agent': {
-        'position': torch.randn(32, 3),
-        'velocity': torch.randn(32, 3),
-    },
     'env': {
-        'goal': torch.randn(32, 2),
+        'obs': torch.randn(3, 10),
+        'info': {'step': torch.tensor([1, 2, 3])},
     },
-}, shape=(32,), device='cpu')
+    'agent': {'policy': torch.randn(3, 6)},
+}, shape=(3,), device='cpu')
 
-# Access
-pos = nested['agent']['position']
-goal = nested['env']['goal']
+# Flatten with default dot separator
+flattened = nested.flatten_keys()
+assert 'env.obs' in flattened
+assert 'env.info.step' in flattened
+assert 'agent.policy' in flattened
 
-# Dynamically extend nested paths
-nested['agent']['inventory'] = {
-    'items': torch.randint(0, 10, (32, 5)),
-    'weights': torch.randn(32, 5),
-}
+# Memory is shared between original and flattened
+assert nested['env']['obs'] is flattened['env.obs']
+assert torch.equal(nested['env']['info']['step'], flattened['env.info.step'])
 ```
-
-### Operation Propagation
-
-Operation propagation to nested children is automatic because all container ops are defined in the base class and traverse leaves via PyTree:
-- Base map used by all ops (with key-path error decoration): [`TensorContainer._tree_map()`](src/tensorcontainer/tensor_container.py:300)
-
-```python
-reshaped = nested.reshape(8, 4)
-on_cuda  = nested.to('cuda')
-indexed  = nested[:, 0]
-```
-
-## Key Flattening
-
-TensorDict provides powerful key flattening capabilities to convert nested structures into flat namespaces for easier processing.
-
-### Flatten Keys
-
-Flatten nested keys into a single-level namespace using dot or a custom separator:
-- API: [`TensorDict.flatten_keys()`](src/tensorcontainer/tensor_dict.py:349)
-
-```python
-flat = nested.flatten_keys()
-print(list(flat.keys()))  # ['agent.position', 'agent.velocity', 'env.goal', ...]
-
-flat_slash = nested.flatten_keys(separator='/')  # ['agent/position', ...]
-flat_under = nested.flatten_keys(separator='_')  # ['agent_position', ...]
-```
-
-Properties:
-- Iterative traversal (non-recursive) prevents recursion depth/cycles.
-- No copies — values in the flattened view reference the same tensors (see tests: tests/tensor_dict/test_flatten_keys.py).
-- Works with `torch.compile` (see tests: tests/tensor_dict/test_flatten_keys.py).
-
-## Advanced Indexing and Assignment
-
-TensorDict provides sophisticated indexing capabilities that distinguish between key-based access and batch-based operations.
-
-### Key vs Batch Indexing
-
-String-key indexing delegates to mapping access, while non-string indexing defers to base batch indexing.
-
-
-```python
-# Key vs batch indexing
-x = td['states']        # key (mapping)
-sub = td[:8]            # batch slice (base container indexing)
-
-# Boolean masking over batch dims
-mask = torch.randint(0, 2, (32,), dtype=torch.bool)
-active = td[mask]       # every leaf masked consistently
-
-# Multi-d indexing
-series = TensorDict({
-    's': torch.randn(8, 10, 64),
-    'a': torch.randn(8, 10, 4),
-}, shape=(8, 10))
-step5 = series[:, 5]         # shape becomes (8,)
-subset = series[:4, :5]      # (4, 5)
-
-# Ellipsis
-complex_td = TensorDict({
-    'multi': torch.randn(4, 8, 6, 128),
-    'simple': torch.randn(4, 8, 6, 1),
-}, shape=(4, 8, 6))
-tail = complex_td[..., :3]   # slice last batch dim
-```
-
-### In-place Assignment
-
-In-place assignment paths:
-- Assign TensorDict into slice/mask: [`TensorContainer.__setitem__()`](src/tensorcontainer/tensor_container.py:511)
-
-```python
-template = TensorDict({
-    'states': torch.zeros(2, 64),
-    'actions': torch.zeros(2, 4),
-}, shape=(2,))
-td[:2] = template
-
-mask = torch.tensor([True, False, True, False])
-td[mask] = template  # broadcast rules apply at leaf level (PyTorch semantics)
-```
-
-Errors and constraints validated by tests:
-- Mask shape mismatch raises IndexError (propagated from PyTorch leaves): tests/tensor_dict/test_mask_select.py
-
-## Error Handling and Diagnostics
-
-TensorDict provides comprehensive error handling with detailed diagnostics to help identify and resolve issues quickly.
-
-### Validation with Context
-
-TensorDict leans on base validation with detailed path reporting:
-- Validation loop adds key-path context: [`TensorContainer._validate()`](src/tensorcontainer/tensor_container.py:340)
-- Errors include "Validation error at key ..." with underlying cause.
-- Any runtime thrown during `tree_map` operations is decorated with a readable key path: [`TensorContainer._tree_map()`](src/tensorcontainer/tensor_container.py:300)
-
-Typical issues:
-- Shape mismatch across batch dims
-- Device mismatch when `device` is set on the container
-- Too many indices or invalid ellipsis usage (normalized and checked in base)
-
-Examples (from tests):
-- Constructor raises on incompatible leaves: tests/tensor_dict/test_shape.py
-- Nested mapping mismatch errors: tests/tensor_dict/test_shape.py
-
-
-## Practical Examples
-
-### Time-Series Batch with Nested Structure
-
-```python
-episodes = 8
-timesteps = 10
-
-rollout = TensorDict({
-    'agent': {
-        'obs': torch.randn(episodes, timesteps, 128),
-        'act': torch.randn(episodes, timesteps, 4),
-    },
-    'env': {
-        'rew': torch.randn(episodes, timesteps, 1),
-        'done': torch.randint(0, 2, (episodes, timesteps, 1)),
-    }
-}, shape=(episodes, timesteps))
-
-# Index timestep
-t5 = rollout[:, 5]        # shape: (8,)
-# Flatten for pipeline
-flat = rollout.flatten_keys()
-# Reshape to a single batch for training
-flat = flat.reshape(episodes * timesteps)
-# Move to GPU
-flat = flat.to('cuda')
-```
-
-### Boolean Masking and Assignment
-
-```python
-td = TensorDict({
-    'state': torch.randn(4, 16),
-    'value': torch.randn(4, 1),
-}, shape=(4,))
-
-mask = torch.tensor([True, False, True, False])
-
-# Select
-sel = td[mask]  # shape: (2,)
-
-# Assign template into masked positions
-template = TensorDict({'state': torch.zeros(2, 16), 'value': torch.zeros(2, 1)}, shape=(2,))
-td[mask] = template
-```
-
-### Stacking and Concatenating Rollouts
-
-```python
-rollout1 = TensorDict({'obs': torch.randn(16, 64)}, shape=(16,))
-rollout2 = TensorDict({'obs': torch.randn(16, 64)}, shape=(16,))
-
-stacked = torch.stack([rollout1, rollout2])  # (2, 16)
-joined  = torch.cat([rollout1, rollout2])    # (32,)
-```
-
+*Example available at: [examples/tensor_dict/13_flatten_keys.py](../../examples/tensor_dict/13_flatten_keys.py)*
 
 ---
+
+## Comparison and Decision Guide
+
+### TensorDict vs. TensorDataClass
+
+| Feature          | TensorDict                          | TensorDataClass                   |
+|------------------|-------------------------------------|-----------------------------------|
+| **Access**       | `obj["key"]` (dictionary)           | `obj.field` (attribute)           |
+| **Schema**       | Dynamic, keys added at runtime      | Static, defined at class level    |
+| **Type Safety**  | Runtime                             | Compile-time (static analysis)    |
+| **IDE Support**  | Limited to string keys              | Full autocomplete & refactoring   |
+| **Flexibility**  | High - modify structure at runtime  | Low - fixed schema               |
+| **Use Case**     | Exploratory, dynamic structures     | Stable, production-ready schemas  |
+
+Choose `TensorDict` for dynamic scenarios where the contents might change during execution, prototyping, or when you need dictionary-like flexibility. Choose `TensorDataClass` when you have a well-defined, stable data structure and can benefit from static type checking and IDE support.
