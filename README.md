@@ -3,6 +3,7 @@
 *Tensor containers for PyTorch with PyTree compatibility and torch.compile optimization*
 
 [![Docs](https://img.shields.io/static/v1?logo=github&style=flat&color=pink&label=docs&message=tensorcontainer)](tree/main/docs)
+[![Documentation](https://img.shields.io/badge/docs-local-blue)](./docs/user_guide/README.md)
 [![Python 3.9, 3.10, 3.11, 3.12](https://img.shields.io/badge/python-3.9%20%7C%203.10%20%7C%203.11%20%7C%203.12-blue)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.6+-blue.svg)](https://pytorch.org/)
