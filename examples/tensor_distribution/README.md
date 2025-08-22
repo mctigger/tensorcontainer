@@ -50,13 +50,52 @@ Demonstrates:
 - Hierarchical composition patterns
 - Policy comparison workflows
 
-## Advanced Examples (Planned)
+## Advanced Examples
 
-- **06_sampling_patterns.py** - Advanced sampling strategies
-- **07_gradient_flow.py** - Training integration  
-- **08_integration_tensorcontainer.py** - TensorDict/TensorDataClass integration
-- **09_kl_divergence.py** - Distribution comparisons
-- **10_real_world_workflows.py** - Practical applications
+### 06_sampling_patterns.py - Advanced Sampling Strategies
+**Key Concept:** Different sampling approaches for various scenarios
+
+Demonstrates:
+- sample() vs rsample() for gradient flow
+- Multiple sampling shapes and batch processing
+- Custom sampling functions and strategies
+- Statistical property computation from samples
+
+### 07_gradient_flow.py - Training Integration
+**Key Concept:** Seamless training with distributions
+
+Demonstrates:
+- Reparameterized sampling for VAE-style training
+- Gradient tracking and detachment patterns
+- Loss computation with distribution parameters
+- Integration with PyTorch optimizers
+
+### 08_integration_tensorcontainer.py - Ecosystem Integration
+**Key Concept:** Working with TensorDict and TensorDataClass
+
+Demonstrates:
+- Nested distribution structures
+- Unified operations on multiple distributions
+- Type-safe distribution containers
+- Complex hierarchical modeling
+
+### 09_kl_divergence.py - Distribution Comparisons
+**Key Concept:** Measuring distribution differences
+
+Demonstrates:
+- KL divergence between TensorDistributions
+- Mixed TensorDistribution/torch.distributions operations
+- Policy comparison and regularization workflows
+- Interoperability with PyTorch's KL registry
+
+### 10_real_world_workflows.py - Practical Applications
+**Key Concept:** End-to-end usage patterns
+
+Demonstrates:
+- Policy networks outputting distributions
+- Variational inference and Bayesian modeling
+- Multi-task and multi-agent scenarios
+- Production-ready patterns and best practices
 
 ## Running Examples
 
