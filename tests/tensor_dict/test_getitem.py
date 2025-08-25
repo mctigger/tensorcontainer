@@ -124,3 +124,12 @@ def test_slice_preserves_device(nested_dict, device):
     assert normalize_device(nested["b"].device) == normalize_device(
         torch.device(device)
     )
+
+
+def test_invalid_getitem_raises_error():
+    td = TensorDict({"a": torch.randn(2, 3, 4)}, shape=[2, 3])
+    with pytest.raises(
+        IndexError,
+        match="too many indices for container: container is 2-dimensional, but 3 were indexed",
+    ):
+        td[:, :, 0]
