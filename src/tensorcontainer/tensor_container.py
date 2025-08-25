@@ -373,6 +373,19 @@ class TensorContainer:
         Transforms an indexing tuple with an ellipsis into an equivalent one without it.
         ...
         """
+        # Count how many items in the index "consume" an axis from the original shape.
+        # `None` adds a new axis, so it's not counted.
+        num_consuming_indices = sum(
+            self.get_number_of_consuming_dims(item) for item in idx
+        )
+
+        rank = len(shape)
+        if num_consuming_indices > rank:
+            raise IndexError(
+                f"too many indices for container: container is {rank}-dimensional, "
+                f"but {num_consuming_indices} were indexed"
+            )
+
         if Ellipsis not in idx:
             return idx
 
@@ -384,20 +397,6 @@ class TensorContainer:
             raise IndexError("an index can only have a single ellipsis ('...')")
 
         ellipsis_pos = idx.index(Ellipsis)
-
-        # Count how many items in the index "consume" an axis from the original shape.
-        # `None` adds a new axis, so it's not counted.
-        num_consuming_indices = sum(
-            self.get_number_of_consuming_dims(item) for item in idx
-        )
-
-        rank = len(shape)
-
-        if num_consuming_indices > rank:
-            raise IndexError(
-                f"too many indices for array: array is {rank}-dimensional, "
-                f"but {num_consuming_indices} were indexed"
-            )
 
         # Calculate slices needed based on the consuming indices
         num_slices_to_add = rank - num_consuming_indices

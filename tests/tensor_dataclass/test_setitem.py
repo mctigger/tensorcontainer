@@ -195,8 +195,8 @@ class TestSetItem:
             "too_many_indices",
             (slice(None), slice(None), 0),
             (20, 5),  # Assign a valid TDC
-            RuntimeError,  # Changed from IndexError to RuntimeError
-            r"Issue with key \.(features|labels) and index \(slice\(None, None, None\), slice\(None, None, None\), 0\) for value of shape torch\.Size\(\[20, 5, 10\]\) and type <class 'torch\.Tensor'> and assignment of shape \(20, 5\)",
+            IndexError,
+            r"too many indices for container: container is \d+-dimensional, but \d+ were indexed",
         ),
     ]
 
