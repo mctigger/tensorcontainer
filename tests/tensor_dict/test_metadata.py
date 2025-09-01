@@ -84,4 +84,3 @@ class TestStructuralEdgeCases:
             td_doubled["nested"]["nested_tensor"], torch.ones(4, 2) * 2
         )
         assert td_doubled["nested"]["nested_meta"] == "level2"
-
