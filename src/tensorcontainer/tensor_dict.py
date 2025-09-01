@@ -49,7 +49,6 @@ TDCompatible = Union[Tensor, TensorContainer]
 class TensorDictPytreeContext(NamedTuple):
     keys: Tuple[str, ...]
     event_ndims: Tuple[int, ...]
-    shape_context: torch.Size
     device_context: torch.device | None
     metadata: Dict[str, Any]
 
@@ -160,9 +159,7 @@ class TensorDict(TensorContainer, PytreeRegistered):
         """
         batch_ndim = len(self.shape)
         event_ndims = tuple(leaf.ndim - batch_ndim for leaf in flat_leaves)
-        return TensorDictPytreeContext(
-            tuple(keys), event_ndims, self.shape, self.device, metadata
-        )
+        return TensorDictPytreeContext(tuple(keys), event_ndims, self.device, metadata)
 
     def _pytree_flatten(
         self,
@@ -229,7 +226,7 @@ class TensorDict(TensorContainer, PytreeRegistered):
             from the context. The device is restored from the context.
         """
         # Unpack context tuple
-        keys, event_ndims, shape_context, device_context, metadata = context
+        keys, event_ndims, device_context, metadata = context
 
         obj = cls.__new__(cls)
         obj.device = device_context
@@ -241,11 +238,6 @@ class TensorDict(TensorContainer, PytreeRegistered):
         data.update(metadata)
         obj.data = data
 
-        if not leaves_list:
-            # Empty case - use shape from context
-            obj.shape = shape_context
-            return obj
-
         first_leaf = leaves_list[0]
 
         # Infer batch shape from first leaf and event_ndims
@@ -253,10 +245,8 @@ class TensorDict(TensorContainer, PytreeRegistered):
             event_ndims and event_ndims[0] == 0
         ):  # Leaf was a scalar or had only batch dimensions originally
             reconstructed_shape = first_leaf.shape
-        elif event_ndims:  # Leaf had event dimensions originally
+        else:  # Leaf had event dimensions originally
             reconstructed_shape = first_leaf.shape[: -event_ndims[0]]
-        else:  # No leaves with event_ndims, use context
-            reconstructed_shape = shape_context
 
         obj.shape = reconstructed_shape
 

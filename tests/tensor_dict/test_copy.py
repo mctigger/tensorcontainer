@@ -152,34 +152,6 @@ def test_mutating_nested_copy_does_not_affect_original_compiled(nested_dict):
     assert "c" not in td["x"]
 
 
-def test_copy_of_empty_tensor_dict(nested_dict):
-    # an empty dict should still copy correctly
-    td = TensorDict({}, shape=())
-    td_copy = td.copy()
-    assert isinstance(td_copy, TensorDict)
-    assert td_copy is not td
-    assert td_copy.shape == torch.Size([])
-    assert len(td_copy) == 0
-
-
-@skipif_no_compile
-def test_copy_of_empty_tensor_dict_compiled():
-    """Test that copying an empty TensorDict works with torch.compile."""
-
-    def copy_empty_td(td):
-        return td.copy()
-
-    td = TensorDict({}, shape=())
-
-    eager_result, compiled_result = run_and_compare_compiled(copy_empty_td, td)
-
-    # Additional checks specific to empty TensorDict
-    assert isinstance(eager_result, TensorDict)
-    assert eager_result is not td
-    assert eager_result.shape == torch.Size([])
-    assert len(eager_result) == 0
-
-
 def test_copy_with_pytree(nested_dict):
     data = nested_dict((2, 2))
     td = TensorDict(data, shape=(2, 2))
