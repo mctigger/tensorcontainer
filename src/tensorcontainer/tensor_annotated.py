@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from typing import Any, Iterable, TypeVar, Union, get_args
+from typing import Any, Iterable, NamedTuple, TypeVar, Union, get_args
 
+import torch
 from torch import Tensor
 from torch.utils import _pytree as pytree
 from typing_extensions import Self
@@ -15,6 +16,14 @@ DATACLASS_ARGS = {"init", "repr", "eq", "order", "unsafe_hash", "frozen", "slots
 
 
 T_TensorAnnotated = TypeVar("T_TensorAnnotated", bound="TensorAnnotated")
+
+
+# PyTree context metadata for reconstruction
+class TensorAnnoatedPytreeContext(NamedTuple):
+    keys: list[str]
+    event_ndims: list[int]
+    device: torch.device | None
+    metadata: dict[str, Any]
 
 
 class TensorAnnotated(TensorContainer, PytreeRegistered):
@@ -73,11 +82,13 @@ class TensorAnnotated(TensorContainer, PytreeRegistered):
 
     def _get_pytree_context(
         self, flat_names: list[str], flat_leaves: list[TDCompatible], meta_data
-    ) -> tuple:
+    ) -> TensorAnnoatedPytreeContext:
         batch_ndim = len(self.shape)
-        event_ndims = tuple(leaf.ndim - batch_ndim for leaf in flat_leaves)
+        event_ndims = [leaf.ndim - batch_ndim for leaf in flat_leaves]
 
-        return flat_names, event_ndims, meta_data, self.device
+        return TensorAnnoatedPytreeContext(
+            flat_names, event_ndims, self.device, meta_data
+        )
 
     def _pytree_flatten(self) -> tuple[list[Any], Any]:
         tensor_attributes = self._get_tensor_attributes()
@@ -101,8 +112,10 @@ class TensorAnnotated(TensorContainer, PytreeRegistered):
         return name_value_tuples, context  # type: ignore[return-value]
 
     @classmethod
-    def _pytree_unflatten(cls, leaves: Iterable[Any], context: pytree.Context) -> Self:
-        flat_names, event_ndims, meta_data, device = context
+    def _pytree_unflatten(
+        cls, leaves: Iterable[Any], context: TensorAnnoatedPytreeContext
+    ) -> Self:
+        flat_names, event_ndims, device, meta_data = context
 
         leaves = list(leaves)  # Convert to list to allow indexing
 

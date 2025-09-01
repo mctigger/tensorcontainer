@@ -1,5 +1,15 @@
 from abc import abstractmethod
-from typing import Any, Callable, Iterable, List, Tuple, Type, TypeVar
+from typing import (
+    Any,
+    Callable,
+    Iterable,
+    Iterator,
+    List,
+    Optional,
+    Tuple,
+    Type,
+    TypeVar,
+)
 
 import torch
 import torch.utils._pytree as pytree
@@ -7,11 +17,9 @@ from torch.utils._pytree import (
     Context,
     KeyEntry,
     PyTree,
-    TreeSpec,
     SUPPORTED_NODES,
     _get_node_type,
     KeyPath,
-    is_namedtuple
 )
 
 from tensorcontainer.types import DeviceLike
@@ -19,15 +27,33 @@ from tensorcontainer.types import DeviceLike
 _PytreeRegistered = TypeVar("_PytreeRegistered", bound="PytreeRegistered")
 
 
+def format_path(path: KeyPath) -> str:
+    """Formats a PyTree KeyPath into a human-readable string for debugging or logging.
+
+    Args:
+        path: The KeyPath tuple to format, typically containing keys from PyTree traversal.
+
+    Returns:
+        A string representation of the path, with elements concatenated.
+    """
+    return "".join([str(e) for e in path])
+
+
 class PytreeRegistered:
     """
     A mixin class that automatically registers any of its subclasses
-    with the PyTorch PyTree system upon definition.
+    with the PyTorch PyTree system upon definition. This enables seamless
+    integration with PyTorch's tree operations (e.g., flattening/unflattening)
+    without manual registration calls.
     """
 
     def __init_subclass__(cls, **kwargs):
-        # This method is called by Python when a class that inherits
-        # from PytreeRegistered is defined. `cls` is the new subclass.
+        """Automatically registers the subclass with PyTorch's PyTree system.
+
+        This method is invoked when a subclass is defined, ensuring the class
+        is treated as a PyTree node for operations like tree_map or tree_flatten.
+        No manual intervention is required, reducing boilerplate.
+        """
         super().__init_subclass__(**kwargs)
 
         pytree.register_pytree_node(
@@ -39,12 +65,30 @@ class PytreeRegistered:
 
     @abstractmethod
     def _pytree_flatten(self) -> Tuple[List[Any], Context]:
+        """Flattens the instance into leaves and context for PyTree operations.
+
+        Subclasses must implement this to define how their structure is decomposed
+        into a list of child values and a context object for reconstruction.
+
+        Returns:
+            A tuple of (leaves, context), where leaves are the flattened children
+            and context contains metadata for unflattening.
+        """
         pass
 
     @abstractmethod
     def _pytree_flatten_with_keys_fn(
         self,
     ) -> Tuple[List[Tuple[KeyEntry, Any]], Any]:
+        """Flattens the instance with keys for advanced PyTree traversal.
+
+        Similar to _pytree_flatten, but includes key information for each leaf,
+        enabling key-aware operations like tree_map_with_path.
+
+        Returns:
+            A tuple of (keys_and_children, context), where keys_and_children
+            is a list of (KeyEntry, child) pairs.
+        """
         pass
 
     @classmethod
@@ -52,6 +96,18 @@ class PytreeRegistered:
     def _pytree_unflatten(
         cls: Type[_PytreeRegistered], leaves: Iterable[Any], context: Context
     ) -> PyTree:
+        """Reconstructs an instance from flattened leaves and context.
+
+        Subclasses must implement this to reverse the flattening process,
+        ensuring the original structure is restored accurately.
+
+        Args:
+            leaves: The flattened child values from _pytree_flatten.
+            context: The context object from _pytree_flatten.
+
+        Returns:
+            A reconstructed instance of the class.
+        """
         pass
 
 
@@ -65,14 +121,15 @@ def resolve_device(device: DeviceLike) -> torch.device:
     exception instead of returning a fallback.
 
     Args:
-        device_str: Device string or torch.device object to resolve
+        device: Device string or torch.device object to resolve.
 
     Returns:
-        torch.device: The resolved device object with proper indexing
+        torch.device: The resolved device object with proper indexing.
 
     Raises:
-        RuntimeError: If the device type is invalid or device is not available
-        AssertionError: If the backend is not compiled/available
+        RuntimeError: If the device type is invalid or device is not available.
+        AssertionError: If the backend is not compiled/available.
+        ValueError: If device is None.
     """
     # Handle case where input is already a torch.device object
     if isinstance(device, torch.device):
@@ -97,198 +154,158 @@ def resolve_device(device: DeviceLike) -> torch.device:
     return device
 
 
-def _get_differing_namedtuple_fields(contexts: tuple) -> dict[str, list]:
-    """Get fields that differ between namedtuple contexts.
-    
-    Args:
-        contexts: Tuple of namedtuple contexts to compare
-        
-    Returns:
-        Dictionary mapping field names to their values across contexts
-    """
-    first_context = contexts[0]
-    differing_fields = {}
-    
-    for field in first_context._fields:
-        field_values = [getattr(ctx, field) for ctx in contexts]
-        first_value = getattr(first_context, field)
-        
-        if not all(value == first_value for value in field_values):
-            differing_fields[field] = field_values
-            
-    return differing_fields
-
-
-def _create_context_error_message(contexts: tuple) -> str:
-    """Create a descriptive error message for differing contexts.
-    
-    Args:
-        contexts: Tuple of contexts that differ
-        
-    Returns:
-        Formatted error message string
-    """
-    if not is_namedtuple(contexts[0]):
-        return f"Contexts differ: {contexts}"
-    
-    differing_fields = _get_differing_namedtuple_fields(contexts)
-    
-    if not differing_fields:
-        return f"Contexts differ: {contexts}"
-    
-    field_descriptions = []
-    for field, values in differing_fields.items():
-        field_descriptions.append(f"{field}: {values}")
-    
-    return f"Contexts differ in fields: {', '.join(field_descriptions)}"
-
-
-def _assert_all_contexts_equal(contexts: tuple) -> None:
-    """Assert that all contexts are equal.
-    
-    Args:
-        contexts: Tuple of contexts to compare
-        
-    Raises:
-        AssertionError: If contexts are not all equal
-    """
-    first_context = contexts[0]
-    
-    if all(ctx == first_context for ctx in contexts):
-        return
-        
-    error_message = _create_context_error_message(contexts)
-    raise AssertionError(error_message)
-
-
-def _ensure_generators_exhausted(generators: list) -> None:
-    """Ensure all generators are exhausted (same length).
-    
-    Args:
-        generators: List of generators to check
-        
-    Raises:
-        AssertionError: If any generator has remaining elements
-    """
-    for i, gen in enumerate(generators):
-        try:
-            next(gen)
-            raise AssertionError(f"Tree {i} has more elements than others. This is a bug. Report to developers")
-        except StopIteration:
-            pass
-
-
-def _assert_all_keypaths_equal(keypaths: tuple[KeyPath]) -> None:
-    """Assert that all key paths are equal.
-    
-    Args:
-        keypaths: Tuple of key paths to compare
-        
-    Raises:
-        AssertionError: If key paths differ
-    """
-    first_keypath = keypaths[0]
-    assert all(kp == first_keypath for kp in keypaths), (
-        f"Key paths differ: {keypaths}"
-    )
-
-
-def _assert_all_types_equal(node_types: tuple[type]) -> None:
-    """Assert that all node types are equal.
-    
-    Args:
-        node_types: Tuple of node types to compare
-        
-    Raises:
-        AssertionError: If node types differ
-    """
-    first_node_type = node_types[0]
-    assert all(nt == first_node_type for nt in node_types), (
-        f"Node types differ: {node_types}"
-    )
-
-
-def _assert_pytrees_equal(trees: list[PyTree]):
-    """Assert that all PyTrees in the list have identical structure.
-
-    Iterates through the key paths, node types, and contexts of each PyTree
-    and asserts that they are equal across all trees.
-
-    Args:
-        trees: List of PyTrees to compare
-
-    Raises:
-        AssertionError: If the PyTrees have different structures
-    """
-    if not trees:
-        return
-
-    generators = [_generate_key_path_context((), tree) for tree in trees]
-    
-    for knc in zip(*generators):
-        keypaths, node_types, contexts = tuple(zip(*knc))
-        
-        _assert_all_keypaths_equal(keypaths)
-
-        try:
-            _assert_all_types_equal(node_types)
-            _assert_all_contexts_equal(contexts)
-        except Exception as e:
-            raise ValueError(f"Error at keypath {str(keypaths[0][0])}: {str(e)}") from e
-
-    _ensure_generators_exhausted(generators)
-
-
-def _generate_key_path_context(
-    key_path: KeyPath,
+def diagnose_pytree_structure_mismatch(
     tree: PyTree,
-    is_leaf: Callable[[PyTree], bool] | None = None,
-) -> Iterable[tuple[KeyPath, type, Context]]:
-    """Recursively traverses a PyTree and yields key paths, node types, and contexts.
+    *rests: tuple[PyTree],
+    is_leaf: Optional[Callable[[PyTree], bool]] = None,
+) -> str | None:
+    """Diagnoses if all PyTrees have identical structure for operations requiring uniformity.
 
-    This generator function walks through a PyTree structure, yielding information
-    about each node that has a registered handler in the PyTorch PyTree system.
-    It stops at leaf nodes or unregistered node types.
+    Iterates through key paths, node types, and contexts, checking for equality.
+    Useful for debugging mismatches before operations like stacking or mapping.
 
     Args:
-        key_path: Tuple representing the sequence of keys to reach the current node.
-        tree: The current PyTree node being processed.
-        is_leaf: Optional callable that determines if a node should be treated as a leaf.
-            If provided and returns True for the current tree, traversal stops.
+        tree: The first PyTree to compare.
+        rests: Additional PyTrees to compare.
+        is_leaf: Optional callable to determine if a node is a leaf.
 
-    Yields:
-        Tuple of (key_path, node_type, context) for each registered node encountered.
-
-    Raises:
-        ValueError: If a node type is registered but lacks a flatten_with_keys_fn.
+    Returns:
+        str | None: Error message describing the mismatch if structures differ, None if they match.
     """
-    # Check if current node should be treated as a leaf
-    if is_leaf and is_leaf(tree):
-        return
 
-    # Determine the type of the current node
-    node_type = _get_node_type(tree)
-    # Lookup the handler for this node type from the registry
-    handler = SUPPORTED_NODES.get(node_type)
-    if not handler:
-        # Node type not registered, treat as leaf and stop traversal
-        return
+    def diagnose_keypaths_equal(keypaths: Tuple[KeyPath, ...]) -> str | None:
+        """Check if all key paths are equal.
 
-    # Get the flatten_with_keys function from the handler
-    flatten_with_keys = handler.flatten_with_keys_fn
-    if flatten_with_keys:
-        # Flatten the node to get children and context
-        keys_and_children, context = flatten_with_keys(tree)
-        # Yield the current node's information
+        Args:
+            keypaths: Tuple of KeyPath to compare.
+
+        Returns:
+            str | None: Error message if key paths differ, None if they match.
+        """
+        if not all(kp == keypaths[0] for kp in keypaths):
+            return f"Key paths differ: {keypaths}"
+
+    def diagnose_types_equal(node_types: Tuple[type, ...]) -> str | None:
+        """Check if all node types are equal to the first type.
+
+        Args:
+            node_types: Tuple of types to compare.
+
+        Returns:
+            str | None: Error message if types differ, None if they match.
+        """
+        for i, n in enumerate(node_types[1:]):
+            if n != node_types[0]:
+                return f"operation expects each item to have equal type, but got {node_types[0]} at entry 0 and {n} at entry {i + 1}"
+
+    def diagnose_contexts_equal(
+        contexts: Tuple[Context, ...], key_path: KeyPath = ()
+    ) -> str | None:
+        """Check if all contexts are equal.
+
+        Args:
+            contexts: Tuple of Context to compare.
+            key_path: The key path for error reporting.
+
+        Returns:
+            str | None: Error message if contexts differ, None if they match.
+        """
+        for i, c in enumerate(contexts[1:]):
+            if c != contexts[0]:
+                path_str = format_path(key_path)
+                return f"""
+                    operation expects each item to have the same structure, but item 0 and item {i + 1} differ\n
+                    at path items[0]{path_str}: {contexts[0]}\n
+                    at path items[{i + 1}]{path_str}: {c}
+                """
+
+    def generate_key_path_context(
+        key_path: KeyPath,
+        tree: PyTree,
+        is_leaf: Callable[[PyTree], bool] | None = None,
+    ) -> Iterator[Tuple[KeyPath, type, Context]]:
+        """Recursively traverse a PyTree, yielding key paths, node types, and contexts.
+
+        This function performs a depth-first traversal of the PyTree structure,
+        yielding information about each node including its key path, type, and
+        flattening context. It handles registered PyTree nodes and treats
+        unregistered types as leaves.
+
+        Args:
+            key_path: The current key path in the tree traversal, represented as
+                a tuple of keys leading to the current node.
+            tree: The PyTree structure to traverse. This can be any nested
+                structure composed of registered PyTree node types.
+            is_leaf: Optional callable that determines if a node should be
+                treated as a leaf. If provided, nodes for which this returns
+                True will not be traversed further. If None, uses the default
+                PyTree leaf detection.
+
+        Yields:
+            Tuple[KeyPath, type, Context]: A tuple containing:
+                - key_path: The full key path to the current node
+                - node_type: The type of the current node
+                - context: The context object from flattening the node
+
+        Raises:
+            ValueError: If a registered node type does not have a
+                flatten_with_keys_fn function available.
+        """
+        # Early return for leaf nodes
+        if is_leaf and is_leaf(tree):
+            return
+
+        node_type = _get_node_type(tree)
+        handler = SUPPORTED_NODES.get(node_type)
+        if not handler:
+            return  # Unregistered type treated as leaf
+
+        flatten_fn = handler.flatten_with_keys_fn
+        if not flatten_fn:
+            raise ValueError(
+                f"No flatten_with_keys_fn for type: {node_type}. "
+                "Provide one when registering the PyTree node."
+            )
+
+        # Flatten and yield current node
+        keys_and_children, context = flatten_fn(tree)
         yield key_path, node_type, context
 
-        # Recursively process each child node
-        for k, c in keys_and_children:
-            new_key_path = (*key_path, k)
-            yield from _generate_key_path_context(new_key_path, c, is_leaf)
-    else:
-        # Handler exists but no flatten_with_keys_fn provided
-        raise ValueError(
-            f"Did not find a flatten_with_keys_fn for type: {node_type}. "
-            "Please pass a flatten_with_keys_fn argument to register_pytree_node."
+        # Recurse on children
+        for key, child in keys_and_children:
+            new_path = (*key_path, key)
+            yield from generate_key_path_context(new_path, child, is_leaf)
+
+    if len(rests) == 0:
+        return
+
+    # Create generators for each tree's structure to enable synchronized traversal and comparison.
+    # Each generator yields tuples of (key_path, node_type, context) for every node in the PyTree,
+    # allowing us to iterate through multiple trees in parallel and detect structural mismatches
+    # by comparing corresponding nodes across all trees at each level of nesting.
+    # Example: For a nested TensorDict, the generator might yield:
+    #   - keypath: ("a",), TensorDict, TensorDictContext(...)
+    #   - keypath: ("a", "b"), TensorDict, TensorDictContext(...)
+    #   - ...
+    generators = [
+        generate_key_path_context((), tree, is_leaf) for tree in [tree, *rests]
+    ]
+
+    # Iterate through corresponding nodes in all trees simultaneously.
+    # zip(*generators) provides the next (keypath, type, context) from each tree at the same structural level.
+    # Unpack into separate lists and check for mismatches in keypaths, types, or contexts.
+    # Return detailed error message on first mismatch found.
+    # Example: zipped_items = ((("a",), TensorDict, ctx1), (("a",), TensorDict, ctx2), ...)
+    for zipped_items in zip(*generators):
+        # Unpack the zipped items: transform from ((kp1, t1, c1), (kp2, t2, c2), ...)
+        # to separate tuples: keypaths=(kp1, kp2, ...), node_types=(t1, t2, ...), contexts=(c1, c2, ...)
+        # This groups corresponding elements from each tree for easy comparison.
+        keypaths, node_types, contexts = tuple(zip(*zipped_items))
+
+        error_message = (
+            diagnose_keypaths_equal(keypaths)
+            or diagnose_types_equal(node_types)
+            or diagnose_contexts_equal(contexts, keypaths[0])
         )
+
+        return error_message

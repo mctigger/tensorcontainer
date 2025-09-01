@@ -15,7 +15,11 @@ from torch.utils._pytree import Context, KeyEntry, PyTree
 from typing_extensions import Self, TypeAlias
 
 from tensorcontainer.types import DeviceLike, ShapeLike
-from tensorcontainer.utils import resolve_device
+from tensorcontainer.utils import (
+    diagnose_pytree_structure_mismatch,
+    resolve_device,
+    format_path,
+)
 
 HANDLED_FUNCTIONS = {}
 
@@ -308,11 +312,25 @@ class TensorContainer:
             try:
                 return func(x, *xs)
             except Exception as e:
-                path = cls._format_path(keypath)
+                path = format_path(keypath)
                 message = f"Error at path {path}: {type(e).__name__}: {e}"
                 raise type(e)(message) from e
 
-        return pytree.tree_map_with_path(wrapped_func, tree, *rests, is_leaf=is_leaf)
+        try:
+            return pytree.tree_map_with_path(
+                wrapped_func, tree, *rests, is_leaf=is_leaf
+            )
+        except Exception as e:
+            # The following code is just to provide better error messages for operations that
+            # work on multiple pytrees such as torch.stack() or torch.cat()
+            # It is not necessary for TensorContainer to function properly.
+            if len(rests) > 0:
+                msg = diagnose_pytree_structure_mismatch(tree, *rests, is_leaf=is_leaf)
+                if msg:
+                    raise RuntimeError(msg) from e
+
+            # Re-raise if it is an unknown error.
+            raise e
 
     @classmethod
     def _is_shape_compatible(cls, parent: TensorContainer, child: TCCompatible):
@@ -408,22 +426,6 @@ class TensorContainer:
         final_index = part_before_ellipsis + ellipsis_replacement + part_after_ellipsis
 
         return final_index
-
-    @classmethod
-    def _format_path(cls, path: pytree.KeyPath) -> str:
-        """Helper to format a PyTree KeyPath into a readable string."""
-        parts = []
-        for entry in path:
-            if isinstance(entry, tuple):  # Handle nested KeyPath tuples
-                parts.append(cls._format_path(entry))
-            else:
-                parts.append(str(entry))
-
-        # Join parts and clean up leading dots if any
-        formatted_path = "".join(parts)
-        if formatted_path.startswith("."):
-            formatted_path = formatted_path[1:]
-        return formatted_path
 
     def __repr__(self) -> str:
         # Use a consistent indent of 4 spaces, which is standard
