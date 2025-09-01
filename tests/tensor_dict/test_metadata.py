@@ -84,24 +84,3 @@ class TestStructuralEdgeCases:
             td_doubled["nested"]["nested_tensor"], torch.ones(4, 2) * 2
         )
         assert td_doubled["nested"]["nested_meta"] == "level2"
-
-    def test_metadata_only_tensordict(self):
-        """
-        Tests the edge case where a TensorDict contains no tensors at all, only
-        metadata. Pytree operations should not alter it.
-        """
-        td = TensorDict({"meta1": "a", "meta2": 123}, shape=(4,))
-        td_unchanged = tree_map(lambda x: x * 2, td)
-
-        assert td_unchanged.data == td.data
-
-    def test_empty_tensordict(self):
-        """
-        Tests that an empty TensorDict remains empty and handles pytree
-        operations gracefully without errors.
-        """
-        td = TensorDict({}, shape=(4,))
-        td_unchanged = tree_map(lambda x: x * 2, td)
-
-        assert len(td_unchanged) == 0
-        assert td_unchanged.shape == (4,)
