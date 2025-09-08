@@ -83,3 +83,16 @@ def pytest_configure(config):
 )
 def device(request):
     return torch.device(request.param)
+
+
+@pytest.fixture(autouse=True)
+def dynamo_reset():
+    """
+    A pytest fixture that automatically resets torch._dynamo state
+    before and after every test function.
+    """
+    # Code before the test runs
+    torch._dynamo.reset()
+    yield
+    # Code after the test runs (optional cleanup)
+    torch._dynamo.reset()

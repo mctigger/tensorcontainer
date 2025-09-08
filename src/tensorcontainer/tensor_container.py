@@ -333,6 +333,28 @@ class TensorContainer:
             raise e
 
     @classmethod
+    def tree_map_with_path(
+        cls,
+        func: Callable[..., Any],
+        tree: PyTree,
+        *rests: PyTree,
+        is_leaf: Optional[Callable[[PyTree], bool]] = None,
+    ) -> PyTree:
+        # This is copied from pytree.tree_map_with_path()
+        # We add the check for no leaves as operations are currently no supported for
+        # empty TensorContainers.
+        keypath_leaves, treespec = pytree.tree_flatten_with_path(tree, is_leaf)
+
+        if len(keypath_leaves) == 0:
+            raise RuntimeError(
+                "TensorContainer does not allow operations on containers without leaves (i.e. not containing any tensors)."
+            )
+
+        keypath_leaves = list(zip(*keypath_leaves))
+        all_keypath_leaves = keypath_leaves + [treespec.flatten_up_to(r) for r in rests]
+        return treespec.unflatten(func(*xs) for xs in zip(*all_keypath_leaves))
+
+    @classmethod
     def _is_shape_compatible(cls, parent: TensorContainer, child: TCCompatible):
         return child.shape[: parent.ndim] == parent.shape
 
@@ -376,7 +398,7 @@ class TensorContainer:
     # --- Overloaded methods leveraging PyTrees ---
 
     def copy(self) -> Self:
-        return pytree.tree_map(lambda x: x, self)
+        return self._tree_map(lambda x: x, self)
 
     def get_number_of_consuming_dims(self, item) -> int:
         if item is Ellipsis or item is None:
