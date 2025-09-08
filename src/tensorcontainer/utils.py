@@ -1,4 +1,5 @@
 from abc import abstractmethod
+from dataclasses import dataclass
 from typing import (
     Any,
     Callable,
@@ -25,6 +26,61 @@ from torch.utils._pytree import (
 from tensorcontainer.types import DeviceLike
 
 _PytreeRegistered = TypeVar("_PytreeRegistered", bound="PytreeRegistered")
+
+
+@dataclass
+class StructureMismatch:
+    """Base class for PyTree structure mismatch errors."""
+    
+    @abstractmethod
+    def __str__(self) -> str:
+        """Return a human-readable error message describing the mismatch."""
+        pass
+
+
+@dataclass
+class KeyPathMismatch(StructureMismatch):
+    """Represents a mismatch in key paths between PyTrees."""
+    keypaths: Tuple[KeyPath, ...]
+    
+    def __str__(self) -> str:
+        return (f"Cannot perform operation: containers have different nested structures.\n"
+                f"The paths to nested elements don't match: {self.keypaths}")
+
+
+@dataclass
+class TypeMismatch(StructureMismatch):
+    """Represents a type mismatch between PyTree nodes."""
+    expected_type: type
+    actual_type: type
+    entry_index: int
+    key_path: KeyPath
+    
+    def __str__(self) -> str:
+        path_str = format_path(self.key_path)
+        location = f" at location {path_str}" if path_str else ""
+        return (f"Cannot perform operation: containers have different data types{location}.\n"
+                f"Expected all elements to be {self.expected_type.__name__}, "
+                f"but found {self.actual_type.__name__} in container {self.entry_index}")
+
+
+@dataclass
+class ContextMismatch(StructureMismatch):
+    """Represents a context mismatch between PyTree nodes."""
+    expected_context: Context
+    actual_context: Context
+    entry_index: int
+    key_path: KeyPath
+    
+    def __str__(self) -> str:
+        path_str = format_path(self.key_path)
+        location = f" at {path_str}" if path_str else ""
+        return (
+            f"Cannot perform operation: containers have different nested structures.\n\n"
+            f"Container 0{location}: {self.expected_context}\n"
+            f"Container {self.entry_index}{location}: {self.actual_context}\n\n"
+            f"All containers must have the same organization of nested elements."
+        )
 
 
 def format_path(path: KeyPath) -> str:
@@ -158,7 +214,7 @@ def diagnose_pytree_structure_mismatch(
     tree: PyTree,
     *rests: tuple[PyTree],
     is_leaf: Optional[Callable[[PyTree], bool]] = None,
-) -> str | None:
+) -> StructureMismatch | None:
     """Diagnoses if all PyTrees have identical structure for operations requiring uniformity.
 
     Iterates through key paths, node types, and contexts, checking for equality.
@@ -170,37 +226,43 @@ def diagnose_pytree_structure_mismatch(
         is_leaf: Optional callable to determine if a node is a leaf.
 
     Returns:
-        str | None: Error message describing the mismatch if structures differ, None if they match.
+        StructureMismatch | None: Structured error describing the mismatch if structures differ, None if they match.
     """
 
-    def diagnose_keypaths_equal(keypaths: Tuple[KeyPath, ...]) -> str | None:
+    def diagnose_keypaths_equal(keypaths: Tuple[KeyPath, ...]) -> KeyPathMismatch | None:
         """Check if all key paths are equal.
 
         Args:
             keypaths: Tuple of KeyPath to compare.
 
         Returns:
-            str | None: Error message if key paths differ, None if they match.
+            KeyPathMismatch | None: KeyPathMismatch if key paths differ, None if they match.
         """
         if not all(kp == keypaths[0] for kp in keypaths):
-            return f"Key paths differ: {keypaths}"
+            return KeyPathMismatch(keypaths=keypaths)
 
-    def diagnose_types_equal(node_types: Tuple[type, ...]) -> str | None:
+    def diagnose_types_equal(node_types: Tuple[type, ...], key_path: KeyPath = ()) -> TypeMismatch | None:
         """Check if all node types are equal to the first type.
 
         Args:
             node_types: Tuple of types to compare.
+            key_path: The key path for error reporting.
 
         Returns:
-            str | None: Error message if types differ, None if they match.
+            TypeMismatch | None: TypeMismatch if types differ, None if they match.
         """
         for i, n in enumerate(node_types[1:]):
             if n != node_types[0]:
-                return f"operation expects each item to have equal type, but got {node_types[0]} at entry 0 and {n} at entry {i + 1}"
+                return TypeMismatch(
+                    expected_type=node_types[0],
+                    actual_type=n,
+                    entry_index=i + 1,
+                    key_path=key_path
+                )
 
     def diagnose_contexts_equal(
         contexts: Tuple[Context, ...], key_path: KeyPath = ()
-    ) -> str | None:
+    ) -> ContextMismatch | None:
         """Check if all contexts are equal.
 
         Args:
@@ -208,16 +270,16 @@ def diagnose_pytree_structure_mismatch(
             key_path: The key path for error reporting.
 
         Returns:
-            str | None: Error message if contexts differ, None if they match.
+            ContextMismatch | None: ContextMismatch if contexts differ, None if they match.
         """
         for i, c in enumerate(contexts[1:]):
             if c != contexts[0]:
-                path_str = format_path(key_path)
-                return f"""
-                    operation expects each item to have the same structure, but item 0 and item {i + 1} differ\n
-                    at path items[0]{path_str}: {contexts[0]}\n
-                    at path items[{i + 1}]{path_str}: {c}
-                """
+                return ContextMismatch(
+                    expected_context=contexts[0],
+                    actual_context=c,
+                    entry_index=i + 1,
+                    key_path=key_path
+                )
 
     def generate_key_path_context(
         key_path: KeyPath,
@@ -302,10 +364,13 @@ def diagnose_pytree_structure_mismatch(
         # This groups corresponding elements from each tree for easy comparison.
         keypaths, node_types, contexts = tuple(zip(*zipped_items))
 
-        error_message = (
+        mismatch = (
             diagnose_keypaths_equal(keypaths)
-            or diagnose_types_equal(node_types)
+            or diagnose_types_equal(node_types, keypaths[0])
             or diagnose_contexts_equal(contexts, keypaths[0])
         )
 
-        return error_message
+        if mismatch:
+            return mismatch
+
+    return None
