@@ -31,7 +31,7 @@ _PytreeRegistered = TypeVar("_PytreeRegistered", bound="PytreeRegistered")
 @dataclass
 class StructureMismatch:
     """Base class for PyTree structure mismatch errors."""
-    
+
     @abstractmethod
     def __str__(self) -> str:
         """Return a human-readable error message describing the mismatch."""
@@ -41,37 +41,44 @@ class StructureMismatch:
 @dataclass
 class KeyPathMismatch(StructureMismatch):
     """Represents a mismatch in key paths between PyTrees."""
+
     keypaths: Tuple[KeyPath, ...]
-    
+
     def __str__(self) -> str:
-        return (f"Cannot perform operation: containers have different nested structures.\n"
-                f"The paths to nested elements don't match: {self.keypaths}")
+        return (
+            f"Cannot perform operation: containers have different nested structures.\n"
+            f"The paths to nested elements don't match: {self.keypaths}"
+        )
 
 
 @dataclass
 class TypeMismatch(StructureMismatch):
     """Represents a type mismatch between PyTree nodes."""
+
     expected_type: type
     actual_type: type
     entry_index: int
     key_path: KeyPath
-    
+
     def __str__(self) -> str:
         path_str = format_path(self.key_path)
         location = f" at location {path_str}" if path_str else ""
-        return (f"Cannot perform operation: containers have different data types{location}.\n"
-                f"Expected all elements to be {self.expected_type.__name__}, "
-                f"but found {self.actual_type.__name__} in container {self.entry_index}")
+        return (
+            f"Cannot perform operation: containers have different data types{location}.\n"
+            f"Expected all elements to be {self.expected_type.__name__}, "
+            f"but found {self.actual_type.__name__} in container {self.entry_index}"
+        )
 
 
 @dataclass
 class ContextMismatch(StructureMismatch):
     """Represents a context mismatch between PyTree nodes."""
+
     expected_context: Context
     actual_context: Context
     entry_index: int
     key_path: KeyPath
-    
+
     def __str__(self) -> str:
         path_str = format_path(self.key_path)
         location = f" at {path_str}" if path_str else ""
@@ -229,7 +236,9 @@ def diagnose_pytree_structure_mismatch(
         StructureMismatch | None: Structured error describing the mismatch if structures differ, None if they match.
     """
 
-    def diagnose_keypaths_equal(keypaths: Tuple[KeyPath, ...]) -> KeyPathMismatch | None:
+    def diagnose_keypaths_equal(
+        keypaths: Tuple[KeyPath, ...],
+    ) -> KeyPathMismatch | None:
         """Check if all key paths are equal.
 
         Args:
@@ -241,7 +250,9 @@ def diagnose_pytree_structure_mismatch(
         if not all(kp == keypaths[0] for kp in keypaths):
             return KeyPathMismatch(keypaths=keypaths)
 
-    def diagnose_types_equal(node_types: Tuple[type, ...], key_path: KeyPath = ()) -> TypeMismatch | None:
+    def diagnose_types_equal(
+        node_types: Tuple[type, ...], key_path: KeyPath = ()
+    ) -> TypeMismatch | None:
         """Check if all node types are equal to the first type.
 
         Args:
@@ -257,7 +268,7 @@ def diagnose_pytree_structure_mismatch(
                     expected_type=node_types[0],
                     actual_type=n,
                     entry_index=i + 1,
-                    key_path=key_path
+                    key_path=key_path,
                 )
 
     def diagnose_contexts_equal(
@@ -278,7 +289,7 @@ def diagnose_pytree_structure_mismatch(
                     expected_context=contexts[0],
                     actual_context=c,
                     entry_index=i + 1,
-                    key_path=key_path
+                    key_path=key_path,
                 )
 
     def generate_key_path_context(
