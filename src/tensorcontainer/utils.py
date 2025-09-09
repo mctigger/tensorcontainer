@@ -1,4 +1,4 @@
-from abc import abstractmethod
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import (
     Any,
@@ -453,7 +453,7 @@ def diagnose_pytree_structure_mismatch(
 T = TypeVar("T", bound="ContextWithAnalysis")
 
 
-class ContextWithAnalysis(Generic[T]):
+class ContextWithAnalysis(Generic[T], ABC):
     """Base class for PyTree structure mismatch errors."""
 
     @abstractmethod
@@ -464,21 +464,3 @@ class ContextWithAnalysis(Generic[T]):
     @abstractmethod
     def analyze_mismatch_with(self, other: T, entry_index: int) -> str:
         pass
-
-
-@dataclass
-class TensorContainerPytreeContext(ContextWithAnalysis["TensorContainerPytreeContext"]):
-    """Base PyTree context class for tensor containers with common device handling."""
-
-    device: torch.device | None
-
-    def analyze_mismatch_with(
-        self, other: "TensorContainerPytreeContext", entry_index: int
-    ) -> str:
-        """Analyze mismatches with another TensorContainerPytreeContext, starting with device analysis."""
-        # Check device mismatch first
-        if self.device != other.device:
-            return f"Device mismatch: container 0 device={self.device}, container {entry_index} device={other.device}. "
-
-        # If devices match, return empty string for subclasses to add their analysis
-        return ""

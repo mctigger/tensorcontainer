@@ -38,16 +38,19 @@ from torch.utils._pytree import (
     PyTree,
 )
 
-from tensorcontainer.tensor_container import TensorContainer
+from tensorcontainer.tensor_container import (
+    TensorContainer,
+    TensorContainerPytreeContext,
+)
 from tensorcontainer.types import DeviceLike, ShapeLike
-from tensorcontainer.utils import PytreeRegistered, TensorContainerPytreeContext
+from tensorcontainer.utils import PytreeRegistered
 
 TDCompatible = Union[Tensor, TensorContainer]
 
 
 # PyTree context metadata for reconstruction
 @dataclass
-class TensorDictPytreeContext(TensorContainerPytreeContext):
+class TensorDictPytreeContext(TensorContainerPytreeContext["TensorDictPytreeContext"]):
     """TensorDict PyTree context with enhanced error messages."""
 
     keys: list[str]
@@ -62,7 +65,7 @@ class TensorDictPytreeContext(TensorContainerPytreeContext):
         return f"TensorDict({keys_str}, {device_str})"
 
     def analyze_mismatch_with(
-        self, other: "TensorDictPytreeContext", entry_index: int
+        self, other: TensorDictPytreeContext, entry_index: int
     ) -> str:
         """Analyze specific mismatches with another TensorDict context."""
         # Start with base class analysis (device mismatch, if any)

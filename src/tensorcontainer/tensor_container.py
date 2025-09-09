@@ -1,11 +1,23 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 import functools
 import textwrap
 import threading
-from abc import abstractmethod
+from abc import ABC, abstractmethod
 from contextlib import contextmanager
-from typing import Any, Callable, Iterable, List, Optional, Tuple, Type, Union
+from typing import (
+    Any,
+    Callable,
+    Generic,
+    Iterable,
+    List,
+    Optional,
+    Tuple,
+    Type,
+    TypeVar,
+    Union,
+)
 
 import torch
 
@@ -16,6 +28,7 @@ from typing_extensions import Self, TypeAlias
 
 from tensorcontainer.types import DeviceLike, ShapeLike
 from tensorcontainer.utils import (
+    ContextWithAnalysis,
     diagnose_pytree_structure_mismatch,
     resolve_device,
     format_path,
@@ -35,6 +48,25 @@ def implements(torch_function):
         return func
 
     return decorator
+
+
+U = TypeVar("U", bound="TensorContainerPytreeContext")
+
+
+@dataclass
+class TensorContainerPytreeContext(ContextWithAnalysis[U], Generic[U], ABC):
+    """Base PyTree context class for tensor containers with common device handling."""
+
+    device: torch.device | None
+
+    def analyze_mismatch_with(self, other: U, entry_index: int) -> str:
+        """Analyze mismatches with another TensorContainerPytreeContext, starting with device analysis."""
+        # Check device mismatch first
+        if self.device != other.device:
+            return f"Device mismatch: container 0 device={self.device}, container {entry_index} device={other.device}. "
+
+        # If devices match, return empty string for subclasses to add their analysis
+        return ""
 
 
 class TensorContainer:

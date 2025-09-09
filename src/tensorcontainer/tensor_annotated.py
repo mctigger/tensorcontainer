@@ -7,9 +7,12 @@ from torch import Tensor
 from torch.utils import _pytree as pytree
 from typing_extensions import Self
 
-from tensorcontainer.tensor_container import TensorContainer
+from tensorcontainer.tensor_container import (
+    TensorContainer,
+    TensorContainerPytreeContext,
+)
 from tensorcontainer.types import DeviceLike, ShapeLike
-from tensorcontainer.utils import PytreeRegistered, TensorContainerPytreeContext
+from tensorcontainer.utils import PytreeRegistered
 
 TDCompatible = Union[Tensor, TensorContainer]
 DATACLASS_ARGS = {"init", "repr", "eq", "order", "unsafe_hash", "frozen", "slots"}
@@ -20,7 +23,9 @@ T_TensorAnnotated = TypeVar("T_TensorAnnotated", bound="TensorAnnotated")
 
 # PyTree context metadata for reconstruction
 @dataclass
-class TensorAnnotatedPytreeContext(TensorContainerPytreeContext):
+class TensorAnnotatedPytreeContext(
+    TensorContainerPytreeContext["TensorAnnotatedPytreeContext"]
+):
     """TensorAnnotated PyTree context with enhanced error messages."""
 
     keys: list[str]
@@ -32,13 +37,13 @@ class TensorAnnotatedPytreeContext(TensorContainerPytreeContext):
         # Try to get the actual class name from metadata
         class_name = self.metadata.get("class_name", "TensorDataClass")
 
-        fields_str = f"fields={self.keys}" if self.keys else "fields=[]"
-        device_str = f"device={self.device}" if self.device else "device=None"
+        fields_str = f"fields={self.keys}"
+        device_str = f"device={self.device}"
 
         return f"{class_name}({fields_str}, {device_str})"
 
     def analyze_mismatch_with(
-        self, other: "TensorAnnotatedPytreeContext", entry_index: int
+        self, other: TensorAnnotatedPytreeContext, entry_index: int
     ) -> str:
         """Analyze specific mismatches between TensorAnnotated contexts."""
         # Start with base class analysis (device mismatch, if any)
