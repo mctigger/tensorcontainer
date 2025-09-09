@@ -60,11 +60,7 @@ class TensorDictPytreeContext(ContextWithAnalysis['TensorDictPytreeContext']):
         keys_str = f"keys={list(self.keys)}" if self.keys else "keys=[]"
         device_str = f"device={self.device_context}" if self.device_context else "device=None"
         
-        shape_str = ""
-        if 'shape' in self.metadata:
-            shape_str = f", shape={tuple(self.metadata['shape'])}"
-        
-        return f"TensorDict({keys_str}{shape_str}, {device_str})"
+        return f"TensorDict({keys_str}, {device_str})"
     
     def analyze_mismatch_with(self, other: Self, entry_index: int) -> str:
         """Analyze specific mismatches with another TensorDict context."""
@@ -85,12 +81,6 @@ class TensorDictPytreeContext(ContextWithAnalysis['TensorDictPytreeContext']):
         # Device analysis
         if self.device_context != other.device_context:
             return f"Device mismatch: container 0 device={self.device_context}, container {entry_index} device={other.device_context}."
-        
-        # Shape analysis
-        self_shape = self.metadata.get('shape')
-        other_shape = other.metadata.get('shape')
-        if self_shape != other_shape:
-            return f"Batch shape mismatch: container 0 shape={self_shape}, container {entry_index} shape={other_shape}."
         
         return "Containers have different event dimensions or metadata."
 

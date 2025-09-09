@@ -36,11 +36,7 @@ class TensorAnnoatedPytreeContext(ContextWithAnalysis['TensorAnnoatedPytreeConte
         fields_str = f"fields={self.keys}" if self.keys else "fields=[]"
         device_str = f"device={self.device}" if self.device else "device=None"
         
-        shape_str = ""
-        if 'shape' in self.metadata:
-            shape_str = f", shape={tuple(self.metadata['shape'])}"
-            
-        return f"{class_name}({fields_str}{shape_str}, {device_str})"
+        return f"{class_name}({fields_str}, {device_str})"
     
     def analyze_mismatch_with(self, other: Self, entry_index: int) -> str:
         """Analyze specific mismatches between TensorAnnotated contexts."""
@@ -64,14 +60,9 @@ class TensorAnnoatedPytreeContext(ContextWithAnalysis['TensorAnnoatedPytreeConte
         if self_class != other_class:
             return f"Class mismatch: container 0 is {self_class}, container {entry_index} is {other_class}."
         
-        # Device and shape analysis
+        # Device analysis
         if self.device != other.device:
             return f"Device mismatch: container 0 has device={self.device}, container {entry_index} has device={other.device}."
-        
-        self_shape = self.metadata.get('shape')
-        other_shape = other.metadata.get('shape')
-        if self_shape != other_shape:
-            return f"Batch shape mismatch: container 0 shape={self_shape}, container {entry_index} shape={other_shape}."
         
         return "Structure differs in event dimensions or other metadata."
 
