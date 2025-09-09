@@ -80,7 +80,7 @@ class TestCat:
         """Test cat operation raises with inconsistent metadata."""
         td1, td2 = self._create_test_pair(nested_tensor_data_class)
         td2.meta_data = "different_meta_data"
-        with pytest.raises(ValueError, match="Node context mismatch"):
+        with pytest.raises(RuntimeError, match="Structure mismatch"):
             self._cat_operation([td1, td2], 0)
 
     def test_cat_inconsistent_shapes_raises(self, nested_tensor_data_class):
