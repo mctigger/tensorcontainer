@@ -25,6 +25,10 @@ class DataPoint(TensorDataClass):
     y: torch.Tensor
 
 
+class NotADataPoint(TensorDataClass):
+    a: torch.Tensor
+
+
 def main() -> None:
     """Demonstrate stacking TensorDataClass instances."""
     point1 = DataPoint(
@@ -48,6 +52,13 @@ def main() -> None:
     assert stacked.shape == (2, 3)
     assert stacked.x.shape == (2, 3, 4)
     assert stacked.y.shape == (2, 3, 5)
+
+    # Attempt to stack with different TensorDataClasses
+    try:
+        not_a_point = NotADataPoint(a=torch.rand(3, 4), shape=(3,), device="cpu")
+        torch.stack([point1, not_a_point], dim=0)
+    except Exception as e:
+        print(e)
 
 
 if __name__ == "__main__":
