@@ -22,38 +22,45 @@ T_TensorAnnotated = TypeVar("T_TensorAnnotated", bound="TensorAnnotated")
 @dataclass
 class TensorAnnotatedPytreeContext(TensorContainerPytreeContext):
     """TensorAnnotated PyTree context with enhanced error messages."""
+
     keys: list[str]
     event_ndims: list[int]
     metadata: dict[str, Any]
-    
+
     def __str__(self) -> str:
         """Return human-readable description of this TensorAnnotated context."""
         # Try to get the actual class name from metadata
-        class_name = self.metadata.get('class_name', 'TensorDataClass')
-        
+        class_name = self.metadata.get("class_name", "TensorDataClass")
+
         fields_str = f"fields={self.keys}" if self.keys else "fields=[]"
         device_str = f"device={self.device}" if self.device else "device=None"
-        
+
         return f"{class_name}({fields_str}, {device_str})"
-    
-    def analyze_mismatch_with(self, other: 'TensorAnnotatedPytreeContext', entry_index: int) -> str:
+
+    def analyze_mismatch_with(
+        self, other: "TensorAnnotatedPytreeContext", entry_index: int
+    ) -> str:
         """Analyze specific mismatches between TensorAnnotated contexts."""
         # Start with base class analysis (device mismatch, if any)
         guidance = super().analyze_mismatch_with(other, entry_index)
-        
+
         # Add TensorAnnotated-specific analysis
         self_fields = set(self.keys)
         other_fields = set(other.keys)
-        
+
         if self_fields != other_fields:
             missing = self_fields - other_fields
             extra = other_fields - self_fields
             guidance += "Field mismatch detected."
             if missing:
-                guidance += f" Missing fields in container {entry_index}: {sorted(missing)}."
+                guidance += (
+                    f" Missing fields in container {entry_index}: {sorted(missing)}."
+                )
             if extra:
-                guidance += f" Extra fields in container {entry_index}: {sorted(extra)}."
-        
+                guidance += (
+                    f" Extra fields in container {entry_index}: {sorted(extra)}."
+                )
+
         return guidance
 
 

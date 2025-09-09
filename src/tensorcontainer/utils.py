@@ -213,9 +213,11 @@ class TypeMismatch(StructureMismatch):
         """Generate conversion guidance without making assumptions about specific types."""
         type_a_name = self._get_type_name(self.expected_type)
         type_b_name = self._get_type_name(self.actual_type)
-        
+
         # Generic guidance that works for any types without assumptions about which container is wrong
-        return f"Ensure all containers have the same type ({type_a_name} or {type_b_name})"
+        return (
+            f"Ensure all containers have the same type ({type_a_name} or {type_b_name})"
+        )
 
     def __str__(self) -> str:
         path_str = format_path(self.key_path)
@@ -223,7 +225,7 @@ class TypeMismatch(StructureMismatch):
 
         type_a_name = self._get_type_name(self.expected_type)
         type_b_name = self._get_type_name(self.actual_type)
-        
+
         guidance = self._get_conversion_guidance()
 
         return (
@@ -271,7 +273,7 @@ class ContextMismatch(StructureMismatch, Generic[ContextType]):
             specific_analysis = self.expected_context.analyze_mismatch_with(
                 self.actual_context, self.entry_index
             )
-            if specific_analysis:  
+            if specific_analysis:
                 return specific_analysis
 
         # Generic guidance that acknowledges we detected a difference without assumptions
@@ -465,15 +467,18 @@ class ContextWithAnalysis(Generic[T]):
 
 
 @dataclass
-class TensorContainerPytreeContext(ContextWithAnalysis['TensorContainerPytreeContext']):
+class TensorContainerPytreeContext(ContextWithAnalysis["TensorContainerPytreeContext"]):
     """Base PyTree context class for tensor containers with common device handling."""
+
     device: torch.device | None
-    
-    def analyze_mismatch_with(self, other: 'TensorContainerPytreeContext', entry_index: int) -> str:
+
+    def analyze_mismatch_with(
+        self, other: "TensorContainerPytreeContext", entry_index: int
+    ) -> str:
         """Analyze mismatches with another TensorContainerPytreeContext, starting with device analysis."""
         # Check device mismatch first
         if self.device != other.device:
             return f"Device mismatch: container 0 device={self.device}, container {entry_index} device={other.device}. "
-        
+
         # If devices match, return empty string for subclasses to add their analysis
         return ""

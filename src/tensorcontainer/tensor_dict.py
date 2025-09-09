@@ -49,32 +49,37 @@ TDCompatible = Union[Tensor, TensorContainer]
 @dataclass
 class TensorDictPytreeContext(TensorContainerPytreeContext):
     """TensorDict PyTree context with enhanced error messages."""
+
     keys: list[str]
     event_ndims: list[int]
     metadata: Dict[str, Any]
-    
+
     def __str__(self) -> str:
         """Return human-readable description of this TensorDict context."""
         keys_str = f"keys={list(self.keys)}" if self.keys else "keys=[]"
         device_str = f"device={self.device}" if self.device else "device=None"
-        
+
         return f"TensorDict({keys_str}, {device_str})"
-    
-    def analyze_mismatch_with(self, other: 'TensorDictPytreeContext', entry_index: int) -> str:
+
+    def analyze_mismatch_with(
+        self, other: "TensorDictPytreeContext", entry_index: int
+    ) -> str:
         """Analyze specific mismatches with another TensorDict context."""
         # Start with base class analysis (device mismatch, if any)
         guidance = super().analyze_mismatch_with(other, entry_index)
-        
+
         # Add TensorDict-specific analysis
         self_keys = set(self.keys)
         other_keys = set(other.keys)
-        
+
         if self_keys != other_keys:
             missing = self_keys - other_keys
             extra = other_keys - self_keys
             guidance += "Key mismatch detected."
             if missing:
-                guidance += f" Missing keys in container {entry_index}: {sorted(missing)}."
+                guidance += (
+                    f" Missing keys in container {entry_index}: {sorted(missing)}."
+                )
             if extra:
                 guidance += f" Extra keys in container {entry_index}: {sorted(extra)}."
 
