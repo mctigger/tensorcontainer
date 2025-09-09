@@ -45,9 +45,21 @@ class KeyPathMismatch(StructureMismatch):
     keypaths: Tuple[KeyPath, ...]
 
     def __str__(self) -> str:
+        # Format each keypath for better readability
+        formatted_paths = []
+        for i, keypath in enumerate(self.keypaths):
+            if keypath:
+                path_str = "container" + "".join(str(element) for element in keypath)
+            else:
+                path_str = "container (root)"
+            formatted_paths.append(f"Container {i}: {path_str}")
+        
+        paths_display = "\n".join(formatted_paths)
+        
         return (
-            f"Cannot perform operation: containers have different nested structures.\n"
-            f"The paths to nested elements don't match: {self.keypaths}"
+            f"Structure traversal mismatch: containers have different nesting patterns.\n\n"
+            f"{paths_display}\n\n"
+            f"Fix: Ensure all containers have identical nested structure at each level."
         )
 
 
@@ -62,11 +74,26 @@ class TypeMismatch(StructureMismatch):
 
     def __str__(self) -> str:
         path_str = format_path(self.key_path)
-        location = f" at location {path_str}" if path_str else ""
+        location = f" at {path_str}" if path_str else ""
+        
+        # Generate conversion guidance based on common type pairs
+        guidance = f"Convert container {self.entry_index} to {self.expected_type.__name__}"
+        
+        # Add specific guidance for common conversions
+        if self.expected_type.__name__ == "TensorDict" and self.actual_type in (list, tuple):
+            guidance += " using TensorDict({'key_0': item[0], 'key_1': item[1], ...})"
+        elif self.expected_type in (list, tuple) and self.actual_type.__name__ == "TensorDict":
+            guidance += f" using {self.expected_type.__name__}(tensor_dict.values())"
+        elif self.expected_type is list and self.actual_type is tuple:
+            guidance += " using list(container)"
+        elif self.expected_type is tuple and self.actual_type is list:
+            guidance += " using tuple(container)"
+        
         return (
-            f"Cannot perform operation: containers have different data types{location}.\n"
-            f"Expected all elements to be {self.expected_type.__name__}, "
-            f"but found {self.actual_type.__name__} in container {self.entry_index}"
+            f"Type mismatch{location}: incompatible container types.\n\n"
+            f"Expected: {self.expected_type.__name__}\n"
+            f"Found:    {self.actual_type.__name__} (in container {self.entry_index})\n\n"
+            f"Fix: {guidance}"
         )
 
 
@@ -82,24 +109,87 @@ class ContextMismatch(StructureMismatch):
     def __str__(self) -> str:
         path_str = format_path(self.key_path)
         location = f" at {path_str}" if path_str else ""
+        
+        # Extract readable context information
+        expected_info = _extract_context_info(self.expected_context)
+        actual_info = _extract_context_info(self.actual_context)
+        
+        # Detect specific types of mismatches for targeted guidance
+        guidance = "Ensure all containers have identical structure."
+        
+        # Try to provide specific guidance based on context differences
+        if hasattr(self.expected_context, 'keys') and hasattr(self.actual_context, 'keys'):
+            expected_keys = set(getattr(self.expected_context, 'keys', []))
+            actual_keys = set(getattr(self.actual_context, 'keys', []))
+            if expected_keys != actual_keys:
+                missing = expected_keys - actual_keys
+                extra = actual_keys - expected_keys
+                if missing or extra:
+                    guidance = "Key mismatch detected."
+                    if missing:
+                        guidance += f" Missing keys in container {self.entry_index}: {sorted(missing)}."
+                    if extra:
+                        guidance += f" Extra keys in container {self.entry_index}: {sorted(extra)}."
+        
         return (
-            f"Cannot perform operation: containers have different nested structures.\n\n"
-            f"Container 0{location}: {self.expected_context}\n"
-            f"Container {self.entry_index}{location}: {self.actual_context}\n\n"
-            f"All containers must have the same organization of nested elements."
+            f"Structure mismatch{location}: containers have incompatible layouts.\n\n"
+            f"Container 0{location}: {expected_info}\n"
+            f"Container {self.entry_index}{location}: {actual_info}\n\n"
+            f"Fix: {guidance}"
         )
 
 
 def format_path(path: KeyPath) -> str:
-    """Formats a PyTree KeyPath into a human-readable string for debugging or logging.
+    """Formats a PyTree KeyPath into a PyTorch-style path string.
 
     Args:
         path: The KeyPath tuple to format, typically containing keys from PyTree traversal.
 
     Returns:
-        A string representation of the path, with elements concatenated.
+        A PyTorch-style path string (e.g., "container['outer']['inner']", "container[0][1]").
     """
-    return "".join([str(e) for e in path])
+    if not path:
+        return ""
+    
+    # KeyPath elements already format nicely: MappingKey -> "['key']", SequenceKey -> "[0]"  
+    path_parts = [str(element) for element in path]
+    return "container" + "".join(path_parts)
+
+
+def _extract_context_info(context: Context) -> str:
+    """Extract human-readable information from PyTree context objects.
+    
+    Args:
+        context: PyTree context object from _pytree_flatten.
+        
+    Returns:
+        Human-readable string describing the context.
+    """
+    if hasattr(context, 'keys') and hasattr(context, 'shape'):
+        # TensorDict-like context
+        keys = getattr(context, 'keys', [])
+        shape = getattr(context, 'shape', ())
+        device = getattr(context, 'device', None)
+        
+        keys_str = f"keys={list(keys)}" if keys else "keys=[]"
+        shape_str = f"shape={tuple(shape)}" if shape else "shape=()"
+        device_str = f"device={device}" if device is not None else "device=None"
+        
+        return f"({keys_str}, {shape_str}, {device_str})"
+    elif hasattr(context, '__dataclass_fields__'):
+        # TensorDataClass-like context
+        fields = list(getattr(context, '__dataclass_fields__', {}).keys())
+        shape = getattr(context, 'shape', ())
+        device = getattr(context, 'device', None)
+        
+        fields_str = f"fields={fields}"
+        shape_str = f"shape={tuple(shape)}"
+        device_str = f"device={device}" if device is not None else "device=None"
+        
+        return f"({fields_str}, {shape_str}, {device_str})"
+    else:
+        # Fallback to string representation
+        return str(context)
 
 
 class PytreeRegistered:
