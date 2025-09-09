@@ -56,7 +56,7 @@ class TensorDictPytreeContext(TensorContainerPytreeContext):
     def __str__(self) -> str:
         """Return human-readable description of this TensorDict context."""
         keys_str = f"keys={list(self.keys)}" if self.keys else "keys=[]"
-        device_str = f"device={self.device_context}" if self.device_context else "device=None"
+        device_str = f"device={self.device}" if self.device else "device=None"
         
         return f"TensorDict({keys_str}, {device_str})"
     
@@ -256,7 +256,7 @@ class TensorDict(TensorContainer, PytreeRegistered):
         # Access context fields
         keys = context.keys
         event_ndims = context.event_ndims
-        device_context = context.device_context
+        device_context = context.device
         metadata = context.metadata
 
         obj = cls.__new__(cls)

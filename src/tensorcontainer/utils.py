@@ -467,13 +467,13 @@ class ContextWithAnalysis(Generic[T]):
 @dataclass
 class TensorContainerPytreeContext(ContextWithAnalysis['TensorContainerPytreeContext']):
     """Base PyTree context class for tensor containers with common device handling."""
-    device_context: torch.device | None
+    device: torch.device | None
     
     def analyze_mismatch_with(self, other: 'TensorContainerPytreeContext', entry_index: int) -> str:
         """Analyze mismatches with another TensorContainerPytreeContext, starting with device analysis."""
         # Check device mismatch first
-        if self.device_context != other.device_context:
-            return f"Device mismatch: container 0 device={self.device_context}, container {entry_index} device={other.device_context}. "
+        if self.device != other.device:
+            return f"Device mismatch: container 0 device={self.device}, container {entry_index} device={other.device}. "
         
         # If devices match, return empty string for subclasses to add their analysis
         return ""

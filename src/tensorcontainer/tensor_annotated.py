@@ -32,7 +32,7 @@ class TensorAnnotatedPytreeContext(TensorContainerPytreeContext):
         class_name = self.metadata.get('class_name', 'TensorDataClass')
         
         fields_str = f"fields={self.keys}" if self.keys else "fields=[]"
-        device_str = f"device={self.device_context}" if self.device_context else "device=None"
+        device_str = f"device={self.device}" if self.device else "device=None"
         
         return f"{class_name}({fields_str}, {device_str})"
     
@@ -148,7 +148,7 @@ class TensorAnnotated(TensorContainer, PytreeRegistered):
     ) -> Self:
         flat_names = context.keys
         event_ndims = context.event_ndims
-        device = context.device_context
+        device = context.device
         meta_data = context.metadata
 
         leaves = list(leaves)  # Convert to list to allow indexing
