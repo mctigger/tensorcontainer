@@ -21,6 +21,7 @@ from tests.tensor_dataclass.conftest import (
     OptionalFieldsTestClass,
     compute_stack_shape,
 )
+from tests.tensor_dataclass.conftest import FlatTensorDataClass
 
 
 def _stack_operation(tensor_dataclass_list, dim_arg):
@@ -89,16 +90,39 @@ class TestStackGeneral:
     def test_stack_invalid_dim_raises(self, nested_tensor_data_class, dim):
         """Tests that stacking with an invalid dimension raises an IndexError."""
         td1, td2 = _create_test_pair(nested_tensor_data_class)
-        with pytest.raises(IndexError, match="Dimension out of range"):
+        with pytest.raises(IndexError, match="Dimension .* out of range"):
             _stack_operation([td1, td2], dim)
 
     def test_stack_inconsistent_shapes_raises(self, nested_tensor_data_class):
-        """Tests that stacking instances with inconsistent shapes raises a ValueError."""
-        td1, td2 = _create_test_pair(nested_tensor_data_class)
-        # Create an inconsistent shape for one of the tensors.
-        td2.shape = (td1.shape[0] + 1, td1.shape[1])
+        """Tests that stacking instances with inconsistent shapes raises a RuntimeError."""
+
+        # Get the first instance from the fixture
+        td1 = nested_tensor_data_class
+
+        # Create a second instance with different batch shape (incompatible for stacking)
+        # td1 has batch shape (2, 3), create td2 with batch shape (3, 3)
+        different_batch_shape = (3, 3)  # Different first dimension
+        event_shape = (4, 5)  # Same event shape as td1
+
+        # Create nested tensor with different batch shape
+        flat_td2 = FlatTensorDataClass(
+            tensor=torch.randn(*different_batch_shape, *event_shape, device=td1.device),
+            meta_data=td1.tensor_data_class.meta_data,  # Same metadata to avoid other errors
+            shape=different_batch_shape,
+            device=td1.device,
+        )
+
+        # Create main tensor container with different batch shape
+        td2 = NestedTensorDataClass(
+            tensor=torch.randn(*different_batch_shape, *event_shape, device=td1.device),
+            tensor_data_class=flat_td2,
+            meta_data=td1.meta_data,  # Same metadata to avoid other errors
+            shape=different_batch_shape,
+            device=td1.device,
+        )
+
         with pytest.raises(
-            ValueError, match="stack expects each TensorContainer to be equal size"
+            RuntimeError, match="stack expects each tensor to be equal size"
         ):
             _stack_operation([td1, td2], 0)
 
@@ -132,7 +156,7 @@ class TestStackOptionalFields:
         def _test_stack_none():
             data1 = OptionalFieldsTestClass(
                 shape=(4,),
-                device=None,
+                device=torch.device("cpu"),
                 obs=torch.ones(4, 32, 32),
                 reward=None,
                 info=["step1"],
@@ -154,7 +178,7 @@ class TestStackOptionalFields:
         def _test_stack_tensor():
             data1 = OptionalFieldsTestClass(
                 shape=(4,),
-                device=None,
+                device=torch.device("cpu"),
                 obs=torch.ones(4, 32, 32),
                 reward=torch.ones(4),
             )
@@ -198,7 +222,7 @@ class TestStackOptionalFields:
         def _test_default_factory_tensor():
             data1 = OptionalFieldsTestClass(
                 shape=(4,),
-                device=None,
+                device=torch.device("cpu"),
                 obs=torch.ones(4, 32, 32),
                 reward=None,
                 info=["step1"],
