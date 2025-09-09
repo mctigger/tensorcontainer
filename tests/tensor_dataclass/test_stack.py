@@ -188,7 +188,7 @@ class TestStackOptionalFields:
             shape=(3,), device=torch.device("cpu"), a=torch.randn(3), b=None
         )
 
-        with pytest.raises(RuntimeError, match="Key mismatch detected"):
+        with pytest.raises(RuntimeError, match="Field mismatch detected"):
             torch.stack([td1, td2], dim=0)  # type: ignore
 
     @skipif_no_compile
