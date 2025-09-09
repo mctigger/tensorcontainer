@@ -23,6 +23,7 @@ from typing import (
     Iterable,
     List,
     Mapping,
+    Self,
     Tuple,
     Union,
     cast,
@@ -40,18 +41,58 @@ from torch.utils._pytree import (
 
 from tensorcontainer.tensor_container import TensorContainer
 from tensorcontainer.types import DeviceLike, ShapeLike
-from tensorcontainer.utils import PytreeRegistered
+from tensorcontainer.utils import PytreeRegistered, ContextWithAnalysis
 
 TDCompatible = Union[Tensor, TensorContainer]
 
 
 # PyTree context metadata for reconstruction
 @dataclass
-class TensorDictPytreeContext:
+class TensorDictPytreeContext(ContextWithAnalysis['TensorDictPytreeContext']):
+    """TensorDict PyTree context with enhanced error messages."""
     keys: Tuple[str, ...]
     event_ndims: Tuple[int, ...]
     device_context: torch.device | None
     metadata: Dict[str, Any]
+    
+    def __str__(self) -> str:
+        """Return human-readable description of this TensorDict context."""
+        keys_str = f"keys={list(self.keys)}" if self.keys else "keys=[]"
+        device_str = f"device={self.device_context}" if self.device_context else "device=None"
+        
+        shape_str = ""
+        if 'shape' in self.metadata:
+            shape_str = f", shape={tuple(self.metadata['shape'])}"
+        
+        return f"TensorDict({keys_str}{shape_str}, {device_str})"
+    
+    def analyze_mismatch_with(self, other: Self, entry_index: int) -> str:
+        """Analyze specific mismatches with another TensorDict context."""
+        # Key analysis
+        self_keys = set(self.keys)
+        other_keys = set(other.keys)
+        
+        if self_keys != other_keys:
+            missing = self_keys - other_keys
+            extra = other_keys - self_keys
+            guidance = "Key mismatch detected."
+            if missing:
+                guidance += f" Missing keys in container {entry_index}: {sorted(missing)}."
+            if extra:
+                guidance += f" Extra keys in container {entry_index}: {sorted(extra)}."
+            return guidance
+        
+        # Device analysis
+        if self.device_context != other.device_context:
+            return f"Device mismatch: container 0 device={self.device_context}, container {entry_index} device={other.device_context}."
+        
+        # Shape analysis
+        self_shape = self.metadata.get('shape')
+        other_shape = other.metadata.get('shape')
+        if self_shape != other_shape:
+            return f"Batch shape mismatch: container 0 shape={self_shape}, container {entry_index} shape={other_shape}."
+        
+        return "Containers have different event dimensions or metadata."
 
 
 class TensorDict(TensorContainer, PytreeRegistered):

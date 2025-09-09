@@ -10,7 +10,7 @@ from typing_extensions import Self
 
 from tensorcontainer.tensor_container import TensorContainer
 from tensorcontainer.types import DeviceLike, ShapeLike
-from tensorcontainer.utils import PytreeRegistered
+from tensorcontainer.utils import PytreeRegistered, ContextWithAnalysis
 
 TDCompatible = Union[Tensor, TensorContainer]
 DATACLASS_ARGS = {"init", "repr", "eq", "order", "unsafe_hash", "frozen", "slots"}
@@ -21,11 +21,59 @@ T_TensorAnnotated = TypeVar("T_TensorAnnotated", bound="TensorAnnotated")
 
 # PyTree context metadata for reconstruction
 @dataclass
-class TensorAnnoatedPytreeContext:
+class TensorAnnoatedPytreeContext(ContextWithAnalysis['TensorAnnoatedPytreeContext']):
+    """TensorAnnotated PyTree context with enhanced error messages."""
     keys: list[str]
     event_ndims: list[int]
     device: torch.device | None
     metadata: dict[str, Any]
+    
+    def __str__(self) -> str:
+        """Return human-readable description of this TensorAnnotated context."""
+        # Try to get the actual class name from metadata
+        class_name = self.metadata.get('class_name', 'TensorDataClass')
+        
+        fields_str = f"fields={self.keys}" if self.keys else "fields=[]"
+        device_str = f"device={self.device}" if self.device else "device=None"
+        
+        shape_str = ""
+        if 'shape' in self.metadata:
+            shape_str = f", shape={tuple(self.metadata['shape'])}"
+            
+        return f"{class_name}({fields_str}{shape_str}, {device_str})"
+    
+    def analyze_mismatch_with(self, other: Self, entry_index: int) -> str:
+        """Analyze specific mismatches between TensorAnnotated contexts."""
+        # Field mismatch analysis
+        self_fields = set(self.keys)
+        other_fields = set(other.keys)
+        
+        if self_fields != other_fields:
+            missing = self_fields - other_fields
+            extra = other_fields - self_fields
+            guidance = "Field mismatch detected."
+            if missing:
+                guidance += f" Missing fields in container {entry_index}: {sorted(missing)}."
+            if extra:
+                guidance += f" Extra fields in container {entry_index}: {sorted(extra)}."
+            return guidance
+        
+        # Class type mismatch
+        self_class = self.metadata.get('class_name', 'TensorDataClass')
+        other_class = other.metadata.get('class_name', 'TensorDataClass')
+        if self_class != other_class:
+            return f"Class mismatch: container 0 is {self_class}, container {entry_index} is {other_class}."
+        
+        # Device and shape analysis
+        if self.device != other.device:
+            return f"Device mismatch: container 0 has device={self.device}, container {entry_index} has device={other.device}."
+        
+        self_shape = self.metadata.get('shape')
+        other_shape = other.metadata.get('shape')
+        if self_shape != other_shape:
+            return f"Batch shape mismatch: container 0 shape={self_shape}, container {entry_index} shape={other_shape}."
+        
+        return "Structure differs in event dimensions or other metadata."
 
 
 class TensorAnnotated(TensorContainer, PytreeRegistered):

@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from typing import (
     Any,
     Callable,
+    Generic,
     Iterable,
     Iterator,
     List,
@@ -475,3 +476,18 @@ def diagnose_pytree_structure_mismatch(
             return mismatch
 
     return None
+
+
+
+T = TypeVar('T', bound="ContextWithAnalysis")
+class ContextWithAnalysis(Generic[T]):
+    """Base class for PyTree structure mismatch errors."""
+
+    @abstractmethod
+    def __str__(self) -> str:
+        """Return a human-readable description of the context"""
+        pass
+
+    @abstractmethod
+    def analyze_mismatch_with(self, other: T, entry_index: int) -> str:
+        pass
