@@ -3,14 +3,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Iterable, TypeVar, Union, get_args
 
-import torch
 from torch import Tensor
 from torch.utils import _pytree as pytree
 from typing_extensions import Self
 
 from tensorcontainer.tensor_container import TensorContainer
 from tensorcontainer.types import DeviceLike, ShapeLike
-from tensorcontainer.utils import PytreeRegistered, ContextWithAnalysis
+from tensorcontainer.utils import PytreeRegistered, TensorContainerPytreeContext
 
 TDCompatible = Union[Tensor, TensorContainer]
 DATACLASS_ARGS = {"init", "repr", "eq", "order", "unsafe_hash", "frozen", "slots"}
@@ -21,11 +20,10 @@ T_TensorAnnotated = TypeVar("T_TensorAnnotated", bound="TensorAnnotated")
 
 # PyTree context metadata for reconstruction
 @dataclass
-class TensorAnnoatedPytreeContext(ContextWithAnalysis['TensorAnnoatedPytreeContext']):
+class TensorAnnotatedPytreeContext(TensorContainerPytreeContext):
     """TensorAnnotated PyTree context with enhanced error messages."""
     keys: list[str]
     event_ndims: list[int]
-    device: torch.device | None
     metadata: dict[str, Any]
     
     def __str__(self) -> str:
@@ -34,37 +32,29 @@ class TensorAnnoatedPytreeContext(ContextWithAnalysis['TensorAnnoatedPytreeConte
         class_name = self.metadata.get('class_name', 'TensorDataClass')
         
         fields_str = f"fields={self.keys}" if self.keys else "fields=[]"
-        device_str = f"device={self.device}" if self.device else "device=None"
+        device_str = f"device={self.device_context}" if self.device_context else "device=None"
         
         return f"{class_name}({fields_str}, {device_str})"
     
-    def analyze_mismatch_with(self, other: Self, entry_index: int) -> str:
+    def analyze_mismatch_with(self, other: 'TensorAnnotatedPytreeContext', entry_index: int) -> str:
         """Analyze specific mismatches between TensorAnnotated contexts."""
-        # Field mismatch analysis
+        # Start with base class analysis (device mismatch, if any)
+        guidance = super().analyze_mismatch_with(other, entry_index)
+        
+        # Add TensorAnnotated-specific analysis
         self_fields = set(self.keys)
         other_fields = set(other.keys)
         
         if self_fields != other_fields:
             missing = self_fields - other_fields
             extra = other_fields - self_fields
-            guidance = "Field mismatch detected."
+            guidance += "Field mismatch detected."
             if missing:
                 guidance += f" Missing fields in container {entry_index}: {sorted(missing)}."
             if extra:
                 guidance += f" Extra fields in container {entry_index}: {sorted(extra)}."
-            return guidance
         
-        # Class type mismatch
-        self_class = self.metadata.get('class_name', 'TensorDataClass')
-        other_class = other.metadata.get('class_name', 'TensorDataClass')
-        if self_class != other_class:
-            return f"Class mismatch: container 0 is {self_class}, container {entry_index} is {other_class}."
-        
-        # Device analysis
-        if self.device != other.device:
-            return f"Device mismatch: container 0 has device={self.device}, container {entry_index} has device={other.device}."
-        
-        return "Structure differs in event dimensions or other metadata."
+        return guidance
 
 
 class TensorAnnotated(TensorContainer, PytreeRegistered):
@@ -123,12 +113,12 @@ class TensorAnnotated(TensorContainer, PytreeRegistered):
 
     def _get_pytree_context(
         self, flat_names: list[str], flat_leaves: list[TDCompatible], meta_data
-    ) -> TensorAnnoatedPytreeContext:
+    ) -> TensorAnnotatedPytreeContext:
         batch_ndim = len(self.shape)
         event_ndims = [leaf.ndim - batch_ndim for leaf in flat_leaves]
 
-        return TensorAnnoatedPytreeContext(
-            flat_names, event_ndims, self.device, meta_data
+        return TensorAnnotatedPytreeContext(
+            self.device, flat_names, event_ndims, meta_data
         )
 
     def _pytree_flatten(self) -> tuple[list[Any], Any]:
@@ -154,11 +144,11 @@ class TensorAnnotated(TensorContainer, PytreeRegistered):
 
     @classmethod
     def _pytree_unflatten(
-        cls, leaves: Iterable[Any], context: TensorAnnoatedPytreeContext
+        cls, leaves: Iterable[Any], context: TensorAnnotatedPytreeContext
     ) -> Self:
         flat_names = context.keys
         event_ndims = context.event_ndims
-        device = context.device
+        device = context.device_context
         meta_data = context.metadata
 
         leaves = list(leaves)  # Convert to list to allow indexing

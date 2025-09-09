@@ -268,9 +268,11 @@ class ContextMismatch(StructureMismatch, Generic[ContextType]):
         # Use context-specific analysis if context implements ContextWithAnalysis
         # (type safety guaranteed by ContextMismatch[ContextType] generic)
         if isinstance(self.expected_context, ContextWithAnalysis):
-            return self.expected_context.analyze_mismatch_with(
+            specific_analysis = self.expected_context.analyze_mismatch_with(
                 self.actual_context, self.entry_index
             )
+            if specific_analysis:  
+                return specific_analysis
 
         # Generic guidance that acknowledges we detected a difference without assumptions
         return f"Contexts differ between container 0 and container {self.entry_index}. Ensure all containers have identical structure and metadata."
@@ -460,3 +462,18 @@ class ContextWithAnalysis(Generic[T]):
     @abstractmethod
     def analyze_mismatch_with(self, other: T, entry_index: int) -> str:
         pass
+
+
+@dataclass
+class TensorContainerPytreeContext(ContextWithAnalysis['TensorContainerPytreeContext']):
+    """Base PyTree context class for tensor containers with common device handling."""
+    device_context: torch.device | None
+    
+    def analyze_mismatch_with(self, other: 'TensorContainerPytreeContext', entry_index: int) -> str:
+        """Analyze mismatches with another TensorContainerPytreeContext, starting with device analysis."""
+        # Check device mismatch first
+        if self.device_context != other.device_context:
+            return f"Device mismatch: container 0 device={self.device_context}, container {entry_index} device={other.device_context}. "
+        
+        # If devices match, return empty string for subclasses to add their analysis
+        return ""

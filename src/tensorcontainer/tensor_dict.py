@@ -29,7 +29,6 @@ from typing import (
     overload,
     get_args,
 )
-from typing_extensions import Self
 
 import torch
 from torch import Tensor
@@ -41,18 +40,17 @@ from torch.utils._pytree import (
 
 from tensorcontainer.tensor_container import TensorContainer
 from tensorcontainer.types import DeviceLike, ShapeLike
-from tensorcontainer.utils import PytreeRegistered, ContextWithAnalysis
+from tensorcontainer.utils import PytreeRegistered, TensorContainerPytreeContext
 
 TDCompatible = Union[Tensor, TensorContainer]
 
 
 # PyTree context metadata for reconstruction
 @dataclass
-class TensorDictPytreeContext(ContextWithAnalysis['TensorDictPytreeContext']):
+class TensorDictPytreeContext(TensorContainerPytreeContext):
     """TensorDict PyTree context with enhanced error messages."""
-    keys: Tuple[str, ...]
-    event_ndims: Tuple[int, ...]
-    device_context: torch.device | None
+    keys: list[str]
+    event_ndims: list[int]
     metadata: Dict[str, Any]
     
     def __str__(self) -> str:
@@ -62,27 +60,25 @@ class TensorDictPytreeContext(ContextWithAnalysis['TensorDictPytreeContext']):
         
         return f"TensorDict({keys_str}, {device_str})"
     
-    def analyze_mismatch_with(self, other: Self, entry_index: int) -> str:
+    def analyze_mismatch_with(self, other: 'TensorDictPytreeContext', entry_index: int) -> str:
         """Analyze specific mismatches with another TensorDict context."""
-        # Key analysis
+        # Start with base class analysis (device mismatch, if any)
+        guidance = super().analyze_mismatch_with(other, entry_index)
+        
+        # Add TensorDict-specific analysis
         self_keys = set(self.keys)
         other_keys = set(other.keys)
         
         if self_keys != other_keys:
             missing = self_keys - other_keys
             extra = other_keys - self_keys
-            guidance = "Key mismatch detected."
+            guidance += "Key mismatch detected."
             if missing:
                 guidance += f" Missing keys in container {entry_index}: {sorted(missing)}."
             if extra:
                 guidance += f" Extra keys in container {entry_index}: {sorted(extra)}."
-            return guidance
-        
-        # Device analysis
-        if self.device_context != other.device_context:
-            return f"Device mismatch: container 0 device={self.device_context}, container {entry_index} device={other.device_context}."
-        
-        return "Containers have different event dimensions or metadata."
+
+        return guidance
 
 
 class TensorDict(TensorContainer, PytreeRegistered):
@@ -191,7 +187,7 @@ class TensorDict(TensorContainer, PytreeRegistered):
         """
         batch_ndim = len(self.shape)
         event_ndims = tuple(leaf.ndim - batch_ndim for leaf in flat_leaves)
-        return TensorDictPytreeContext(tuple(keys), event_ndims, self.device, metadata)
+        return TensorDictPytreeContext(self.device, tuple(keys), event_ndims, metadata)
 
     def _pytree_flatten(
         self,
