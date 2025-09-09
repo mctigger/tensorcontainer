@@ -16,13 +16,13 @@ Notes:
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import (
     Any,
     Dict,
     Iterable,
     List,
     Mapping,
-    NamedTuple,
     Tuple,
     Union,
     cast,
@@ -46,7 +46,8 @@ TDCompatible = Union[Tensor, TensorContainer]
 
 
 # PyTree context metadata for reconstruction
-class TensorDictPytreeContext(NamedTuple):
+@dataclass
+class TensorDictPytreeContext:
     keys: Tuple[str, ...]
     event_ndims: Tuple[int, ...]
     device_context: torch.device | None
@@ -225,8 +226,11 @@ class TensorDict(TensorContainer, PytreeRegistered):
           - If no leaves are provided, an empty ``TensorDict`` is constructed using the shape
             from the context. The device is restored from the context.
         """
-        # Unpack context tuple
-        keys, event_ndims, device_context, metadata = context
+        # Access context fields
+        keys = context.keys
+        event_ndims = context.event_ndims
+        device_context = context.device_context
+        metadata = context.metadata
 
         obj = cls.__new__(cls)
         obj.device = device_context

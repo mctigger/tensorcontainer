@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Any, Iterable, NamedTuple, TypeVar, Union, get_args
+from dataclasses import dataclass
+from typing import Any, Iterable, TypeVar, Union, get_args
 
 import torch
 from torch import Tensor
@@ -19,7 +20,8 @@ T_TensorAnnotated = TypeVar("T_TensorAnnotated", bound="TensorAnnotated")
 
 
 # PyTree context metadata for reconstruction
-class TensorAnnoatedPytreeContext(NamedTuple):
+@dataclass
+class TensorAnnoatedPytreeContext:
     keys: list[str]
     event_ndims: list[int]
     device: torch.device | None
@@ -105,7 +107,7 @@ class TensorAnnotated(TensorContainer, PytreeRegistered):
         self,
     ) -> tuple[list[tuple[pytree.KeyEntry, Any]], Any]:
         flat_values, context = self._pytree_flatten()
-        flat_names = context[0]
+        flat_names = context.keys
         name_value_tuples = [
             (pytree.GetAttrKey(k), v) for k, v in zip(flat_names, flat_values)
         ]
@@ -115,7 +117,10 @@ class TensorAnnotated(TensorContainer, PytreeRegistered):
     def _pytree_unflatten(
         cls, leaves: Iterable[Any], context: TensorAnnoatedPytreeContext
     ) -> Self:
-        flat_names, event_ndims, device, meta_data = context
+        flat_names = context.keys
+        event_ndims = context.event_ndims
+        device = context.device
+        meta_data = context.metadata
 
         leaves = list(leaves)  # Convert to list to allow indexing
 
