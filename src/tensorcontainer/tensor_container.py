@@ -865,14 +865,10 @@ def _stack(
         dim = dim + batch_ndim + 1
 
     if dim < 0 or dim > batch_ndim:
-        raise IndexError("Dimension out of range")
-
-    shape_expected = first_tc.shape
-
-    for t in tensors:
-        shape_is = t.shape
-        if shape_is != shape_expected:
-            raise ValueError("stack expects each TensorContainer to be equal size")
+        raise IndexError(
+            f"Dimension {dim - batch_ndim - 1 if dim < 0 else dim} out of range "
+            f"(expected 0 to {batch_ndim} for stack operation on shape {tuple(first_tc.shape)})"
+        )
 
     # Pytree handles the stacking of individual tensors and metadata consistency
     result_td = TensorContainer._tree_map(lambda *x: torch.stack(x, dim), *tensors)
@@ -893,16 +889,10 @@ def _cat(
         dim = dim + batch_ndim
 
     if dim < 0 or dim > batch_ndim - 1:
-        raise IndexError("Dimension out of range")
-
-    shape_expected = first_tc.shape[:dim] + first_tc.shape[dim + 1 :]
-
-    for t in tensors:
-        shape_is = t.shape[:dim] + t.shape[dim + 1 :]
-        if shape_is != shape_expected:
-            raise ValueError(
-                "TensorContainer batch shapes must be identical except for 'dim'"
-            )
+        raise IndexError(
+            f"Dimension {dim - batch_ndim if dim < 0 else dim} out of range "
+            f"(expected 0 to {batch_ndim - 1} for concatenation on shape {tuple(first_tc.shape)})"
+        )
 
     # Create a new TensorContainer of the same type as the first one
     # and apply torch.cat to its internal tensors
