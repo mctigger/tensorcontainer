@@ -29,117 +29,6 @@ from tensorcontainer.types import DeviceLike
 _PytreeRegistered = TypeVar("_PytreeRegistered", bound="PytreeRegistered")
 
 
-@dataclass
-class StructureMismatch:
-    """Base class for PyTree structure mismatch errors."""
-
-    @abstractmethod
-    def __str__(self) -> str:
-        """Return a human-readable error message describing the mismatch."""
-        pass
-
-
-@dataclass
-class KeyPathMismatch(StructureMismatch):
-    """Represents a mismatch in key paths between PyTrees."""
-
-    keypaths: Tuple[KeyPath, ...]
-
-    def __str__(self) -> str:
-        # Format each keypath for better readability
-        formatted_paths = []
-        for i, keypath in enumerate(self.keypaths):
-            if keypath:
-                path_str = "container" + "".join(str(element) for element in keypath)
-            else:
-                path_str = "container (root)"
-            formatted_paths.append(f"Container {i}: {path_str}")
-        
-        paths_display = "\n".join(formatted_paths)
-        
-        return (
-            f"Structure traversal mismatch: containers have different nesting patterns.\n\n"
-            f"{paths_display}\n\n"
-            f"Fix: Ensure all containers have identical nested structure at each level."
-        )
-
-
-@dataclass
-class TypeMismatch(StructureMismatch):
-    """Represents a type mismatch between PyTree nodes."""
-
-    expected_type: type
-    actual_type: type
-    entry_index: int
-    key_path: KeyPath
-
-    def __str__(self) -> str:
-        path_str = format_path(self.key_path)
-        location = f" at {path_str}" if path_str else ""
-        
-        # Generate conversion guidance based on common type pairs
-        guidance = f"Convert container {self.entry_index} to {self.expected_type.__name__}"
-        
-        # Add specific guidance for common conversions
-        if self.expected_type.__name__ == "TensorDict" and self.actual_type in (list, tuple):
-            guidance += " using TensorDict({'key_0': item[0], 'key_1': item[1], ...})"
-        elif self.expected_type in (list, tuple) and self.actual_type.__name__ == "TensorDict":
-            guidance += f" using {self.expected_type.__name__}(tensor_dict.values())"
-        elif self.expected_type is list and self.actual_type is tuple:
-            guidance += " using list(container)"
-        elif self.expected_type is tuple and self.actual_type is list:
-            guidance += " using tuple(container)"
-        
-        return (
-            f"Type mismatch{location}: incompatible container types.\n\n"
-            f"Expected: {self.expected_type.__name__}\n"
-            f"Found:    {self.actual_type.__name__} (in container {self.entry_index})\n\n"
-            f"Fix: {guidance}"
-        )
-
-
-@dataclass
-class ContextMismatch(StructureMismatch):
-    """Represents a context mismatch between PyTree nodes."""
-
-    expected_context: Context
-    actual_context: Context
-    entry_index: int
-    key_path: KeyPath
-
-    def __str__(self) -> str:
-        path_str = format_path(self.key_path)
-        location = f" at {path_str}" if path_str else ""
-        
-        # Extract readable context information
-        expected_info = _extract_context_info(self.expected_context)
-        actual_info = _extract_context_info(self.actual_context)
-        
-        # Detect specific types of mismatches for targeted guidance
-        guidance = "Ensure all containers have identical structure."
-        
-        # Try to provide specific guidance based on context differences
-        if hasattr(self.expected_context, 'keys') and hasattr(self.actual_context, 'keys'):
-            expected_keys = set(getattr(self.expected_context, 'keys', []))
-            actual_keys = set(getattr(self.actual_context, 'keys', []))
-            if expected_keys != actual_keys:
-                missing = expected_keys - actual_keys
-                extra = actual_keys - expected_keys
-                if missing or extra:
-                    guidance = "Key mismatch detected."
-                    if missing:
-                        guidance += f" Missing keys in container {self.entry_index}: {sorted(missing)}."
-                    if extra:
-                        guidance += f" Extra keys in container {self.entry_index}: {sorted(extra)}."
-        
-        return (
-            f"Structure mismatch{location}: containers have incompatible layouts.\n\n"
-            f"Container 0{location}: {expected_info}\n"
-            f"Container {self.entry_index}{location}: {actual_info}\n\n"
-            f"Fix: {guidance}"
-        )
-
-
 def format_path(path: KeyPath) -> str:
     """Formats a PyTree KeyPath into a PyTorch-style path string.
 
@@ -151,46 +40,10 @@ def format_path(path: KeyPath) -> str:
     """
     if not path:
         return ""
-    
-    # KeyPath elements already format nicely: MappingKey -> "['key']", SequenceKey -> "[0]"  
+
+    # KeyPath elements already format nicely: MappingKey -> "['key']", SequenceKey -> "[0]"
     path_parts = [str(element) for element in path]
     return "container" + "".join(path_parts)
-
-
-def _extract_context_info(context: Context) -> str:
-    """Extract human-readable information from PyTree context objects.
-    
-    Args:
-        context: PyTree context object from _pytree_flatten.
-        
-    Returns:
-        Human-readable string describing the context.
-    """
-    if hasattr(context, 'keys') and hasattr(context, 'shape'):
-        # TensorDict-like context
-        keys = getattr(context, 'keys', [])
-        shape = getattr(context, 'shape', ())
-        device = getattr(context, 'device', None)
-        
-        keys_str = f"keys={list(keys)}" if keys else "keys=[]"
-        shape_str = f"shape={tuple(shape)}" if shape else "shape=()"
-        device_str = f"device={device}" if device is not None else "device=None"
-        
-        return f"({keys_str}, {shape_str}, {device_str})"
-    elif hasattr(context, '__dataclass_fields__'):
-        # TensorDataClass-like context
-        fields = list(getattr(context, '__dataclass_fields__', {}).keys())
-        shape = getattr(context, 'shape', ())
-        device = getattr(context, 'device', None)
-        
-        fields_str = f"fields={fields}"
-        shape_str = f"shape={tuple(shape)}"
-        device_str = f"device={device}" if device is not None else "device=None"
-        
-        return f"({fields_str}, {shape_str}, {device_str})"
-    else:
-        # Fallback to string representation
-        return str(context)
 
 
 class PytreeRegistered:
@@ -306,6 +159,121 @@ def resolve_device(device: DeviceLike) -> torch.device:
             device = torch.device(device.type, index=0)
 
     return device
+
+
+@dataclass
+class StructureMismatch:
+    """Base class for PyTree structure mismatch errors."""
+
+    @abstractmethod
+    def __str__(self) -> str:
+        """Return a human-readable error message describing the mismatch."""
+        pass
+
+
+@dataclass
+class KeyPathMismatch(StructureMismatch):
+    """Represents a mismatch in key paths between PyTrees."""
+
+    keypaths: Tuple[KeyPath, ...]
+
+    def __str__(self) -> str:
+        # Format each keypath for better readability
+        formatted_paths = []
+        for i, keypath in enumerate(self.keypaths):
+            if keypath:
+                path_str = "container" + "".join(str(element) for element in keypath)
+            else:
+                path_str = "container (root)"
+            formatted_paths.append(f"Container {i}: {path_str}")
+
+        paths_display = "\n".join(formatted_paths)
+
+        return (
+            f"Structure traversal mismatch: containers have different nesting patterns.\n\n"
+            f"{paths_display}\n\n"
+            f"Fix: Ensure all containers have identical nested structure at each level."
+        )
+
+
+@dataclass
+class TypeMismatch(StructureMismatch):
+    """Represents a type mismatch between PyTree nodes."""
+
+    expected_type: type
+    actual_type: type
+    entry_index: int
+    key_path: KeyPath
+
+    def _get_type_name(self, type_obj: type) -> str:
+        """Extract a readable name from a type object."""
+        return type_obj.__name__
+
+    def _get_conversion_guidance(self) -> str:
+        """Generate conversion guidance without making assumptions about specific types."""
+        type_a_name = self._get_type_name(self.expected_type)
+        type_b_name = self._get_type_name(self.actual_type)
+        
+        # Generic guidance that works for any types without assumptions about which container is wrong
+        return f"Ensure all containers have the same type ({type_a_name} or {type_b_name})"
+
+    def __str__(self) -> str:
+        path_str = format_path(self.key_path)
+        location = f" at {path_str}" if path_str else ""
+
+        type_a_name = self._get_type_name(self.expected_type)
+        type_b_name = self._get_type_name(self.actual_type)
+        
+        guidance = self._get_conversion_guidance()
+
+        return (
+            f"Type mismatch{location}: incompatible container types.\n\n"
+            f"Container 0: {type_a_name}\n"
+            f"Container {self.entry_index}: {type_b_name}\n\n"
+            f"Fix: {guidance}"
+        )
+
+
+ContextType = TypeVar("ContextType", bound=Context)
+
+
+@dataclass
+class ContextMismatch(StructureMismatch, Generic[ContextType]):
+    """Represents a context mismatch between PyTree nodes of the same type."""
+
+    expected_context: ContextType
+    actual_context: ContextType
+    entry_index: int
+    key_path: KeyPath
+
+    def __str__(self) -> str:
+        path_str = format_path(self.key_path)
+        location = f" at {path_str}" if path_str else ""
+
+        # Use context string representation
+        expected_info = str(self.expected_context)
+        actual_info = str(self.actual_context)
+
+        guidance = self._get_guidance()
+
+        return (
+            f"Structure mismatch{location}: containers have incompatible layouts.\n\n"
+            f"Container 0{location}: {expected_info}\n"
+            f"Container {self.entry_index}{location}: {actual_info}\n\n"
+            f"Fix: {guidance}"
+        )
+
+    def _get_guidance(self) -> str:
+        """Get context-specific guidance, with fallback to generic guidance."""
+        # Use context-specific analysis if context implements ContextWithAnalysis
+        # (type safety guaranteed by ContextMismatch[ContextType] generic)
+        if isinstance(self.expected_context, ContextWithAnalysis):
+            return self.expected_context.analyze_mismatch_with(
+                self.actual_context, self.entry_index
+            )
+
+        # Generic guidance that acknowledges we detected a difference without assumptions
+        return f"Contexts differ between container 0 and container {self.entry_index}. Ensure all containers have identical structure and metadata."
 
 
 def diagnose_pytree_structure_mismatch(
@@ -478,8 +446,9 @@ def diagnose_pytree_structure_mismatch(
     return None
 
 
+T = TypeVar("T", bound="ContextWithAnalysis")
 
-T = TypeVar('T', bound="ContextWithAnalysis")
+
 class ContextWithAnalysis(Generic[T]):
     """Base class for PyTree structure mismatch errors."""
 
