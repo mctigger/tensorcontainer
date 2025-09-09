@@ -23,13 +23,13 @@ from typing import (
     Iterable,
     List,
     Mapping,
-    Self,
     Tuple,
     Union,
     cast,
     overload,
     get_args,
 )
+from typing_extensions import Self
 
 import torch
 from torch import Tensor
