@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import (
@@ -283,7 +285,7 @@ class ContextMismatch(StructureMismatch, Generic[ContextType]):
 def diagnose_pytree_structure_mismatch(
     tree: PyTree,
     *rests: tuple[PyTree],
-    is_leaf: Optional[Callable[[PyTree], bool]] = None,
+    is_leaf: Callable[[PyTree], bool] | None = None,
 ) -> StructureMismatch | None:
     """Diagnoses if all PyTrees have identical structure for operations requiring uniformity.
 
