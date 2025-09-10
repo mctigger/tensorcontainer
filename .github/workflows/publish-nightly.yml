@@ -55,7 +55,7 @@ jobs:
 
     # Using a dedicated environment for PyPI is a recommended security practice.
     environment:
-      name: pypi
+      name: nightly
       url: https://pypi.org/p/tensorcontainer
 
     steps:
