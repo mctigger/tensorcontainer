@@ -57,4 +57,4 @@ class TestTreeMap:
         with pytest.raises(Exception) as excinfo:
             TensorContainer._tree_map(func_with_error, td)
 
-        assert "Error at path ['b']['c']" in str(excinfo.value)
+        assert "Error at path container['b']['c']" in str(excinfo.value)

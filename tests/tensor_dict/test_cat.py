@@ -83,5 +83,5 @@ def test_cat_invalid_dim_raises_compile(shape, dim):
     # are often wrapped in TorchRuntimeError.
     # We compile first, then expect the error upon execution of the compiled function.
     compiled_cat_op = torch.compile(cat_operation)
-    with pytest.raises(IndexError, match="Dimension out of range"):
+    with pytest.raises(IndexError, match="Dimension .* out of range"):
         compiled_cat_op(td, dim)

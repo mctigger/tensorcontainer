@@ -1,11 +1,23 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 import functools
 import textwrap
 import threading
-from abc import abstractmethod
+from abc import ABC, abstractmethod
 from contextlib import contextmanager
-from typing import Any, Callable, Iterable, List, Optional, Tuple, Type, Union
+from typing import (
+    Any,
+    Callable,
+    Generic,
+    Iterable,
+    List,
+    Optional,
+    Tuple,
+    Type,
+    TypeVar,
+    Union,
+)
 
 import torch
 
@@ -15,7 +27,12 @@ from torch.utils._pytree import Context, KeyEntry, PyTree
 from typing_extensions import Self, TypeAlias
 
 from tensorcontainer.types import DeviceLike, ShapeLike
-from tensorcontainer.utils import resolve_device
+from tensorcontainer.utils import (
+    ContextWithAnalysis,
+    diagnose_pytree_structure_mismatch,
+    resolve_device,
+    format_path,
+)
 
 HANDLED_FUNCTIONS = {}
 
@@ -31,6 +48,25 @@ def implements(torch_function):
         return func
 
     return decorator
+
+
+U = TypeVar("U", bound="TensorContainerPytreeContext")
+
+
+@dataclass
+class TensorContainerPytreeContext(ContextWithAnalysis[U], Generic[U], ABC):
+    """Base PyTree context class for tensor containers with common device handling."""
+
+    device: torch.device | None
+
+    def analyze_mismatch_with(self, other: U, entry_index: int) -> str:
+        """Analyze mismatches with another TensorContainerPytreeContext, starting with device analysis."""
+        # Check device mismatch first
+        if self.device != other.device:
+            return f"Device mismatch: container 0 device={self.device}, container {entry_index} device={other.device}. "
+
+        # If devices match, return empty string for subclasses to add their analysis
+        return ""
 
 
 class TensorContainer:
@@ -308,11 +344,25 @@ class TensorContainer:
             try:
                 return func(x, *xs)
             except Exception as e:
-                path = cls._format_path(keypath)
+                path = format_path(keypath)
                 message = f"Error at path {path}: {type(e).__name__}: {e}"
                 raise type(e)(message) from e
 
-        return cls.tree_map_with_path(wrapped_func, tree, *rests, is_leaf=is_leaf)
+        try:
+            return pytree.tree_map_with_path(
+                wrapped_func, tree, *rests, is_leaf=is_leaf
+            )
+        except Exception as e:
+            # The following code is just to provide better error messages for operations that
+            # work on multiple pytrees such as torch.stack() or torch.cat()
+            # It is not necessary for TensorContainer to function properly.
+            if len(rests) > 0:
+                msg = diagnose_pytree_structure_mismatch(tree, *rests, is_leaf=is_leaf)
+                if msg:
+                    raise RuntimeError(msg) from e
+
+            # Re-raise if it is an unknown error.
+            raise e
 
     @classmethod
     def tree_map_with_path(
@@ -430,22 +480,6 @@ class TensorContainer:
         final_index = part_before_ellipsis + ellipsis_replacement + part_after_ellipsis
 
         return final_index
-
-    @classmethod
-    def _format_path(cls, path: pytree.KeyPath) -> str:
-        """Helper to format a PyTree KeyPath into a readable string."""
-        parts = []
-        for entry in path:
-            if isinstance(entry, tuple):  # Handle nested KeyPath tuples
-                parts.append(cls._format_path(entry))
-            else:
-                parts.append(str(entry))
-
-        # Join parts and clean up leading dots if any
-        formatted_path = "".join(parts)
-        if formatted_path.startswith("."):
-            formatted_path = formatted_path[1:]
-        return formatted_path
 
     def __repr__(self) -> str:
         # Use a consistent indent of 4 spaces, which is standard
@@ -863,14 +897,10 @@ def _stack(
         dim = dim + batch_ndim + 1
 
     if dim < 0 or dim > batch_ndim:
-        raise IndexError("Dimension out of range")
-
-    shape_expected = first_tc.shape
-
-    for t in tensors:
-        shape_is = t.shape
-        if shape_is != shape_expected:
-            raise ValueError("stack expects each TensorContainer to be equal size")
+        raise IndexError(
+            f"Dimension {dim - batch_ndim - 1 if dim < 0 else dim} out of range "
+            f"(expected 0 to {batch_ndim} for stack operation on shape {tuple(first_tc.shape)})"
+        )
 
     # Pytree handles the stacking of individual tensors and metadata consistency
     result_td = TensorContainer._tree_map(lambda *x: torch.stack(x, dim), *tensors)
@@ -891,16 +921,10 @@ def _cat(
         dim = dim + batch_ndim
 
     if dim < 0 or dim > batch_ndim - 1:
-        raise IndexError("Dimension out of range")
-
-    shape_expected = first_tc.shape[:dim] + first_tc.shape[dim + 1 :]
-
-    for t in tensors:
-        shape_is = t.shape[:dim] + t.shape[dim + 1 :]
-        if shape_is != shape_expected:
-            raise ValueError(
-                "TensorContainer batch shapes must be identical except for 'dim'"
-            )
+        raise IndexError(
+            f"Dimension {dim - batch_ndim if dim < 0 else dim} out of range "
+            f"(expected 0 to {batch_ndim - 1} for concatenation on shape {tuple(first_tc.shape)})"
+        )
 
     # Create a new TensorContainer of the same type as the first one
     # and apply torch.cat to its internal tensors
