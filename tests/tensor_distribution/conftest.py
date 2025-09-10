@@ -1,5 +1,6 @@
+from __future__ import annotations
+
 import inspect
-from typing import Type
 
 import pytest
 import torch
@@ -163,7 +164,7 @@ def normalize_device(dev: torch.device) -> torch.device:
 
 
 def assert_init_signatures_match(
-    td_class: Type[TensorDistribution], torch_dist_class: Type[Distribution]
+    td_class: type[TensorDistribution], torch_dist_class: type[Distribution]
 ) -> None:
     """
     Assert that __init__ signatures match between TensorDistribution and Distribution.
@@ -216,7 +217,7 @@ def assert_init_signatures_match(
 
 
 def _get_torch_dist_properties(
-    torch_dist_class: Type[Distribution],
+    torch_dist_class: type[Distribution],
 ) -> list[tuple[str, property]]:
     """
     Discover relevant public properties from a torch.distribution.Distribution class.
@@ -257,7 +258,7 @@ def _get_torch_dist_properties(
 
 
 def assert_properties_signatures_match(
-    td_class: Type[TensorDistribution], torch_dist_class: Type[Distribution]
+    td_class: type[TensorDistribution], torch_dist_class: type[Distribution]
 ) -> None:
     """
     Asserts that public properties of a torch.distribution.Distribution are mirrored

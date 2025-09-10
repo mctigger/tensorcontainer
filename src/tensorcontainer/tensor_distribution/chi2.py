@@ -30,7 +30,7 @@ class TensorChi2(TensorDistribution):
         return TorchChi2(df=self._df, validate_args=self._validate_args)
 
     @classmethod
-    def _unflatten_distribution(cls, attributes: dict[str, Any]) -> "TensorChi2":
+    def _unflatten_distribution(cls, attributes: dict[str, Any]) -> TensorChi2:
         return cls(df=attributes["_df"], validate_args=attributes.get("_validate_args"))
 
     @property

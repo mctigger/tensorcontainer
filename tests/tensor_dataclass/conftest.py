@@ -1,5 +1,6 @@
+from __future__ import annotations
+
 import dataclasses
-from typing import List, Optional
 
 import pytest
 import torch
@@ -37,10 +38,10 @@ class OptionalFieldsTestClass(TensorDataClass):
     """TensorDataclass with optional and default_factory fields for testing."""
 
     obs: torch.Tensor
-    reward: Optional[torch.Tensor]
-    info: List[str] = dataclasses.field(default_factory=list)
-    optional_meta: Optional[str] = None
-    optional_meta_val: Optional[str] = "value"
+    reward: torch.Tensor | None
+    info: list[str] = dataclasses.field(default_factory=list)
+    optional_meta: str | None = None
+    optional_meta_val: str | None = "value"
     default_tensor: torch.Tensor = dataclasses.field(
         default_factory=lambda: torch.zeros(4)
     )
@@ -431,8 +432,8 @@ class NestedTensorDataClass(TensorDataClass):
     tensor: torch.Tensor
     tensor_data_class: FlatTensorDataClass
     meta_data: str
-    optional_tensor: Optional[torch.Tensor] = None
-    optional_meta_data: Optional[str] = None
+    optional_tensor: torch.Tensor | None = None
+    optional_meta_data: str | None = None
 
 
 # ============================================================================

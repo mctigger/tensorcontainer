@@ -19,16 +19,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import (
     Any,
-    Dict,
-    Iterable,
-    List,
-    Mapping,
-    Tuple,
     Union,
     cast,
     overload,
     get_args,
 )
+from collections.abc import Iterable, Mapping
 
 import torch
 from torch import Tensor
@@ -55,7 +51,7 @@ class TensorDictPytreeContext(TensorContainerPytreeContext["TensorDictPytreeCont
 
     keys: list[str]
     event_ndims: list[int]
-    metadata: Dict[str, Any]
+    metadata: dict[str, Any]
 
     def __str__(self) -> str:
         """Return human-readable description of this TensorDict context."""
@@ -149,7 +145,9 @@ class TensorDict(TensorContainer, PytreeRegistered):
         super().__init__(shape, device)
 
     @classmethod
-    def data_from_dict(cls, data, shape, device=None) -> Dict[str, Any]:
+    def data_from_dict(
+        cls, data: Mapping[str, Any], shape: ShapeLike, device=None
+    ) -> dict[str, Any]:
         """Recursively wrap nested dict values into TensorDict instances.
 
         Args:
@@ -178,9 +176,9 @@ class TensorDict(TensorContainer, PytreeRegistered):
 
     def _get_pytree_context(
         self,
-        keys: List[str],
-        flat_leaves: List[Any],
-        metadata: Dict[str, Any],
+        keys: list[str],
+        flat_leaves: list[Any],
+        metadata: dict[str, Any],
     ) -> TensorDictPytreeContext:
         """Compute pytree context metadata for reconstructing this TensorDict.
 
@@ -194,21 +192,21 @@ class TensorDict(TensorContainer, PytreeRegistered):
           original batch shape, device, and metadata.
         """
         batch_ndim = len(self.shape)
-        event_ndims = tuple(leaf.ndim - batch_ndim for leaf in flat_leaves)
-        return TensorDictPytreeContext(self.device, tuple(keys), event_ndims, metadata)
+        event_ndims = list(leaf.ndim - batch_ndim for leaf in flat_leaves)
+        return TensorDictPytreeContext(self.device, list(keys), event_ndims, metadata)
 
     def _pytree_flatten(
         self,
-    ) -> Tuple[List[Any], TensorDictPytreeContext]:
+    ) -> tuple[list[Any], TensorDictPytreeContext]:
         """Shallow flatten into leaves and context.
 
         Returns:
           Tuple[List[TDCompatible], TensorDictPytreeContext]: The TDCompatible leaves in key order and
           the reconstruction context (keys, per-leaf ``event_ndims``, shape, device, metadata).
         """
-        td_compatible_leaves: List[Any] = []
-        td_compatible_keys: List[str] = []
-        metadata: Dict[str, Any] = {}
+        td_compatible_leaves: list[Any] = []
+        td_compatible_keys: list[str] = []
+        metadata: dict[str, Any] = {}
 
         for key, value in self.data.items():
             if isinstance(value, get_args(TDCompatible)):
@@ -258,8 +256,6 @@ class TensorDict(TensorContainer, PytreeRegistered):
           - Batch shape is inferred from the first leaf and its corresponding ``event_ndims``:
             if ``event_ndims[0] == 0``, the batch shape equals ``first_leaf.shape``; otherwise,
             it is ``first_leaf.shape[:-event_ndims[0]]``.
-          - If no leaves are provided, an empty ``TensorDict`` is constructed using the shape
-            from the context. The device is restored from the context.
         """
         # Access context fields
         keys = context.keys
@@ -313,7 +309,7 @@ class TensorDict(TensorContainer, PytreeRegistered):
     @overload
     def __setitem__(
         self,
-        key: Union[slice, Tensor, int, Tuple[Union[slice, Tensor, int], ...]],
+        key: slice | Tensor | int | tuple[slice | Tensor | int, ...],
         value: Any,
     ) -> None: ...
 
@@ -357,7 +353,7 @@ class TensorDict(TensorContainer, PytreeRegistered):
     def items(self):
         return self.data.items()
 
-    def update(self, other: Union[Dict[str, Any], TensorDict]):
+    def update(self, other: dict[str, Any] | TensorDict):
         """Update entries from a mapping or another TensorDict.
 
         Args:
@@ -392,7 +388,7 @@ class TensorDict(TensorContainer, PytreeRegistered):
         """
         out = {}
         # Stack for iterative traversal: (data, prefix)
-        stack: List[Tuple[Any, str]] = [(self, "")]
+        stack: list[tuple[Any, str]] = [(self, "")]
 
         while stack:
             data, prefix = stack.pop()

@@ -55,7 +55,7 @@ class TensorContinuousBernoulli(TensorDistribution):
     def _unflatten_distribution(
         cls,
         attributes: dict[str, Any],
-    ) -> "TensorContinuousBernoulli":
+    ) -> TensorContinuousBernoulli:
         return cls(
             probs=attributes.get("_probs"),
             logits=attributes.get("_logits"),

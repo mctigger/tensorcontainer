@@ -6,7 +6,9 @@ including handling of different dimensions, shapes, metadata, optional fields,
 and edge cases.
 """
 
-from typing import Any, List, Optional, cast
+from __future__ import annotations
+
+from typing import Any, cast
 
 import pytest
 import torch
@@ -71,7 +73,7 @@ class TestStackGeneral:
         assert stacked_td.meta_data == td1.meta_data
 
         normalized_dim = dim if dim >= 0 else dim + len(original_batch_shape) + 1
-        slicer: List[Any] = [slice(None)] * len(expected_tensor_shape)
+        slicer: list[Any] = [slice(None)] * len(expected_tensor_shape)
 
         slicer[normalized_dim] = 0
         testing.assert_close(stacked_td.tensor[tuple(slicer)], td1.tensor)
@@ -203,7 +205,7 @@ class TestStackOptionalFields:
 
         class OptionalStack(TensorDataClass):
             a: torch.Tensor
-            b: Optional[torch.Tensor] = None
+            b: torch.Tensor | None = None
 
         td1 = OptionalStack(
             shape=(3,), device=torch.device("cpu"), a=torch.randn(3), b=torch.ones(3)

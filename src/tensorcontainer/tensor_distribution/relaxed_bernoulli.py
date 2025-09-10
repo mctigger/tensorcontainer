@@ -48,7 +48,7 @@ class TensorRelaxedBernoulli(TensorDistribution):
     @classmethod
     def _unflatten_distribution(
         cls, attributes: dict[str, Any]
-    ) -> "TensorRelaxedBernoulli":
+    ) -> TensorRelaxedBernoulli:
         """Reconstruct distribution from tensor attributes."""
         return cls(
             temperature=attributes["_temperature"],

@@ -10,14 +10,10 @@ from typing import (
     Any,
     Callable,
     Generic,
-    Iterable,
-    List,
-    Optional,
-    Tuple,
-    Type,
     TypeVar,
     Union,
 )
+from collections.abc import Iterable
 
 import torch
 
@@ -256,7 +252,7 @@ class TensorContainer:
     """
 
     shape: torch.Size
-    device: Optional[torch.device]
+    device: torch.device | None
 
     # Thread-local storage for unsafe construction flag
     _validation_disabled = threading.local()
@@ -318,7 +314,7 @@ class TensorContainer:
     @classmethod
     @abstractmethod
     def _pytree_unflatten(
-        cls: Type[Self], leaves: Iterable[Any], context: Context
+        cls: type[Self], leaves: Iterable[Any], context: Context
     ) -> PyTree:
         pass
 
@@ -338,7 +334,7 @@ class TensorContainer:
         func: Callable[..., Any],
         tree: PyTree,
         *rests: PyTree,
-        is_leaf: Optional[Callable[[PyTree], bool]] = None,
+        is_leaf: Callable[[PyTree], bool] | None = None,
     ) -> PyTree:
         def wrapped_func(keypath, x, *xs):
             try:
@@ -370,7 +366,7 @@ class TensorContainer:
         func: Callable[..., Any],
         tree: PyTree,
         *rests: PyTree,
-        is_leaf: Optional[Callable[[PyTree], bool]] = None,
+        is_leaf: Callable[[PyTree], bool] | None = None,
     ) -> PyTree:
         # This is copied from pytree.tree_map_with_path()
         # We add the check for no leaves as operations are currently no supported for
@@ -672,9 +668,7 @@ class TensorContainer:
     def detach(self: Self) -> Self:
         return TensorContainer._tree_map(lambda x: x.detach(), self)
 
-    def clone(
-        self: Self, *, memory_format: Optional[torch.memory_format] = None
-    ) -> Self:
+    def clone(self: Self, *, memory_format: torch.memory_format | None = None) -> Self:
         """Create a deep copy of the container with optional memory format control.
 
         Creates a new container with cloned tensors. All tensor data is copied,
@@ -735,7 +729,7 @@ class TensorContainer:
             lambda x: x.permute(*dims, *range(self.ndim, x.ndim)), self
         )
 
-    def squeeze(self: Self, dim: Optional[int] = None) -> Self:
+    def squeeze(self: Self, dim: int | None = None) -> Self:
         """Squeezes the batch dimensions of the container.
 
         Args:
@@ -883,7 +877,7 @@ class TensorContainer:
 # --- PyTree-aware implementations of torch functions ---
 @implements(torch.stack)
 def _stack(
-    tensors: Union[Tuple[TensorContainer, ...], List[TensorContainer]], dim: int = 0
+    tensors: tuple[TensorContainer, ...] | list[TensorContainer], dim: int = 0
 ) -> TensorContainer:
     if not tensors:
         # Replicate PyTorch's error for an empty list
@@ -910,7 +904,7 @@ def _stack(
 
 @implements(torch.cat)
 def _cat(
-    tensors: Union[Tuple[TensorContainer, ...], List[TensorContainer]], dim: int = 0
+    tensors: tuple[TensorContainer, ...] | list[TensorContainer], dim: int = 0
 ) -> TensorContainer:
     # Get the first tensor container to determine the base shape and type
     first_tc = tensors[0]

@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Iterable, TypeVar, Union, get_args
+from typing import Any, TypeVar, Union, get_args
+from collections.abc import Iterable
 
 from torch import Tensor
 from torch.utils import _pytree as pytree

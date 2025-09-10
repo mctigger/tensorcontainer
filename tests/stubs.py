@@ -1,4 +1,7 @@
-from typing import Any, Iterable, Type
+from __future__ import annotations
+
+from typing import Any
+from collections.abc import Iterable
 
 import torch
 
@@ -45,8 +48,8 @@ class StubTensorContainer(TensorContainer):
 
     @classmethod
     def _pytree_unflatten(
-        cls: Type["StubTensorContainer"], leaves: Iterable[Any], context: Any
-    ) -> "StubTensorContainer":
+        cls: type[StubTensorContainer], leaves: Iterable[Any], context: Any
+    ) -> StubTensorContainer:
         """Reconstruct from flattened tensors and context."""
         if not cls._in_context:
             raise RuntimeError(
