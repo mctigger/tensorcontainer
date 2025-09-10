@@ -35,7 +35,7 @@ class TensorKumaraswamy(TensorDistribution):
     def _unflatten_distribution(
         cls,
         attributes: dict[str, Any],
-    ) -> "TensorKumaraswamy":
+    ) -> TensorKumaraswamy:
         """Reconstruct distribution from tensor attributes."""
         return cls(
             concentration1=attributes["_concentration1"],

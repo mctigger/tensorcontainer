@@ -50,7 +50,7 @@ class TensorRelaxedOneHotCategorical(TensorDistribution):
     def _unflatten_distribution(
         cls,
         attributes: dict[str, Any],
-    ) -> "TensorRelaxedOneHotCategorical":
+    ) -> TensorRelaxedOneHotCategorical:
         """Reconstruct distribution from tensor attributes."""
         return cls(
             temperature=attributes["_temperature"][0],

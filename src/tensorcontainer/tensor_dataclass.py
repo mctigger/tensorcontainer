@@ -297,7 +297,7 @@ class TensorDataClass(TensorAnnotated, TensorDataclassTransform):
         return new_obj
 
     def __deepcopy__(
-        self: T_TensorDataclass, memo: Optional[dict] = None
+        self: T_TensorDataclass, memo: dict | None = None
     ) -> T_TensorDataclass:
         """
         Performs a deep copy of the TensorDataclass instance.

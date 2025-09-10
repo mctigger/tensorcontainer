@@ -31,7 +31,7 @@ class TensorExponential(TensorDistribution):
     def _unflatten_distribution(
         cls,
         attributes: dict[str, Any],
-    ) -> "TensorExponential":
+    ) -> TensorExponential:
         return cls(
             rate=attributes["_rate"], validate_args=attributes.get("_validate_args")
         )

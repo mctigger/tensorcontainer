@@ -6,13 +6,9 @@ from typing import (
     Any,
     Callable,
     Generic,
-    Iterable,
-    Iterator,
-    List,
-    Tuple,
-    Type,
     TypeVar,
 )
+from collections.abc import Iterable, Iterator
 
 import torch
 import torch.utils._pytree as pytree
@@ -72,7 +68,7 @@ class PytreeRegistered:
         )
 
     @abstractmethod
-    def _pytree_flatten(self) -> Tuple[List[Any], Context]:
+    def _pytree_flatten(self) -> tuple[list[Any], Context]:
         """Flattens the instance into leaves and context for PyTree operations.
 
         Subclasses must implement this to define how their structure is decomposed
@@ -87,7 +83,7 @@ class PytreeRegistered:
     @abstractmethod
     def _pytree_flatten_with_keys_fn(
         self,
-    ) -> Tuple[List[Tuple[KeyEntry, Any]], Any]:
+    ) -> tuple[list[tuple[KeyEntry, Any]], Any]:
         """Flattens the instance with keys for advanced PyTree traversal.
 
         Similar to _pytree_flatten, but includes key information for each leaf,
@@ -102,7 +98,7 @@ class PytreeRegistered:
     @classmethod
     @abstractmethod
     def _pytree_unflatten(
-        cls: Type[_PytreeRegistered], leaves: Iterable[Any], context: Context
+        cls: type[_PytreeRegistered], leaves: Iterable[Any], context: Context
     ) -> PyTree:
         """Reconstructs an instance from flattened leaves and context.
 
@@ -176,7 +172,7 @@ class StructureMismatch:
 class KeyPathMismatch(StructureMismatch):
     """Represents a mismatch in key paths between PyTrees."""
 
-    keypaths: Tuple[KeyPath, ...]
+    keypaths: tuple[KeyPath, ...]
 
     def __str__(self) -> str:
         # Format each keypath for better readability
@@ -301,7 +297,7 @@ def diagnose_pytree_structure_mismatch(
     """
 
     def diagnose_keypaths_equal(
-        keypaths: Tuple[KeyPath, ...],
+        keypaths: tuple[KeyPath, ...],
     ) -> KeyPathMismatch | None:
         """Check if all key paths are equal.
 
@@ -315,7 +311,7 @@ def diagnose_pytree_structure_mismatch(
             return KeyPathMismatch(keypaths=keypaths)
 
     def diagnose_types_equal(
-        node_types: Tuple[type, ...], key_path: KeyPath = ()
+        node_types: tuple[type, ...], key_path: KeyPath = ()
     ) -> TypeMismatch | None:
         """Check if all node types are equal to the first type.
 
@@ -336,7 +332,7 @@ def diagnose_pytree_structure_mismatch(
                 )
 
     def diagnose_contexts_equal(
-        contexts: Tuple[Context, ...], key_path: KeyPath = ()
+        contexts: tuple[Context, ...], key_path: KeyPath = ()
     ) -> ContextMismatch | None:
         """Check if all contexts are equal.
 
@@ -360,7 +356,7 @@ def diagnose_pytree_structure_mismatch(
         key_path: KeyPath,
         tree: PyTree,
         is_leaf: Callable[[PyTree], bool] | None = None,
-    ) -> Iterator[Tuple[KeyPath, type, Context]]:
+    ) -> Iterator[tuple[KeyPath, type, Context]]:
         """Recursively traverse a PyTree, yielding key paths, node types, and contexts.
 
         This function performs a depth-first traversal of the PyTree structure,

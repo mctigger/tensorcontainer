@@ -47,7 +47,7 @@ class TensorStudentT(TensorDistribution):
     def _unflatten_distribution(
         cls,
         attributes: dict[str, Any],
-    ) -> "TensorStudentT":
+    ) -> TensorStudentT:
         return cls(
             df=attributes["_df"],
             loc=attributes["_loc"],
