@@ -234,3 +234,149 @@ class TestTensorDictKeyBasedSetitem:
             RuntimeError, match="Invalid device.*Expected device that is compatible"
         ):
             td_cpu["bad_device"] = torch.randn(2, 3, device="cuda")
+
+
+class TestTensorDictCrossDeviceSliceAssignment:
+    """
+    Tests that demonstrate PyTorch's cross-device assignment behavior for slice assignments.
+    
+    This test class shows that PyTorch allows cross-device tensor assignments by automatically
+    transferring data to the target tensor's device, maintaining device consistency.
+    """
+
+    @skipif_no_cuda
+    def test_cpu_to_cuda_slice_assignment_succeeds(self):
+        """
+        Tests that slice assignment from CPU TensorDict to CUDA TensorDict succeeds
+        with PyTorch automatically transferring data to CUDA.
+        """
+        # Create CUDA destination container
+        td_cuda = TensorDict(
+            data={"features": torch.ones(2, 3, device="cuda")},
+            shape=(2,),
+            device="cuda",
+        )
+        
+        # Create CPU source container with different values
+        td_cpu = TensorDict(
+            data={"features": torch.ones(2, 3, device="cpu") * 5},
+            shape=(2,),
+            device="cpu",
+        )
+        
+        # Perform slice assignment - should succeed with automatic device transfer
+        td_cuda[0] = td_cpu[0]
+        
+        # Verify the assignment worked and device consistency is maintained
+        expected = torch.ones(2, 3, device="cuda")
+        expected[0] = 5  # First row should be 5s, second row still 1s
+        
+        torch.testing.assert_close(td_cuda["features"], expected)
+        assert td_cuda["features"].device.type == "cuda"
+        assert td_cuda.device.type == "cuda"
+    
+    @skipif_no_cuda
+    def test_cuda_to_cpu_slice_assignment_succeeds(self):
+        """
+        Tests that slice assignment from CUDA TensorDict to CPU TensorDict succeeds
+        with PyTorch automatically transferring data to CPU.
+        """
+        # Create CPU destination container
+        td_cpu = TensorDict(
+            data={"features": torch.ones(2, 3, device="cpu")},
+            shape=(2,),
+            device="cpu",
+        )
+        
+        # Create CUDA source container with different values
+        td_cuda = TensorDict(
+            data={"features": torch.ones(2, 3, device="cuda") * 7},
+            shape=(2,),
+            device="cuda",
+        )
+        
+        # Perform slice assignment - should succeed with automatic device transfer
+        td_cpu[0] = td_cuda[0]
+        
+        # Verify the assignment worked and device consistency is maintained
+        expected = torch.ones(2, 3, device="cpu")
+        expected[0] = 7  # First row should be 7s, second row still 1s
+        
+        torch.testing.assert_close(td_cpu["features"], expected)
+        assert td_cpu["features"].device.type == "cpu"
+        assert td_cpu.device.type == "cpu"
+    
+    @skipif_no_cuda
+    def test_cross_device_slice_range_assignment_succeeds(self):
+        """
+        Tests that slice range assignment across devices succeeds with automatic transfer.
+        """
+        # Create CUDA destination container
+        td_cuda = TensorDict(
+            data={"features": torch.ones(4, 2, device="cuda")},
+            shape=(4,),
+            device="cuda",
+        )
+        
+        # Create CPU source container with different values for slice
+        td_cpu = TensorDict(
+            data={"features": torch.ones(2, 2, device="cpu") * 3},
+            shape=(2,),
+            device="cpu",
+        )
+        
+        # Perform slice range assignment - should succeed
+        td_cuda[1:3] = td_cpu
+        
+        # Verify the assignment worked
+        expected = torch.ones(4, 2, device="cuda")
+        expected[1:3] = 3  # Middle rows should be 3s
+        
+        torch.testing.assert_close(td_cuda["features"], expected)
+        assert td_cuda["features"].device.type == "cuda"
+        assert td_cuda.device.type == "cuda"
+    
+    @skipif_no_cuda
+    def test_cross_device_boolean_mask_fails_due_to_stricter_requirements(self):
+        """
+        Tests that boolean mask assignment has stricter device requirements than
+        regular slice assignment - it requires ALL tensors (mask, target, source) 
+        to be on the same device.
+        """
+        # Create CUDA destination container
+        td_cuda = TensorDict(
+            data={"features": torch.ones(4, 2, device="cuda")},
+            shape=(4,),
+            device="cuda",
+        )
+        
+        # Create CPU source container
+        td_cpu = TensorDict(
+            data={"features": torch.ones(2, 2, device="cpu") * 9},
+            shape=(2,),
+            device="cpu",
+        )
+        
+        # Create boolean mask on CUDA (same as target device)
+        mask = torch.tensor([True, False, True, False], device="cuda")
+        
+        # Boolean mask assignment fails because PyTorch requires ALL tensors
+        # (mask, target, AND source) to be on the same device for boolean indexing
+        with pytest.raises(RuntimeError, match="Expected all tensors to be on the same device|Issue with key"):
+            td_cuda[mask] = td_cpu
+    
+    @skipif_no_cuda 
+    def test_device_validation_still_enforced_for_key_assignment(self):
+        """
+        Tests that device validation is still enforced for key-based assignments,
+        demonstrating that slice assignment behavior is PyTorch's standard behavior.
+        """
+        td_cuda = TensorDict(
+            data={"features": torch.ones(2, 3, device="cuda")},
+            shape=(2,),
+            device="cuda",
+        )
+        
+        # Key-based assignment should still enforce device validation
+        with pytest.raises(RuntimeError, match="Invalid device.*Expected device that is compatible"):
+            td_cuda["new_tensor"] = torch.ones(2, 3, device="cpu")
