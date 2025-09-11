@@ -22,7 +22,7 @@ from torch import Tensor
 from torch.utils._pytree import Context, KeyEntry, PyTree
 from typing_extensions import Self, TypeAlias
 
-from tensorcontainer.types import DeviceLike, ShapeLike
+from tensorcontainer.types import DeviceLike, IndexType, ShapeLike
 from tensorcontainer.utils import (
     ContextWithAnalysis,
     diagnose_pytree_structure_mismatch,
@@ -512,7 +512,7 @@ class TensorContainer:
             f")"
         )
 
-    def __getitem__(self: Self, key: Any) -> Self:
+    def __getitem__(self: Self, key: IndexType) -> Self:
         """Index into the container along batch dimensions.
 
         Indexing operations are applied to the batch dimensions of all contained tensors.
@@ -557,10 +557,10 @@ class TensorContainer:
             raise IndexError(
                 "Cannot index a 0-dimensional TensorContainer with a single index. Use a tuple of indices matching the batch shape, or an empty tuple for a scalar."
             )
-        
+
         return TensorContainer._tree_map(lambda x: x[key], self)
 
-    def __setitem__(self: Self, index: Any, value: Self) -> None:
+    def __setitem__(self: Self, index: IndexType, value: Self) -> None:
         """
         Sets the value of a slice of the container in-place.
 
@@ -583,7 +583,7 @@ class TensorContainer:
             raise ValueError(f"Invalid value. Expected value of type {type(self)}")
 
         processed_index = index
-        if isinstance(processed_index, tuple):
+        if isinstance(index, tuple):
             processed_index = self.transform_ellipsis_index(self.shape, index)
 
         for k, v in self._pytree_flatten_with_keys_fn()[0]:
