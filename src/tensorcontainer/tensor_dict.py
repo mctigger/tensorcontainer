@@ -316,13 +316,6 @@ class TensorDict(TensorContainer, PytreeRegistered):
 
             self.data[key] = value
         else:
-            # Handle slicing/indexing assignments via TensorContainer
-            if isinstance(value, (float, int)):
-                # Promote Python scalars to tensors to support slice assignment paths
-                value = torch.tensor(
-                    value, device=self.device, dtype=torch.float32
-                )  # scalar promotion for container setitem
-
             super().__setitem__(key, value)
 
     def __delitem__(self, key: str):
