@@ -11,19 +11,66 @@ import torch
 from src.tensorcontainer.tensor_dict import TensorDict
 from tests.conftest import skipif_no_cuda
 
-# Define a common set of indices for slicing tests
-SLICING_INDICES = [
-    (1, slice(None)),  # Single integer index
-    (slice(0, 2), slice(None)),  # Basic slice
-    (slice(0, 2, 1), slice(None)),  # Slice with step
-    ([0, 1], slice(None)),  # List of indices
-    (torch.LongTensor([0, 1]), slice(None)),  # LongTensor of indices
-    (torch.rand(2) > 0.5, slice(None)),  # BoolTensor mask
-    (slice(None), 1),  # Indexing second dimension
-    (slice(None), slice(0, 2)),  # Slicing second dimension
-    (torch.tensor([0, 1]), torch.tensor([0, 1])),  # Tensor indexing
-    (slice(None), torch.rand(3) > 0.5),  # BoolTensor mask on second dim
+# Basic indexing - creates views when possible, predictable shape transformations
+BASIC_INDICES = [
+    0,
+    1,
+    -1,
+    -2,
+    slice(0, 2),
+    slice(1, 2),
+    slice(-2, None),
+    slice(None, -1),
+    slice(-3, -1),
+    slice(None, None, 2),
+    slice(1, None, 2),
+    ...,
+    None,
 ]
+
+# Advanced indexing - may require copying, can gather elements from arbitrary positions  
+ADVANCED_INDICES = [
+    [0, 1],
+    torch.tensor([0]),
+    torch.tensor([1]),
+    torch.tensor([0, 1]),
+    torch.LongTensor([0, 1]),
+]
+
+# Boolean indexing - filters elements based on conditions, typically flattens result
+BOOLEAN_INDICES = [
+    torch.rand(2) > 0.5,
+    torch.rand(2, 3) > 0.5,
+]
+
+# Multi-dimensional indexing - tests interaction between different index types
+MULTIDIM_INDICES = [
+    (1, slice(None)),
+    (slice(0, 2), slice(None)),
+    (slice(0, 2, 1), slice(None)),
+    ([0, 1], slice(None)),
+    (torch.LongTensor([0, 1]), slice(None)),
+    (torch.rand(2) > 0.5, slice(None)),
+    (slice(None), 1),
+    (slice(None), slice(0, 2)),
+    (torch.tensor([0, 1]), torch.tensor([0, 1])),
+    (slice(None), torch.rand(3) > 0.5),
+]
+
+# Edge cases - empty slices, boundary conditions, and special behaviors
+EDGE_CASE_INDICES = [
+    slice(0, 0),
+    slice(1, 1),
+    slice(2, 2),
+]
+
+SLICING_INDICES = (
+    BASIC_INDICES
+    + ADVANCED_INDICES
+    + BOOLEAN_INDICES
+    + MULTIDIM_INDICES
+    + EDGE_CASE_INDICES
+)
 
 
 class TestTensorDictSlicingSetitem:
@@ -36,7 +83,7 @@ class TestTensorDictSlicingSetitem:
     - Tensor data is correctly updated when assigning TensorDict slices
     """
 
-    @pytest.mark.parametrize("idx", SLICING_INDICES)
+    @pytest.mark.parametrize("idx", SLICING_INDICES, ids=str)
     def test_valid_slicing_assignment(self, idx):
         """
         Tests assigning a source TensorDict to a slice of a destination TensorDict.
@@ -49,7 +96,7 @@ class TestTensorDictSlicingSetitem:
         )
 
         # Determine the shape of the slice to create a compatible source TensorDict
-        slice_shape = td_dest[idx].shape
+        slice_shape = torch.ones(2, 3)[idx].shape
 
         td_source = TensorDict(
             data={
@@ -59,17 +106,16 @@ class TestTensorDictSlicingSetitem:
             shape=slice_shape,
         )
 
-        original_dest_features = td_dest["features"].clone()
-        original_dest_labels = td_dest["labels"].clone()
-
-        # Perform the assignment
-        td_dest[idx] = td_source
-
         # Calculate expected results
-        expected_features = original_dest_features
-        expected_labels = original_dest_labels
+        expected_features = td_dest["features"].clone()
+        expected_labels = td_dest["labels"].clone()
+
+        # Manually assign from source tensors to destination tensors
         expected_features[idx] = td_source["features"]
         expected_labels[idx] = td_source["labels"]
+
+        # Perform the assignment
+        td_dest[idx] = td_source.clone()
 
         torch.testing.assert_close(td_dest["features"], expected_features)
         torch.testing.assert_close(td_dest["labels"], expected_labels)

@@ -557,6 +557,7 @@ class TensorContainer:
             raise IndexError(
                 "Cannot index a 0-dimensional TensorContainer with a single index. Use a tuple of indices matching the batch shape, or an empty tuple for a scalar."
             )
+        
         return TensorContainer._tree_map(lambda x: x[key], self)
 
     def __setitem__(self: Self, index: Any, value: Self) -> None:
@@ -585,13 +586,13 @@ class TensorContainer:
         if isinstance(processed_index, tuple):
             processed_index = self.transform_ellipsis_index(self.shape, index)
 
-            for k, v in self._pytree_flatten_with_keys_fn()[0]:
-                try:
-                    v[processed_index] = k.get(value)
-                except Exception as e:
-                    raise type(e)(
-                        f"Issue with key {str(k)} and index {processed_index} for value of shape {v.shape} and type {type(v)} and assignment of shape {tuple(value.shape)}"
-                    ) from e
+        for k, v in self._pytree_flatten_with_keys_fn()[0]:
+            try:
+                v[processed_index] = k.get(value)
+            except Exception as e:
+                raise type(e)(
+                    f"Issue with key {str(k)} and index {processed_index} for value of shape {v.shape} and type {type(v)} and assignment of shape {tuple(value.shape)}"
+                ) from e
 
     def view(self: Self, *shape: int) -> Self:
         """Return a view with modified batch dimensions, preserving event dimensions.
