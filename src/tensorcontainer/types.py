@@ -7,8 +7,10 @@ will fail if PyTorch changes it in the future.
 """
 
 from typing import List, Union
-from types import EllipsisType
 import torch
+
+# Define EllipsisType for Python 3.9 compatibility
+EllipsisType = type(...)
 
 # Mirror torch._prims_common.ShapeType without importing it directly.
 ShapeLike = Union[torch.Size, list[int], tuple[int, ...]]
