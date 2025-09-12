@@ -22,7 +22,7 @@ from torch import Tensor
 from torch.utils._pytree import Context, KeyEntry, PyTree
 from typing_extensions import Self, TypeAlias
 
-from tensorcontainer.types import DeviceLike, ShapeLike
+from tensorcontainer.types import DeviceLike, IndexType, ShapeLike
 from tensorcontainer.utils import (
     ContextWithAnalysis,
     diagnose_pytree_structure_mismatch,
@@ -429,6 +429,43 @@ class TensorContainer:
         return self._tree_map(lambda x: x, self)
 
     def get_number_of_consuming_dims(self, item) -> int:
+        """
+        Returns the number of container dimensions consumed by an indexing item.
+
+        This method is crucial for ellipsis expansion calculation. "Consuming" means
+        the index item selects from existing container dimensions, reducing the
+        container's rank. "Non-consuming" items either don't affect existing
+        dimensions (Ellipsis) or add new dimensions (None).
+
+        Args:
+            item: An indexing element from an indexing tuple
+
+        Returns:
+            Number of container dimensions this item consumes:
+            - 0 for non-consuming items (Ellipsis, None)
+            - item.ndim for boolean tensors (advanced indexing)
+            - 1 for standard consuming items (int, slice, non-bool tensor)
+
+        Examples:
+            >>> container.get_number_of_consuming_dims(0)          # int
+            1
+            >>> container.get_number_of_consuming_dims(slice(0, 2)) # slice
+            1
+            >>> container.get_number_of_consuming_dims(...)        # Ellipsis
+            0
+            >>> container.get_number_of_consuming_dims(None)       # None (newaxis)
+            0
+            >>> bool_mask = torch.tensor([[True, False], [False, True]])
+            >>> container.get_number_of_consuming_dims(bool_mask)  # 2D bool tensor
+            2
+            >>> indices = torch.tensor([0, 2, 1])
+            >>> container.get_number_of_consuming_dims(indices)    # non-bool tensor
+            1
+
+        Note:
+            Used internally by transform_ellipsis_index to calculate how many ':'
+            slices the ellipsis should expand to: rank - sum(consuming_dims)
+        """
         if item is Ellipsis or item is None:
             return 0
         if isinstance(item, torch.Tensor) and item.dtype == torch.bool:
@@ -438,15 +475,49 @@ class TensorContainer:
 
     def transform_ellipsis_index(self, shape: torch.Size, idx: tuple) -> tuple:
         """
-        Transforms an indexing tuple with an ellipsis into an equivalent one without it.
-        ...
+        Transforms an indexing tuple with ellipsis relative to container batch shape.
+
+        This method is essential for TensorContainer's design: containers have batch dimensions
+        (self.shape) but contain individual tensors with varying total shapes. Without this
+        preprocessing, ellipsis (...) would expand differently for each tensor based on its
+        individual shape, violating container semantics and batch/event dimension boundaries.
+
+        Args:
+            shape: The container's batch shape (self.shape), used as reference for ellipsis expansion
+            idx: Indexing tuple potentially containing ellipsis (...)
+
+        Returns:
+            Equivalent indexing tuple with ellipsis expanded to explicit slices
+
+        Example:
+            Container with shape (4, 3) containing tensors (4, 3, 128) and (4, 3, 6, 64):
+
+            # User indexing: container[..., 0]
+            # This method transforms: (..., 0) -> (:, 0) based on container batch shape (4, 3)
+            # Applied to tensors: [:, 0] works consistently on both tensor shapes
+            # Result: Container shape becomes (4,) with tensors (4, 128) and (4, 6, 64)
+
+            # Without this preprocessing, PyTorch would expand ellipsis per-tensor:
+            # Tensor (4, 3, 128): [..., 0] -> [:, :, :, 0] (invalid - too many indices)
+            # Tensor (4, 3, 6, 64): [..., 0] -> [:, :, :, :, 0] (invalid - too many indices)
+
+        Raises:
+            IndexError: If multiple ellipsis found or too many indices for container dimensions
+
+        Note:
+            This method is called internally during __getitem__ and __setitem__ operations
+            to ensure consistent indexing behavior across all tensors in the container.
         """
-        # Count how many items in the index "consume" an axis from the original shape.
-        # `None` adds a new axis, so it's not counted.
+        # Step 1: Count indices that "consume" container dimensions
+        # - Ellipsis (...) and None don't consume dims (Ellipsis is placeholder, None adds new dim)
+        # - int, slice, tensor indices consume 1 dim each (bool tensor consumes its ndim)
+        # Example: (..., 0, :) has 2 consuming indices (0 and :), ellipsis doesn't count
         num_consuming_indices = sum(
             self.get_number_of_consuming_dims(item) for item in idx
         )
 
+        # Step 2: Validate that we don't have more indices than container dimensions
+        # Container shape (4, 3) has rank=2, so max 2 consuming indices allowed
         rank = len(shape)
         if num_consuming_indices > rank:
             raise IndexError(
@@ -454,9 +525,11 @@ class TensorContainer:
                 f"but {num_consuming_indices} were indexed"
             )
 
+        # Step 3: Early return if no ellipsis - nothing to transform
         if Ellipsis not in idx:
             return idx
 
+        # Step 4: Validate only one ellipsis exists (PyTorch/NumPy requirement)
         ellipsis_count = 0
         for item in idx:
             if item is Ellipsis:
@@ -464,15 +537,22 @@ class TensorContainer:
         if ellipsis_count > 1:
             raise IndexError("an index can only have a single ellipsis ('...')")
 
+        # Step 5: Core calculation - determine how many ':' slices ellipsis should expand to
+        # Example: Container shape (4, 3), index (..., 0)
+        # - rank=2, consuming_indices=1 -> ellipsis expands to 2-1=1 slice
+        # - Result: (..., 0) becomes (:, 0)
         ellipsis_pos = idx.index(Ellipsis)
-
-        # Calculate slices needed based on the consuming indices
         num_slices_to_add = rank - num_consuming_indices
 
-        part_before_ellipsis = idx[:ellipsis_pos]
-        part_after_ellipsis = idx[ellipsis_pos + 1 :]
-        ellipsis_replacement = (slice(None),) * num_slices_to_add
+        # Step 6: Reconstruct index tuple by replacing ellipsis with explicit slices
+        # Split around ellipsis: (a, ..., b) -> (a,) + (:, :, ...) + (b,)
+        part_before_ellipsis = idx[:ellipsis_pos]  # Everything before ...
+        part_after_ellipsis = idx[ellipsis_pos + 1 :]  # Everything after ...
+        ellipsis_replacement = (
+            slice(None),
+        ) * num_slices_to_add  # (:, :, ...) - the ':' slices
 
+        # Combine parts: before + replacement + after
         final_index = part_before_ellipsis + ellipsis_replacement + part_after_ellipsis
 
         return final_index
@@ -512,7 +592,7 @@ class TensorContainer:
             f")"
         )
 
-    def __getitem__(self: Self, key: Any) -> Self:
+    def __getitem__(self: Self, key: IndexType) -> Self:
         """Index into the container along batch dimensions.
 
         Indexing operations are applied to the batch dimensions of all contained tensors.
@@ -557,9 +637,10 @@ class TensorContainer:
             raise IndexError(
                 "Cannot index a 0-dimensional TensorContainer with a single index. Use a tuple of indices matching the batch shape, or an empty tuple for a scalar."
             )
+
         return TensorContainer._tree_map(lambda x: x[key], self)
 
-    def __setitem__(self: Self, index: Any, value: Self) -> None:
+    def __setitem__(self: Self, index: IndexType, value: Self) -> None:
         """
         Sets the value of a slice of the container in-place.
 
@@ -582,16 +663,16 @@ class TensorContainer:
             raise ValueError(f"Invalid value. Expected value of type {type(self)}")
 
         processed_index = index
-        if isinstance(processed_index, tuple):
+        if isinstance(index, tuple):
             processed_index = self.transform_ellipsis_index(self.shape, index)
 
-            for k, v in self._pytree_flatten_with_keys_fn()[0]:
-                try:
-                    v[processed_index] = k.get(value)
-                except Exception as e:
-                    raise type(e)(
-                        f"Issue with key {str(k)} and index {processed_index} for value of shape {v.shape} and type {type(v)} and assignment of shape {tuple(value.shape)}"
-                    ) from e
+        for k, v in self._pytree_flatten_with_keys_fn()[0]:
+            try:
+                v[processed_index] = k.get(value)
+            except Exception as e:
+                raise type(e)(
+                    f"Issue with key {str(k)} and index {processed_index} for value of shape {v.shape} and type {type(v)} and assignment of shape {tuple(value.shape)}"
+                ) from e
 
     def view(self: Self, *shape: int) -> Self:
         """Return a view with modified batch dimensions, preserving event dimensions.

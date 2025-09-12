@@ -26,7 +26,6 @@ from typing import (
 )
 from collections.abc import Iterable, Mapping
 
-import torch
 from torch import Tensor
 from torch.utils._pytree import (
     KeyEntry,
@@ -38,7 +37,7 @@ from tensorcontainer.tensor_container import (
     TensorContainer,
     TensorContainerPytreeContext,
 )
-from tensorcontainer.types import DeviceLike, ShapeLike
+from tensorcontainer.types import DeviceLike, IndexType, ShapeLike
 from tensorcontainer.utils import PytreeRegistered
 
 TDCompatible = Union[Tensor, TensorContainer]
@@ -292,12 +291,9 @@ class TensorDict(TensorContainer, PytreeRegistered):
     def __getitem__(self, key: str) -> Any: ...
 
     @overload
-    def __getitem__(self, key: slice) -> TensorDict: ...
+    def __getitem__(self, key: IndexType) -> TensorDict: ...
 
-    @overload
-    def __getitem__(self, key: Tensor) -> TensorDict: ...
-
-    def __getitem__(self, key: Any) -> Any:
+    def __getitem__(self, key: str | IndexType) -> Any:
         if isinstance(key, str):
             return self.data[key]
 
@@ -307,13 +303,9 @@ class TensorDict(TensorContainer, PytreeRegistered):
     def __setitem__(self, key: str, value: Any) -> None: ...
 
     @overload
-    def __setitem__(
-        self,
-        key: slice | Tensor | int | tuple[slice | Tensor | int, ...],
-        value: Any,
-    ) -> None: ...
+    def __setitem__(self, key: IndexType, value: Any) -> None: ...
 
-    def __setitem__(self, key: Any, value: Any) -> None:
+    def __setitem__(self, key: str | IndexType, value: Any) -> None:
         if isinstance(key, str):
             if isinstance(value, dict):
                 value = TensorDict(value, self.shape, self.device)
@@ -323,13 +315,6 @@ class TensorDict(TensorContainer, PytreeRegistered):
 
             self.data[key] = value
         else:
-            # Handle slicing/indexing assignments via TensorContainer
-            if isinstance(value, (float, int)):
-                # Promote Python scalars to tensors to support slice assignment paths
-                value = torch.tensor(
-                    value, device=self.device, dtype=torch.float32
-                )  # scalar promotion for container setitem
-
             super().__setitem__(key, value)
 
     def __delitem__(self, key: str):
