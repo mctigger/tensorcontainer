@@ -26,7 +26,6 @@ from typing import (
 )
 from collections.abc import Iterable, Mapping
 
-import torch
 from torch import Tensor
 from torch.utils._pytree import (
     KeyEntry,
