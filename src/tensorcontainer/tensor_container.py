@@ -22,6 +22,7 @@ from torch import Tensor
 from torch.utils._pytree import Context, KeyEntry, PyTree
 from typing_extensions import Self, TypeAlias
 
+from tensorcontainer.protocols import TensorContainerProtocol
 from tensorcontainer.types import DeviceLike, IndexType, ShapeLike
 from tensorcontainer.utils import (
     ContextWithAnalysis,
@@ -30,6 +31,7 @@ from tensorcontainer.utils import (
     format_path,
 )
 
+# Global registry
 HANDLED_FUNCTIONS = {}
 
 TCCompatible: TypeAlias = Union[torch.Tensor, "TensorContainer"]
@@ -65,7 +67,7 @@ class TensorContainerPytreeContext(ContextWithAnalysis[U], Generic[U], ABC):
         return ""
 
 
-class TensorContainer:
+class TensorContainer(TensorContainerProtocol):
     """A foundational base class for PyTree-compatible tensor containers with batch semantics.
 
     TensorContainer provides a structured way to organize tensors that share common batch dimensions
@@ -315,7 +317,7 @@ class TensorContainer:
     @abstractmethod
     def _pytree_unflatten(
         cls: type[Self], leaves: Iterable[Any], context: Context
-    ) -> PyTree:
+    ) -> Self:
         pass
 
     @classmethod
@@ -335,7 +337,7 @@ class TensorContainer:
         tree: PyTree,
         *rests: PyTree,
         is_leaf: Callable[[PyTree], bool] | None = None,
-    ) -> PyTree:
+    ) -> Self:
         def wrapped_func(keypath, x, *xs):
             try:
                 return func(x, *xs)
@@ -367,7 +369,7 @@ class TensorContainer:
         tree: PyTree,
         *rests: PyTree,
         is_leaf: Callable[[PyTree], bool] | None = None,
-    ) -> PyTree:
+    ) -> Self:
         # This is copied from pytree.tree_map_with_path()
         # We add the check for no leaves as operations are currently no supported for
         # empty TensorContainers.
@@ -425,8 +427,6 @@ class TensorContainer:
 
     # --- Overloaded methods leveraging PyTrees ---
 
-    def copy(self) -> Self:
-        return self._tree_map(lambda x: x, self)
 
     def get_number_of_consuming_dims(self, item) -> int:
         """
@@ -638,7 +638,7 @@ class TensorContainer:
                 "Cannot index a 0-dimensional TensorContainer with a single index. Use a tuple of indices matching the batch shape, or an empty tuple for a scalar."
             )
 
-        return TensorContainer._tree_map(lambda x: x[key], self)
+        return self._tree_map(lambda x: x[key], self)
 
     def __setitem__(self: Self, index: IndexType, value: Self) -> None:
         """
@@ -674,285 +674,36 @@ class TensorContainer:
                     f"Issue with key {str(k)} and index {processed_index} for value of shape {v.shape} and type {type(v)} and assignment of shape {tuple(value.shape)}"
                 ) from e
 
-    def view(self: Self, *shape: int) -> Self:
-        """Return a view with modified batch dimensions, preserving event dimensions.
 
-        Creates a view of the container with new batch shape while preserving all
-        event dimensions. The total number of elements in batch dimensions must remain
-        the same (view constraint).
 
-        Args:
-            *shape: New batch shape dimensions
 
-        Returns:
-            TensorContainer: View with new batch shape
 
-        Example:
-            >>> container.shape == (4, 3)  # 12 batch elements
-            >>> # Reshape batch dimensions while preserving event dims
-            >>> viewed = container.view(2, 6)    # batch becomes (2, 6)
-            >>> viewed = container.view(12)      # batch becomes (12,)
-            >>> viewed = container.view(-1, 3)   # batch becomes (4, 3) - inferred
-            >>>
-            >>> # If tensors have event dims, they are preserved:
-            >>> # Original: tensor.shape == (4, 3, 128)  # event dims (128,)
-            >>> # After view(2, 6): tensor.shape == (2, 6, 128)
-        """
-        return TensorContainer._tree_map(
-            lambda x: x.view(*shape, *x.shape[self.ndim :]), self
-        )
 
-    def reshape(self: Self, *shape: int) -> Self:
-        """Return a reshaped container with modified batch dimensions.
 
-        Reshapes the batch dimensions while preserving event dimensions. Unlike view(),
-        reshape() can change the memory layout if needed and doesn't require the
-        tensor to be contiguous.
 
-        Args:
-            *shape: New batch shape dimensions
 
-        Returns:
-            TensorContainer: Reshaped container
 
-        Example:
-            >>> container.shape == (4, 3)  # 12 batch elements
-            >>> reshaped = container.reshape(2, 6)   # batch becomes (2, 6)
-            >>> reshaped = container.reshape(-1)     # batch becomes (12,)
-            >>>
-            >>> # Handles non-contiguous tensors unlike view()
-            >>> transposed = container.transpose(0, 1)  # Non-contiguous
-            >>> reshaped = transposed.reshape(6, 2)     # Works (reshape can copy)
-        """
-        return TensorContainer._tree_map(
-            lambda x: x.reshape(*shape, *x.shape[self.ndim :]), self
-        )
 
-    def to(self: Self, *args, **kwargs) -> Self:
-        with TensorContainer.unsafe_construction():
-            leaves, context = self._pytree_flatten()
-            leaves = [leaf.to(*args, **kwargs) for leaf in leaves]
-            tc = self._pytree_unflatten(leaves, context)
 
-        device = self.device
 
-        is_device_in_args = len(args) > 0 and isinstance(args[0], (str, torch.device))
-        is_device_in_kwargs = len(kwargs) > 0 and "device" in kwargs
 
-        if is_device_in_args or is_device_in_kwargs:
-            device = pytree.tree_leaves(tc)[0].device
 
-        tc.device = device
 
-        return tc
 
-    def detach(self: Self) -> Self:
-        return TensorContainer._tree_map(lambda x: x.detach(), self)
 
-    def clone(self: Self, *, memory_format: torch.memory_format | None = None) -> Self:
-        """Create a deep copy of the container with optional memory format control.
 
-        Creates a new container with cloned tensors. All tensor data is copied,
-        but metadata (shape, device) is shallow-copied. Supports memory format
-        specification for performance optimization.
 
-        Args:
-            memory_format: Memory layout for cloned tensors. Defaults to preserve_format.
-                          Options: torch.contiguous_format, torch.channels_last, etc.
 
-        Returns:
-            TensorContainer: Deep copy of the container
 
-        Example:
-            >>> cloned = container.clone()  # Deep copy with preserved layout
-            >>>
-            >>> # Force contiguous memory layout for performance
-            >>> contiguous = container.clone(memory_format=torch.contiguous_format)
-            >>>
-            >>> # Clone preserves independence
-            >>> cloned[0] = new_data  # Original container unchanged
-        """
 
-        cloned_td = TensorContainer._tree_map(
-            lambda x: x.clone(memory_format=memory_format), self
-        )
-        return cloned_td
 
-    def expand(self: Self, *shape: int) -> Self:
-        return TensorContainer._tree_map(
-            lambda x: x.expand(*shape, *x.shape[self.ndim :]), self
-        )
 
-    def permute(self: Self, *dims: int) -> Self:
-        """Permutes the batch dimensions of the container.
 
-        This is equivalent to calling :meth:`torch.Tensor.permute` on each tensor
-        in the container, but only for the batch dimensions.
 
-        Args:
-            *dims (int): The desired ordering of dimensions.
 
-        Returns:
-            A new container with the batch dimensions permuted.
-        """
-        if len(dims) != self.ndim:
-            raise RuntimeError(
-                f"permute() expected {self.ndim} dimensions but got {len(dims)}"
-            )
-        if len(set(dims)) != len(dims):
-            raise RuntimeError("permute(): duplicate dimensions are not allowed")
-        for dim in dims:
-            if not 0 <= dim < self.ndim:
-                raise RuntimeError(
-                    f"permute(): dimension out of range (expected to be in range of [0, {self.ndim - 1}], but got {dim})"
-                )
-        return TensorContainer._tree_map(
-            lambda x: x.permute(*dims, *range(self.ndim, x.ndim)), self
-        )
 
-    def squeeze(self: Self, dim: int | None = None) -> Self:
-        """Squeezes the batch dimensions of the container.
 
-        Args:
-            dim (int, optional): The dimension to squeeze. If ``None``, all
-                batch dimensions of size 1 are squeezed.
 
-        Returns:
-            A new container with the specified dimensions squeezed.
-        """
-        if dim is not None:
-            if self.shape[dim] != 1:
-                return self.clone()
-            new_shape = list(self.shape)
-            new_shape.pop(dim)
-            return self.reshape(*new_shape)
-        else:
-            new_shape = [s for s in self.shape if s != 1]
-            if len(new_shape) == len(self.shape):
-                return self.clone()
-            return self.reshape(*new_shape)
-
-    def t(self: Self) -> Self:
-        """Transposes the first two batch dimensions of the container.
-
-        This is equivalent to ``self.transpose(0, 1)``.
-
-        Returns:
-            A new container with the first two batch dimensions transposed.
-        """
-        if self.ndim < 2:
-            raise RuntimeError(
-                "t() expects a tensor with at least 2 dimensions, but got a tensor with "
-                f"{self.ndim} dimensions instead"
-            )
-        return self.transpose(0, 1)
-
-    def transpose(self: Self, dim0: int, dim1: int) -> Self:
-        """Transposes two batch dimensions of the container.
-
-        Args:
-            dim0 (int): The first dimension to transpose.
-            dim1 (int): The second dimension to transpose.
-
-        Returns:
-            A new container with the specified dimensions transposed.
-        """
-        return TensorContainer._tree_map(lambda x: x.transpose(dim0, dim1), self)
-
-    def unsqueeze(self: Self, dim: int) -> Self:
-        """Unsqueezes a batch dimension of the container.
-
-        Args:
-            dim (int): The dimension to unsqueeze.
-
-        Returns:
-            A new container with the specified dimension unsqueezed.
-        """
-        new_shape = torch.empty(self.shape).unsqueeze(dim).shape
-        return self.reshape(*new_shape)
-
-    def size(self) -> torch.Size:
-        """Returns the size of the batch dimensions."""
-        return self.shape
-
-    def dim(self) -> int:
-        """Returns the number of batch dimensions."""
-        return self.ndim
-
-    def numel(self) -> int:
-        """Returns the total number of elements in the batch dimensions."""
-        return self.size().numel()
-
-    def cpu(self: Self) -> Self:
-        """Returns a new container with all tensors on the CPU."""
-        return self.to("cpu")
-
-    def cuda(self: Self, device=None, non_blocking: bool = False) -> Self:
-        """Returns a new container with all tensors on the specified CUDA device."""
-        return self.to(
-            f"cuda:{device}" if device is not None else "cuda",
-            non_blocking=non_blocking,
-        )
-
-    def float(self: Self) -> Self:
-        """Casts all tensors to float type."""
-        return TensorContainer._tree_map(lambda x: x.float(), self)
-
-    def double(self: Self) -> Self:
-        """Casts all tensors to double type."""
-        return TensorContainer._tree_map(lambda x: x.double(), self)
-
-    def half(self: Self) -> Self:
-        """Casts all tensors to half type."""
-        return TensorContainer._tree_map(lambda x: x.half(), self)
-
-    def long(self: Self) -> Self:
-        """Casts all tensors to long type."""
-        return TensorContainer._tree_map(lambda x: x.long(), self)
-
-    def int(self: Self) -> Self:
-        """Casts all tensors to int type."""
-        return TensorContainer._tree_map(lambda x: x.int(), self)
-
-    def abs(self: Self) -> Self:
-        """Computes the absolute value of each tensor in the container."""
-        return TensorContainer._tree_map(lambda x: x.abs(), self)
-
-    def add(self: Self, other) -> Self:
-        """Adds a value to each tensor in the container."""
-        return TensorContainer._tree_map(lambda x: x.add(other), self)
-
-    def sub(self: Self, other) -> Self:
-        """Subtracts a value from each tensor in the container."""
-        return TensorContainer._tree_map(lambda x: x.sub(other), self)
-
-    def mul(self: Self, other) -> Self:
-        """Multiplies each tensor in the container by a value."""
-        return TensorContainer._tree_map(lambda x: x.mul(other), self)
-
-    def div(self: Self, other) -> Self:
-        """Divides each tensor in the container by a value."""
-        return TensorContainer._tree_map(lambda x: x.div(other), self)
-
-    def pow(self: Self, exponent) -> Self:
-        """Raises each tensor in the container to a power."""
-        return TensorContainer._tree_map(lambda x: x.pow(exponent), self)
-
-    def sqrt(self: Self) -> Self:
-        """Computes the square root of each tensor in the container."""
-        return TensorContainer._tree_map(lambda x: x.sqrt(), self)
-
-    def log(self: Self) -> Self:
-        """Computes the natural logarithm of each tensor in the container."""
-        return TensorContainer._tree_map(lambda x: x.log(), self)
-
-    def neg(self: Self) -> Self:
-        """Negates each tensor in the container."""
-        return TensorContainer._tree_map(lambda x: x.neg(), self)
-
-    def clamp(self: Self, min, max) -> Self:
-        """Clamps each tensor in the container to a range."""
-        return TensorContainer._tree_map(lambda x: x.clamp(min, max), self)
 
 
 # --- PyTree-aware implementations of torch functions ---

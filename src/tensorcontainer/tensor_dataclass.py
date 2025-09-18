@@ -3,8 +3,8 @@ from __future__ import annotations
 import copy
 import sys
 from dataclasses import dataclass, fields
-from typing import Optional, TypeVar, Union
-
+from typing import Optional, Union
+from typing_extensions import Self
 import torch
 from torch import Tensor
 from tensorcontainer.types import DeviceLike, ShapeLike
@@ -12,12 +12,15 @@ from typing_extensions import dataclass_transform
 
 from tensorcontainer.tensor_annotated import TensorAnnotated
 from tensorcontainer.tensor_container import TensorContainer
+from tensorcontainer.mixins import (
+    TensorShapeOperationsMixin,
+    TensorMathOperationsMixin,
+    TensorTypeOperationsMixin,
+    TensorDeviceOperationsMixin,
+)
 
 TDCompatible = Union[Tensor, TensorContainer]
 DATACLASS_ARGS = {"init", "repr", "eq", "order", "unsafe_hash", "frozen", "slots"}
-
-
-T_TensorDataclass = TypeVar("T_TensorDataclass", bound="TensorDataClass")
 
 
 @dataclass_transform(eq_default=False)
@@ -27,7 +30,14 @@ class TensorDataclassTransform:
     pass
 
 
-class TensorDataClass(TensorAnnotated, TensorDataclassTransform):
+class TensorDataClass(
+    TensorAnnotated,
+    TensorShapeOperationsMixin,
+    TensorMathOperationsMixin,
+    TensorTypeOperationsMixin,
+    TensorDeviceOperationsMixin,
+    TensorDataclassTransform,
+):
     """A dataclass-based tensor container with automatic field generation and batch semantics.
 
     TensorDataClass provides a strongly-typed alternative to TensorDict by automatically
@@ -210,7 +220,9 @@ class TensorDataClass(TensorAnnotated, TensorDataclassTransform):
         # This check is needed as slots=True will result in dataclass(cls) creating a new class
         # and thus triggering __init__subclass again. However, we already have ran __init__subclass__
         # already for this class. To avoid infinte recursion, we have the following check.
-        if hasattr(cls, "__slots__"):
+        # Note: We check that __slots__ is non-empty to avoid early return when __slots__ = ()
+        # is inherited from typing.Protocol in the class hierarchy.
+        if hasattr(cls, "__slots__") and cls.__slots__:
             return
 
         annotations = cls._get_annotations(TensorDataClass)
@@ -255,7 +267,7 @@ class TensorDataClass(TensorAnnotated, TensorDataclassTransform):
         """
         super().__init__(self.shape, self.device)
 
-    def __copy__(self: T_TensorDataclass) -> T_TensorDataclass:
+    def __copy__(self: Self) -> Self:
         """Create a shallow copy of the TensorDataClass instance.
 
         This method is designed to be `torch.compile` safe by avoiding the
@@ -270,7 +282,7 @@ class TensorDataClass(TensorAnnotated, TensorDataclassTransform):
         For independent tensor data, use `clone()` inherited from TensorContainer.
 
         Returns:
-            T_TensorDataclass: New instance with shared field data
+            Self: New instance with shared field data
 
         Example:
             >>> original = MyData(obs=torch.randn(4, 128), shape=(4,))
@@ -297,8 +309,8 @@ class TensorDataClass(TensorAnnotated, TensorDataclassTransform):
         return new_obj
 
     def __deepcopy__(
-        self: T_TensorDataclass, memo: dict | None = None
-    ) -> T_TensorDataclass:
+        self: Self, memo: dict | None = None
+    ) -> Self:
         """
         Performs a deep copy of the TensorDataclass instance.
 

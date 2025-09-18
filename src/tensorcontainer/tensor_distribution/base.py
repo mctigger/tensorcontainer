@@ -7,11 +7,12 @@ from torch import Size, Tensor
 from torch.types import Device
 from torch.distributions import Distribution, kl_divergence, register_kl
 
+from tensorcontainer.mixins.device_operations import TensorDeviceOperationsMixin
 from tensorcontainer.tensor_annotated import TensorAnnotated
 from tensorcontainer.tensor_dict import TDCompatible
 
 
-class TensorDistribution(TensorAnnotated):
+class TensorDistribution(TensorDeviceOperationsMixin, TensorAnnotated):
     """
     Base class for tensor-aware probability distributions that integrate with TensorDict ecosystem.
 

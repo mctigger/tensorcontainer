@@ -8,6 +8,7 @@ from torch import Tensor
 from torch.utils import _pytree as pytree
 from typing_extensions import Self
 
+from tensorcontainer.mixins.device_operations import TensorDeviceOperationsMixin
 from tensorcontainer.tensor_container import (
     TensorContainer,
     TensorContainerPytreeContext,
