@@ -3,8 +3,15 @@ from typing import Optional
 import pytest
 import torch
 from torch import Tensor
+import torch.utils._pytree as pytree
 
 from tensorcontainer.tensor_annotated import TensorAnnotated
+
+
+def pytree_roundtrip(instance):
+    """Test pytree operations by doing a flatten/unflatten roundtrip."""
+    leaves, context = pytree.tree_flatten(instance)
+    return pytree.tree_unflatten(leaves, context)
 
 
 class TestSubclassingPositive:
@@ -36,9 +43,9 @@ class TestSubclassingPositive:
         x = torch.randn(2, 3, 4)
         y = torch.randn(2, 3, 4)
         instance = B(x=x, y=y)
-        instance = instance.copy()  # To trigger pytree operations
-        assert instance.x is x
-        assert instance.y is y
+        instance_restored = pytree_roundtrip(instance)  # Test pytree operations
+        assert instance_restored.x is x
+        assert instance_restored.y is y
 
     def test_multiple_parent_classes_multiple_tensor_annotated_instantiation(self):
         """Tests subclassing with multiple TensorAnnotated parents."""
@@ -70,10 +77,10 @@ class TestSubclassingPositive:
         y = torch.randn(2, 3, 4)
         z = torch.randn(2, 3, 4)
         instance = C(x=x, y=y, z=z)
-        instance = instance.copy()  # To trigger pytree operations
-        assert instance.x is x
-        assert instance.y is y
-        assert instance.z is z
+        instance_restored = pytree_roundtrip(instance)  # Test pytree operations
+        assert instance_restored.x is x
+        assert instance_restored.y is y
+        assert instance_restored.z is z
 
     def test_multiple_parent_classes_single_tensor_annotated_instantiation(self):
         """Tests subclassing with one TensorAnnotated parent and other non-TensorAnnotated parents."""
@@ -103,9 +110,9 @@ class TestSubclassingPositive:
             x=x,
             z=z,
         )
-        instance = instance.copy()  # To trigger pytree operations
-        assert instance.x is x
-        assert instance.z is z
+        instance_restored = pytree_roundtrip(instance)  # Test pytree operations
+        assert instance_restored.x is x
+        assert instance_restored.z is z
 
 
 class TestSubclassingNegative:
@@ -147,13 +154,13 @@ class TestSubclassingNegative:
         y = torch.randn(2, 3, 4)
         z = torch.randn(2, 3, 4)
         instance = C(x=x, y=y, z=z)
-        instance_copy = instance.copy()
+        instance_restored = pytree_roundtrip(instance)
 
         # x and z should be present, y should not
-        assert instance_copy.x is instance.x
-        assert instance_copy.z is instance.z
+        assert instance_restored.x is instance.x
+        assert instance_restored.z is instance.z
         with pytest.raises(AttributeError, match="object has no attribute 'y'"):
-            instance_copy.y
+            instance_restored.y
 
     def test_no_annotation(self):
         """Tests that non-annotated attributes are ignored."""
@@ -176,11 +183,11 @@ class TestSubclassingNegative:
         x = torch.randn(2, 3, 4)
         y = torch.randn(2, 3, 4)
         instance = B(x=x, y=y)
-        instance_copy = instance.copy()
+        instance_restored = pytree_roundtrip(instance)
 
-        assert instance_copy.x is instance.x
+        assert instance_restored.x is instance.x
         with pytest.raises(AttributeError, match="object has no attribute 'y'"):
-            instance_copy.y
+            instance_restored.y
 
     def test_only_child_tensor_annotated(self):
         """Tests that only attributes from the direct TensorAnnotated subclass are used."""
@@ -216,10 +223,10 @@ class TestSubclassingNegative:
         y = torch.randn(2, 3, 4)
         z = torch.randn(2, 3, 4)
         instance = C(x=x, y=y, z=z)
-        instance_copy = instance.copy()
+        instance_restored = pytree_roundtrip(instance)
 
-        assert instance_copy.z is instance.z
+        assert instance_restored.z is instance.z
         with pytest.raises(AttributeError, match="object has no attribute 'x'"):
-            instance_copy.x
+            instance_restored.x
         with pytest.raises(AttributeError, match="object has no attribute 'y'"):
-            instance_copy.y
+            instance_restored.y
