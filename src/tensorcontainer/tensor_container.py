@@ -76,7 +76,7 @@ class TensorContainer(TensorContainerProtocol):
 
     ## Core Concepts
 
-    ### Batch vs Event Dimensions
+    ### Shape Management
     TensorContainer enforces a clear distinction between batch and event dimensions:
 
     - **Batch Dimensions**: The leading dimensions defined by the `shape` parameter that must be
@@ -98,103 +98,41 @@ class TensorContainer(TensorContainerProtocol):
         >>>
         >>> # All share batch dims (4, 3), different event dims allowed
 
-    ### Shape Management
-    The container validates that all contained tensors have compatible shapes:
-    - Tensors must have at least `len(shape)` dimensions
-    - The first `len(shape)` dimensions must exactly match the container's shape
-    - Additional dimensions (event dims) can be arbitrary and different per tensor
-
     ### Device Management
-    Device consistency is enforced with flexible compatibility rules:
+    Device consistency is enforced through flexible compatibility rules:
     - If container device is None, any tensor device is accepted
-    - String device specs ("cuda") are compatible with indexed variants ("cuda:0")
-    - All operations preserve device consistency across transformations
+    - If container device is not None, only tensors of the same device are accepted
+    - If an operation changes the device of the container, it must also change the device of all children
 
-    ## PyTree Integration
+    ### Metadata
+    Data in a TensorContainer falls into two categories: tensor-likes and metadata.
 
-    TensorContainer is designed for seamless PyTree integration, enabling:
-    - Automatic registration via PytreeRegistered mixin in subclasses
-    - Efficient tree transformations using `torch.utils._pytree`
-    - Compatibility with `torch.compile` and `fullgraph=True`
-    - Support for operations like `torch.stack`, `torch.cat` across containers
+    Tensor-likes participate in all transformations such as .view, .reshape, or .detach.
+    Metadata does not participate. Metadata must remain constant during a transformation.
+    For operations that include multiple TensorContainers (such as torch.stack), the
+    metadata of all TensorContainers must be identical.
 
-    ## Torch Function Override System
+    ## Implementation details
+    
+    ### PyTree Integration
 
-    Uses `__torch_function__` protocol to intercept torch operations:
-    - Register custom implementations via `@implements(torch.function)` decorator
+    TensorContainer is implemented as a PyTree for the following reasons:
+    - PyTrees are `torch.compile` compatible
+    - Efficient tree transformations using `torch.utils._pytree.tree_map`
+
+    Treating TensorContainer as a PyTree enables straightforward implementation of operations that
+    work on all children of a TensorContainer. Without torch.utils._pytree, we would need to
+    implement equivalent tree traversal and transformation functionality from scratch.
+
+    ### Torch Function Override System
+
+    TensorContainer leverages the `__torch_function__` protocol to enable tensor-like behavior.
+    See https://docs.pytorch.org/docs/stable/notes/extending.html#extending-torch-python-api.
+
+    The `__torch_function__` protocol is used to intercept torch operations:
+    - Register custom implementations via `@implements(torch_function)` decorator
     - Maintains compatibility with PyTorch's dispatch system
     - Enables container-aware versions of functions like `torch.stack`, `torch.cat`
-
-    ## Usage Patterns
-
-    ### Basic Operations
-    All tensor-like operations work at the batch dimension level:
-    ```python
-    # Shape transformations (batch dims only)
-    reshaped = container.reshape(8, -1)      # Batch (4,3) -> (8,-1), events preserved
-    expanded = container.expand(4, 3, -1)    # Expand batch dims, events unchanged
-    permuted = container.permute(1, 0)       # Permute batch dims only
-
-    # Device/type conversions (all tensors)
-    gpu_container = container.cuda()         # Move all tensors to GPU
-    float_container = container.float()      # Cast all tensors to float
-
-    # Indexing (batch-aware)
-    sample = container[0]                    # Select first batch element
-    subset = container[1:3]                  # Slice batch dimension
-    ```
-
-    ### Advanced Indexing
-    Supports full PyTorch indexing semantics:
-    - Integer, slice, and ellipsis indexing
-    - Boolean mask indexing
-    - Advanced indexing with tensor indices
-    - Automatic ellipsis transformation for complex indexing
-
-    ### Cloning and Mutation
-    ```python
-    # Deep clone with memory format control
-    cloned = container.clone(memory_format=torch.contiguous_format)
-
-    # In-place assignment (batch-aware)
-    container[mask] = new_values            # Boolean mask assignment
-    container[:, 0] = initial_values        # Slice assignment
-    ```
-
-    ## Unsafe Construction
-
-    For performance-critical scenarios where validation overhead is unacceptable,
-    TensorContainer provides an unsafe construction context manager:
-
-    ```python
-    # Skip validation during construction
-    with TensorContainer.unsafe_construction():
-        container = MyContainer(data, shape=(4, 3), device="cuda")
-        # No shape/device validation performed
-    # Normal validation resumes after context
-    ```
-
-    Use this feature carefully - invalid tensor configurations can lead to runtime
-    errors in subsequent operations.
-
-    ## Implementation Notes
-
-    ### Memory and Performance
-    - Operations use PyTree transformations for efficiency
-    - Lazy evaluation where possible (view operations)
-    - Memory format preservation in clone operations
-    - Reference sharing vs deep copying strategies
-
-    ### Compilation Compatibility
-    - Designed for `torch.compile` with `fullgraph=True`
-    - Avoids Python constructs that cause graph breaks
-    - Uses static shape information where possible
-    - Minimal dynamic behavior in hot paths
-
-    ### Error Handling
-    - Comprehensive shape/device validation with detailed error messages
-    - Path-based error reporting for nested structures using PyTree KeyPath
-    - Early validation to catch incompatibilities during construction
 
     ## Subclassing Guide
 
@@ -204,24 +142,14 @@ class TensorContainer(TensorContainerProtocol):
        ```python
        class MyContainer(TensorContainer, PytreeRegistered):
        ```
-
     2. **Implement PyTree methods**:
        - `_pytree_flatten()` - Convert to (leaves, context)
        - `_pytree_unflatten()` - Reconstruct from leaves and context
        - `_pytree_flatten_with_keys_fn()` - Provide key paths
-
     3. **Call super().__init__(shape, device)** in constructor
-
     4. **Override validation** if needed via `_is_shape_compatible()`, `_is_device_compatible()`
-
     5. **Register torch functions** using `@implements(torch_function)` decorator
 
-    ## Limitations and Constraints
-
-    - Only tensor data participates in transformations; metadata is shallow-copied
-    - Batch dimensions must be consistent across all tensors (no ragged batching)
-    - Device changes affect all tensors (no mixed-device containers)
-    - Shape transformations apply uniformly (no per-tensor custom reshaping)
 
     Args:
         shape (Tuple[int, ...]): The batch shape that all contained tensors must share
@@ -274,24 +202,45 @@ class TensorContainer(TensorContainerProtocol):
     @classmethod
     @contextmanager
     def unsafe_construction(cls):
-        """Context manager to disable validation during construction.
+        """Temporarily skip safety checks when creating TensorContainers.
 
-        This context manager temporarily disables the validation that normally
-        occurs during TensorContainer construction. This is for example use in
-        TensorContainer.to() that changes the device of all children. This would
-        lead to device validation error when we unflatten the TensorContainer.
-        As we expect the device to change, we use unsafe_construction to disable
-        validation here.
+        Normally, when you create a TensorContainer, it automatically checks that:
+        - All tensors have the same batch dimensions (shape consistency)
+        - All tensors are on the same device (device consistency)
+
+        This safety checking is usually good, but sometimes internal operations need
+        to temporarily break these rules to complete successfully.
+
+        For example, when you call container.to('cuda'), the operation needs to:
+        1. Move all tensors to CUDA successfully
+        2. Reconstruct the container with the moved tensors
+
+        During step 2, the PyTreeContext still contains the old device information
+        (e.g., 'cpu'), but the actual tensors are now on CUDA. When reconstructing
+        the container, validation sees this disagreement and fails. This context
+        manager allows that temporary mismatch between stored and actual device info.
+
+        Technical details:
+            During PyTree unflatten operations, the container reconstruction process
+            can create temporarily invalid states that are necessary for the
+            operation to complete. This context manager disables validation during
+            these critical moments.
 
         Warning:
-            Using unsafe construction can lead to runtime errors if tensors
-            have incompatible shapes or devices. Use with caution.
+            Only use this for internal operations. If you manually create containers
+            with mismatched tensor shapes or devices, your code will likely crash
+            later with confusing error messages. When using unsafe_construction,
+            you must ensure the container reaches a consistent state (matching
+            shapes/devices).
 
         Example:
+            >>> # This would normally fail due to device mismatch during construction
             >>> with TensorContainer.unsafe_construction():
-            ...     container = MyContainer(data, shape=(4, 3), device="cuda")
-            ...     # No validation performed during construction
-            >>> # Normal validation resumes after context
+            ...     container = MyContainer({
+            ...         'a': torch.tensor([1, 2]).cuda(),
+            ...         'b': torch.tensor([3, 4]).cpu()  # Different device!
+            ...     })
+            >>> # Validation is back on after the context ends
 
         Yields:
             None: Context manager yields nothing
@@ -426,7 +375,6 @@ class TensorContainer(TensorContainerProtocol):
         return len(self.shape)
 
     # --- Overloaded methods leveraging PyTrees ---
-
 
     def get_number_of_consuming_dims(self, item) -> int:
         """
@@ -673,37 +621,6 @@ class TensorContainer(TensorContainerProtocol):
                 raise type(e)(
                     f"Issue with key {str(k)} and index {processed_index} for value of shape {v.shape} and type {type(v)} and assignment of shape {tuple(value.shape)}"
                 ) from e
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 # --- PyTree-aware implementations of torch functions ---
