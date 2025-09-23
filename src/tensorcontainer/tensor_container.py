@@ -113,7 +113,7 @@ class TensorContainer(TensorContainerProtocol):
     metadata of all TensorContainers must be identical.
 
     ## Implementation details
-    
+
     ### PyTree Integration
 
     TensorContainer is implemented as a PyTree for the following reasons:
@@ -254,12 +254,76 @@ class TensorContainer(TensorContainerProtocol):
 
     @abstractmethod
     def _pytree_flatten(self) -> tuple[list[Any], Context]:
+        """Flatten this container node into immediate children and reconstruction context.
+
+        This method is part of PyTorch's PyTree protocol and enables automatic tree
+        traversal operations like torch.stack, torch.cat, and functional transformations.
+        It should decompose this container node into its immediate children and any
+        metadata needed to reconstruct this specific node level.
+
+        Unlike a full tree flattening, this method only extracts the **immediate children**
+        of this container node. The PyTree system handles recursive traversal by calling
+        this method on each node as it walks the tree structure.
+
+        The flattening process separates this node into:
+        - **Children**: Immediate child values (tensors, nested containers, etc.)
+        - **Context**: Node-level metadata needed to reconstruct this container
+
+        Returns:
+            tuple[list[Any], Context]: A tuple containing:
+                - list[Any]: Immediate children in a consistent order
+                - Context: Node reconstruction metadata (keys, shape, device, etc.)
+
+        Note:
+            The order of children must be consistent with _pytree_flatten_with_keys_fn.
+            The PyTree system will recursively process any nested containers in the
+            children list.
+
+        Example:
+            For a TensorDict with {'a': tensor1, 'b': nested_container}:
+
+            >>> children, context = container._pytree_flatten()
+            >>> # children = [tensor1, nested_container]  # immediate children only
+            >>> # context contains keys=['a', 'b'], shape, device for this node
+        """
         pass
 
     @abstractmethod
     def _pytree_flatten_with_keys_fn(
         self,
     ) -> tuple[list[tuple[KeyEntry, Any]], Any]:
+        """Flatten this container node with key paths for enhanced tree operations.
+
+        This method extends _pytree_flatten by providing key paths that identify
+        how to access each immediate child within this container node. Key paths enable
+        advanced PyTree operations like tree_map_with_path and provide better
+        error messages when operations fail.
+
+        Each KeyEntry implements a protocol with:
+        - get(parent): Retrieves the child value from this parent container
+        - __str__(): String representation for error messages
+        - __hash__() and __eq__(): Support for key-based operations
+
+        The key paths provide navigation from this container to each immediate child,
+        enabling precise error reporting and advanced tree manipulations.
+
+        Returns:
+            tuple[list[tuple[KeyEntry, Any]], Any]: A tuple containing:
+                - list[tuple[KeyEntry, Any]]: List of (key_entry, child) pairs where
+                  key_entry can navigate from this container to the child
+                - Any: Same context as returned by _pytree_flatten
+
+        Note:
+            The order and context must match _pytree_flatten exactly. The children
+            in both methods should be identical, with this method adding key entries.
+
+        Example:
+            For a TensorDict with {'a': tensor1, 'b': nested_container}:
+
+            >>> key_children, context = container._pytree_flatten_with_keys_fn()
+            >>> # key_children = [(MappingKey('a'), tensor1), (MappingKey('b'), nested_container)]
+            >>> # Each KeyEntry navigates to immediate children only
+        """
         pass
 
     @classmethod
@@ -267,6 +331,44 @@ class TensorContainer(TensorContainerProtocol):
     def _pytree_unflatten(
         cls: type[Self], leaves: Iterable[Any], context: Context
     ) -> Self:
+        """Reconstruct a container node from transformed children and context.
+
+        This class method is the inverse of _pytree_flatten, taking the children
+        and context produced by flattening and reconstructing this container node.
+        It's called automatically by PyTree operations after applying transformations
+        to the entire tree structure.
+
+        The method must handle:
+        - Reconstructing this container node from the provided context
+        - Associating transformed children with their correct positions
+        - Restoring node metadata (shape, device) from context
+        - Validating that the reconstructed node is consistent
+
+        Args:
+            leaves (Iterable[Any]): Transformed children in the same order as
+                produced by _pytree_flatten. These may be tensors, nested containers,
+                or other values that have been processed by PyTree operations.
+            context (Context): Reconstruction metadata from _pytree_flatten,
+                containing node-level information like keys, shape, device.
+
+        Returns:
+            Self: A new container instance of this node type with the same structure
+                as the original but containing the transformed children.
+
+        Note:
+            This method may need to use TensorContainer.unsafe_construction()
+            context manager if validation would fail during intermediate steps
+            of reconstruction (e.g., when device information is temporarily
+            inconsistent during .to() operations).
+
+        Example:
+            After torch.stack([container1, container2]):
+
+            >>> # PyTree calls _pytree_flatten on both containers
+            >>> # Recursively processes the tree and applies torch.stack to leaf tensors
+            >>> # Calls _pytree_unflatten with transformed children and context
+            >>> result = cls._pytree_unflatten(transformed_children, context)
+        """
         pass
 
     @classmethod
@@ -287,7 +389,54 @@ class TensorContainer(TensorContainerProtocol):
         *rests: PyTree,
         is_leaf: Callable[[PyTree], bool] | None = None,
     ) -> Self:
-        def wrapped_func(keypath, x, *xs):
+        """Apply a function across PyTree structures with enhanced error reporting.
+
+        This is the foundational infrastructure method that enables all tensor operations
+        in TensorContainer. Every tensor-like operation (indexing, device transfers, shape
+        operations, math operations, etc.) ultimately goes through this method to apply
+        transformations across the container's PyTree structure.
+
+        The method enhances PyTorch's standard `tree_map_with_path` with two layers of
+        improved error reporting:
+
+        1. **Keypath Error Wrapping**: Wraps the provided function to catch exceptions
+           and enhance them with the specific keypath where the error occurred, making
+           debugging much easier in nested structures.
+
+        2. **Structure Mismatch Diagnosis**: For multi-tree operations (like torch.stack
+           or torch.cat), provides detailed diagnostics when tree structures don't match.
+
+        Args:
+            func (Callable[..., Any]): Function to apply to each leaf. For single-tree
+                operations, receives one argument per leaf. For multi-tree operations,
+                receives corresponding leaves from all trees.
+            tree (PyTree): The primary PyTree to map over (typically a TensorContainer).
+            *rests (PyTree): Additional PyTrees for multi-tree operations. All trees
+                must have compatible structures.
+            is_leaf (Callable[[PyTree], bool] | None): Optional predicate to determine
+                what counts as a leaf node during tree traversal.
+
+        Returns:
+            Self: A new TensorContainer of the same type with the function applied
+                to all leaves, maintaining the original tree structure.
+
+        Raises:
+            RuntimeError: When tree structures don't match in multi-tree operations,
+                with detailed diagnostic information about the mismatch.
+            Exception: Any exception from the provided function, enhanced with keypath
+                information showing exactly where the error occurred.
+
+        Note:
+            This method is internal infrastructure. End users typically don't call it
+            directly, but rather use the tensor-like methods (`.view()`, `.cuda()`, etc.)
+            that internally use `_tree_map` to provide their functionality.
+        """
+
+        def func_with_error_path(keypath, x, *xs):
+            """
+            This function wraps the given func just to provide error messages
+            that include the path of the leaf that failed.
+            """
             try:
                 return func(x, *xs)
             except Exception as e:
@@ -297,7 +446,7 @@ class TensorContainer(TensorContainerProtocol):
 
         try:
             return pytree.tree_map_with_path(
-                wrapped_func, tree, *rests, is_leaf=is_leaf
+                func_with_error_path, tree, *rests, is_leaf=is_leaf
             )
         except Exception as e:
             # The following code is just to provide better error messages for operations that
@@ -319,6 +468,40 @@ class TensorContainer(TensorContainerProtocol):
         *rests: PyTree,
         is_leaf: Callable[[PyTree], bool] | None = None,
     ) -> Self:
+        """Apply a function with keypath information to PyTree leaves.
+
+        This is the public interface for keypath-aware tree mapping operations.
+        Unlike `_tree_map`, this method provides the full keypath to the function,
+        enabling operations that need to know the location of each leaf within
+        the tree structure.
+
+        This method validates that the container is not empty before proceeding,
+        as TensorContainer operations require at least one tensor to be present.
+
+        Args:
+            func (Callable[..., Any]): Function to apply that receives keypath
+                as first argument, followed by leaf values. Signature should be
+                `func(keypath, leaf, *other_leaves)`.
+            tree (PyTree): The primary PyTree to map over.
+            *rests (PyTree): Additional PyTrees for multi-tree operations.
+            is_leaf (Callable[[PyTree], bool] | None): Optional leaf predicate.
+
+        Returns:
+            Self: New container with function applied to all leaves.
+
+        Raises:
+            RuntimeError: If the container has no leaves (empty container).
+
+        Example:
+            >>> def print_and_transform(keypath, tensor):
+            ...     print(f"Processing {keypath}: {tensor.shape}")
+            ...     return tensor.float()
+            >>> result = MyContainer.tree_map_with_path(print_and_transform, container)
+
+        Note:
+            Most operations should use the simpler `_tree_map` method. Use this
+            method only when you need access to the keypath information.
+        """
         # This is copied from pytree.tree_map_with_path()
         # We add the check for no leaves as operations are currently no supported for
         # empty TensorContainers.
@@ -335,28 +518,134 @@ class TensorContainer(TensorContainerProtocol):
 
     @classmethod
     def _is_shape_compatible(cls, parent: TensorContainer, child: TCCompatible):
+        """Check if a child tensor/container's shape is compatible with parent's batch shape.
+
+        Shape compatibility requires that the child's leading dimensions (batch dimensions)
+        exactly match the parent container's shape. Event dimensions (trailing dimensions
+        beyond the batch shape) can vary and are not checked.
+
+        Args:
+            parent (TensorContainer): The parent container defining the required batch shape.
+            child (TCCompatible): The child tensor or container to check for compatibility.
+                Can be either a torch.Tensor or another TensorContainer.
+
+        Returns:
+            bool: True if child's leading dimensions match parent's shape, False otherwise.
+
+        Example:
+            >>> parent.shape == (4, 3)
+            >>> tensor1 = torch.randn(4, 3, 128)  # Compatible: batch (4, 3), event (128,)
+            >>> tensor2 = torch.randn(2, 3, 64)   # Incompatible: batch (2, 3) != (4, 3)
+            >>> cls._is_shape_compatible(parent, tensor1)  # True
+            >>> cls._is_shape_compatible(parent, tensor2)  # False
+        """
         return child.shape[: parent.ndim] == parent.shape
 
     @classmethod
     def _is_device_compatible(cls, parent: TensorContainer, child: TCCompatible):
+        """Check if a child tensor/container's device is compatible with parent's device.
+
+        Device compatibility follows these rules:
+        - If parent.device is None, any child device is compatible (mixed devices allowed)
+        - If parent.device is not None, child device must exactly match parent device
+
+        Args:
+            parent (TensorContainer): The parent container defining the required device.
+            child (TCCompatible): The child tensor or container to check for compatibility.
+                Can be either a torch.Tensor or another TensorContainer.
+
+        Returns:
+            bool: True if child's device is compatible with parent's device, False otherwise.
+
+        Example:
+            >>> parent_cpu = Container(shape=(2,), device='cpu')
+            >>> parent_mixed = Container(shape=(2,), device=None)
+            >>> tensor_cpu = torch.randn(2, 3)        # Default device: cpu
+            >>> tensor_gpu = torch.randn(2, 3).cuda() # Device: cuda
+            >>>
+            >>> cls._is_device_compatible(parent_cpu, tensor_cpu)    # True
+            >>> cls._is_device_compatible(parent_cpu, tensor_gpu)    # False
+            >>> cls._is_device_compatible(parent_mixed, tensor_cpu)  # True
+            >>> cls._is_device_compatible(parent_mixed, tensor_gpu)  # True
+        """
         if parent.device is None:
             return True
 
         return parent.device == child.device
 
     def _validate_shape(self, value):
+        """Validate that a value's shape is compatible with this container's batch shape.
+
+        Performs shape validation by checking if the value's leading dimensions match
+        this container's batch shape using _is_shape_compatible. Raises a descriptive
+        error if validation fails.
+
+        Args:
+            value: The tensor or container to validate. Must have a .shape attribute
+                and be compatible with TCCompatible type (torch.Tensor or TensorContainer).
+
+        Raises:
+            RuntimeError: If the value's shape is incompatible with this container's
+                batch shape. The error message includes both the actual and expected shapes.
+
+        Example:
+            >>> container.shape == (4, 3)
+            >>> good_tensor = torch.randn(4, 3, 128)  # Compatible
+            >>> bad_tensor = torch.randn(2, 3, 64)    # Incompatible
+            >>> container._validate_shape(good_tensor)  # Passes silently
+            >>> container._validate_shape(bad_tensor)   # Raises RuntimeError
+        """
         if not self._is_shape_compatible(self, value):
             raise RuntimeError(
                 f"Invalid shape {value.shape}. Expected shape that is compatible to {self.shape}"
             )
 
     def _validate_device(self, value):
+        """Validate that a value's device is compatible with this container's device.
+
+        Performs device validation by checking if the value's device matches this
+        container's device requirements using _is_device_compatible. Raises a
+        descriptive error if validation fails.
+
+        Args:
+            value: The tensor or container to validate. Must have a .device attribute
+                and be compatible with TCCompatible type (torch.Tensor or TensorContainer).
+
+        Raises:
+            RuntimeError: If the value's device is incompatible with this container's
+                device. The error message includes both the actual and expected devices.
+
+        Example:
+            >>> container = TensorDict({}, shape=(2,), device='cpu')
+            >>> cpu_tensor = torch.randn(2, 3)        # Default device: cpu
+            >>> gpu_tensor = torch.randn(2, 3).cuda() # Device: cuda
+            >>> container._validate_device(cpu_tensor)  # Passes silently
+            >>> container._validate_device(gpu_tensor)  # Raises RuntimeError
+        """
         if not self._is_device_compatible(self, value):
             raise RuntimeError(
                 f"Invalid device {value.device}. Expected device that is compatible to {self.device}"
             )
 
     def _validate(self):
+        """Validate shape and device compatibility for all tensors in this container.
+
+        Performs comprehensive validation by checking that every tensor in the container
+        satisfies both shape and device compatibility requirements. This method is called
+        automatically during container construction and can be temporarily disabled using
+        the unsafe_construction() context manager.
+
+        The validation process:
+        1. Checks if validation is disabled via unsafe_construction() context manager
+        2. Flattens the container to get all key-value pairs
+        3. For each tensor, validates both shape and device compatibility
+        4. Provides enhanced error messages with the specific key path where validation failed
+
+        Raises:
+            RuntimeError: If any tensor in the container has incompatible shape or device.
+                The error message includes the key path where validation failed and the
+                underlying validation error details.
+        """
         # Check if validation is disabled via context manager
         if getattr(self._validation_disabled, "value", False):
             return
