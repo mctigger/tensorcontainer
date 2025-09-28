@@ -32,10 +32,6 @@ interface). Most users should prefer TensorDataClass for typical applications.
 """
 
 TDCompatible = Union[Tensor, TensorContainer]
-DATACLASS_ARGS = {"init", "repr", "eq", "order", "unsafe_hash", "frozen", "slots"}
-
-
-T_TensorAnnotated = TypeVar("T_TensorAnnotated", bound="TensorAnnotated")
 
 
 # PyTree context metadata for reconstruction
