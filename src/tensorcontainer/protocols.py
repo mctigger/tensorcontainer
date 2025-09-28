@@ -31,8 +31,7 @@ class TensorContainerProtocol(Protocol):
     device: torch.device | None
 
     @property
-    def ndim(self) -> int:
-        ...
+    def ndim(self) -> int: ...
 
     # PyTree interface methods
     def _pytree_flatten(self) -> tuple[list[Any], Context]:
@@ -49,7 +48,13 @@ class TensorContainerProtocol(Protocol):
         ...
 
     @classmethod
-    def _tree_map(cls, func: Callable[..., Any], tree: Any, *rests: Any, is_leaf: Callable[[Any], bool] | None = None) -> Self:
+    def _tree_map(
+        cls,
+        func: Callable[..., Any],
+        tree: Any,
+        *rests: Any,
+        is_leaf: Callable[[Any], bool] | None = None,
+    ) -> Self:
         """Apply a function to all leaves in the container tree."""
         ...
 
@@ -73,7 +78,13 @@ class TensorContainerProtocol(Protocol):
         ...
 
     @classmethod
-    def tree_map_with_path(cls, func: Callable[..., Any], tree: Any, *rests: Any, is_leaf: Callable[[Any], bool] | None = None) -> Self:
+    def tree_map_with_path(
+        cls,
+        func: Callable[..., Any],
+        tree: Any,
+        *rests: Any,
+        is_leaf: Callable[[Any], bool] | None = None,
+    ) -> Self:
         """Apply a function with path to all leaves in the container tree."""
         ...
 

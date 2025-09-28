@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import copy
-import sys
+import inspect
 from dataclasses import dataclass, fields
 from typing import Optional, Union
 from typing_extensions import Self
@@ -20,7 +20,6 @@ from tensorcontainer.mixins import (
 )
 
 TDCompatible = Union[Tensor, TensorContainer]
-DATACLASS_ARGS = {"init", "repr", "eq", "order", "unsafe_hash", "frozen", "slots"}
 
 
 @dataclass_transform(eq_default=False)
@@ -105,8 +104,8 @@ class TensorDataClass(
     def __init_subclass__(cls, **kwargs):
         """Automatically convert subclasses to dataclasses with proper field inheritance.
 
-        We want to enforce that shape and device must be in __init__ and are available as 
-        attributes. 
+        We want to enforce that shape and device must be in __init__ and are available as
+        attributes.
 
         Args:
             **kwargs: Class definition arguments, may include dataclass options.
@@ -130,10 +129,11 @@ class TensorDataClass(
             **annotations,
         }
 
-        dc_kwargs = {}
-        for k in list(kwargs.keys()):
-            if k in DATACLASS_ARGS:
-                dc_kwargs[k] = kwargs.pop(k)
+        # Get valid dataclass parameters dynamically
+        dataclass_params = set(inspect.signature(dataclass).parameters.keys()) - {"cls"}
+        dc_kwargs = {
+            k: kwargs.pop(k) for k in list(kwargs.keys()) if k in dataclass_params
+        }
 
         super().__init_subclass__(**kwargs)
 
@@ -148,7 +148,7 @@ class TensorDataClass(
         dataclass(cls, **dc_kwargs)
 
     def __post_init__(self):
-        """After dataclasses.dataclass __init__ is called, we use this method to 
+        """After dataclasses.dataclass __init__ is called, we use this method to
         pass the shape and device to the parent class.
 
         Raises:
