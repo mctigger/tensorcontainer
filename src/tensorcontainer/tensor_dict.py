@@ -37,6 +37,12 @@ from tensorcontainer.tensor_container import (
     TensorContainer,
     TensorContainerPytreeContext,
 )
+from tensorcontainer.mixins import (
+    TensorShapeOperationsMixin,
+    TensorMathOperationsMixin,
+    TensorTypeOperationsMixin,
+    TensorDeviceOperationsMixin,
+)
 from tensorcontainer.types import DeviceLike, IndexType, ShapeLike
 from tensorcontainer.utils import PytreeRegistered
 
@@ -84,7 +90,14 @@ class TensorDictPytreeContext(TensorContainerPytreeContext["TensorDictPytreeCont
         return guidance
 
 
-class TensorDict(TensorContainer, PytreeRegistered):
+class TensorDict(
+    TensorContainer,
+    TensorShapeOperationsMixin,
+    TensorMathOperationsMixin,
+    TensorTypeOperationsMixin,
+    TensorDeviceOperationsMixin,
+    PytreeRegistered,
+):
     """Dictionary-like container for batched tensors that share the same leading batch shape.
 
     Args:
