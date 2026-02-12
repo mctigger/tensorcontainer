@@ -19,6 +19,21 @@ def normalize_device(dev: torch.device) -> torch.device:
     return d
 
 
+def assert_tensor_indexing_parity(
+    td_result: TensorDict,
+    batch_shape: tuple[int, ...],
+    index,
+):
+    """Assert that indexing a TensorDict produces the same batch shape as
+    indexing a plain torch.Tensor with identical leading dimensions.
+
+    This catches any drift between TensorDict's indexing semantics and
+    PyTorch's native tensor indexing.
+    """
+    ref = torch.zeros(batch_shape)
+    assert td_result.shape == ref[index].shape
+
+
 @pytest.fixture
 def nested_dict():
     def _make(shape):
@@ -40,6 +55,8 @@ def test_getitem_returns_new_tensordict(nested_dict):
     sliced = td[1]
     assert isinstance(sliced, TensorDict)
     assert sliced is not td
+
+    assert_tensor_indexing_parity(sliced, (2, 2), 1)
 
 
 def test_modify_top_level_structure_on_slice_does_not_affect_original(nested_dict):
@@ -83,6 +100,8 @@ def test_slice_leaf_tensor_content_and_shape(nested_dict):
     slice_ = td[1, 0]
     # after slicing both batch dims, batch_shape becomes empty
     assert slice_.shape == torch.Size([])
+
+    assert_tensor_indexing_parity(slice_, (2, 2), (1, 0))
 
     # leaf values match the underlying tensors
     assert torch.equal(slice_["x"]["a"], data["x"]["a"][1, 0])
@@ -133,3 +152,71 @@ def test_invalid_getitem_raises_error():
         match="too many indices for container: container is 2-dimensional, but 3 were indexed",
     ):
         td[:, :, 0]
+
+    # torch.Tensor parity: torch also rejects too many indices on a 2-d tensor
+    with pytest.raises(IndexError):
+        torch.randn(2, 3)[:, :, 0]
+
+
+def test_getitem_none_on_zero_dim():
+    """td[None] on a 0-dim TensorDict should add a leading dim, matching torch.Tensor semantics."""
+    td = TensorDict(
+        {"scalar": torch.tensor(5.0), "vec": torch.randn(3)},
+        shape=(),
+    )
+    result = td[None]
+    assert result.shape == torch.Size([1])
+    assert_tensor_indexing_parity(result, (), None)
+    assert result["scalar"].shape == torch.Size([1])
+    assert result["vec"].shape == torch.Size([1, 3])
+
+
+def test_getitem_ellipsis_on_zero_dim():
+    """td[...] on a 0-dim TensorDict should return identity, matching torch.Tensor semantics."""
+    td = TensorDict(
+        {"scalar": torch.tensor(5.0), "vec": torch.randn(3)},
+        shape=(),
+    )
+    result = td[...]
+    assert result.shape == torch.Size([])
+    assert_tensor_indexing_parity(result, (), Ellipsis)
+    assert torch.equal(result["scalar"], td["scalar"])
+    assert torch.equal(result["vec"], td["vec"])
+
+
+def test_getitem_bool_on_zero_dim():
+    """td[True]/td[False] on a 0-dim TensorDict should match torch.Tensor semantics."""
+    td = TensorDict(
+        {"scalar": torch.tensor(5.0), "vec": torch.randn(3)},
+        shape=(),
+    )
+    result_true = td[True]
+    assert result_true.shape == torch.Size([1])
+    assert_tensor_indexing_parity(result_true, (), True)
+    assert result_true["scalar"].shape == torch.Size([1])
+    assert result_true["vec"].shape == torch.Size([1, 3])
+
+    result_false = td[False]
+    assert result_false.shape == torch.Size([0])
+    assert_tensor_indexing_parity(result_false, (), False)
+    assert result_false["scalar"].shape == torch.Size([0])
+    assert result_false["vec"].shape == torch.Size([0, 3])
+
+
+def test_getitem_bool_tensor_on_zero_dim():
+    """td[torch.tensor(True/False)] on a 0-dim TensorDict should match torch.Tensor semantics."""
+    td = TensorDict(
+        {"scalar": torch.tensor(5.0), "vec": torch.randn(3)},
+        shape=(),
+    )
+    result_true = td[torch.tensor(True)]
+    assert result_true.shape == torch.Size([1])
+    assert_tensor_indexing_parity(result_true, (), torch.tensor(True))
+    assert result_true["scalar"].shape == torch.Size([1])
+    assert result_true["vec"].shape == torch.Size([1, 3])
+
+    result_false = td[torch.tensor(False)]
+    assert result_false.shape == torch.Size([0])
+    assert_tensor_indexing_parity(result_false, (), torch.tensor(False))
+    assert result_false["scalar"].shape == torch.Size([0])
+    assert result_false["vec"].shape == torch.Size([0, 3])
