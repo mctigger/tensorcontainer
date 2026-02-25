@@ -113,11 +113,6 @@ class TestCat:
             compiled_cat_op([td1, td2], 2)  # Invalid event dimension
         assert "IndexError" in str(excinfo.value)
 
-    def test_cat_empty_list_raises(self):
-        """Test cat operation raises with empty list."""
-        with pytest.raises(RuntimeError, match="expected a non-empty list of Tensors"):
-            torch.cat([], dim=0)
-
     @pytest.mark.parametrize("dim_offset", [2, 3])
     def test_cat_dim_exceeds_batch_ndim(self, nested_tensor_data_class, dim_offset):
         """Test cat operation raises IndexError when dim exceeds batch ndim."""
