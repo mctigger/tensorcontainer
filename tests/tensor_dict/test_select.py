@@ -9,7 +9,11 @@ from tests.conftest import skipif_no_compile
 class TestSelect:
     def test_single_key(self):
         td = TensorDict(
-            {"obs": torch.randn(4, 10), "act": torch.randn(4, 3), "rew": torch.randn(4)},
+            {
+                "obs": torch.randn(4, 10),
+                "act": torch.randn(4, 3),
+                "rew": torch.randn(4),
+            },
             shape=(4,),
         )
         result = td.select("obs")
@@ -18,7 +22,11 @@ class TestSelect:
 
     def test_multiple_keys(self):
         td = TensorDict(
-            {"obs": torch.randn(4, 10), "act": torch.randn(4, 3), "rew": torch.randn(4)},
+            {
+                "obs": torch.randn(4, 10),
+                "act": torch.randn(4, 3),
+                "rew": torch.randn(4),
+            },
             shape=(4,),
         )
         result = td.select("obs", "act")
@@ -35,7 +43,9 @@ class TestSelect:
         assert list(result.keys()) == ["c", "a"]
 
     def test_nested_tensordict_selected_as_whole(self):
-        nested = TensorDict({"x": torch.randn(4, 2), "y": torch.randn(4, 3)}, shape=(4,))
+        nested = TensorDict(
+            {"x": torch.randn(4, 2), "y": torch.randn(4, 3)}, shape=(4,)
+        )
         td = TensorDict({"nested": nested, "scalar": torch.randn(4)}, shape=(4,))
         result = td.select("nested")
         assert list(result.keys()) == ["nested"]

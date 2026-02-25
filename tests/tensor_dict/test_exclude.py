@@ -9,7 +9,11 @@ from tests.conftest import skipif_no_compile
 class TestExclude:
     def test_single_key(self):
         td = TensorDict(
-            {"obs": torch.randn(4, 10), "act": torch.randn(4, 3), "rew": torch.randn(4)},
+            {
+                "obs": torch.randn(4, 10),
+                "act": torch.randn(4, 3),
+                "rew": torch.randn(4),
+            },
             shape=(4,),
         )
         result = td.exclude("rew")
@@ -19,7 +23,11 @@ class TestExclude:
 
     def test_multiple_keys(self):
         td = TensorDict(
-            {"obs": torch.randn(4, 10), "act": torch.randn(4, 3), "rew": torch.randn(4)},
+            {
+                "obs": torch.randn(4, 10),
+                "act": torch.randn(4, 3),
+                "rew": torch.randn(4),
+            },
             shape=(4,),
         )
         result = td.exclude("act", "rew")
@@ -35,7 +43,9 @@ class TestExclude:
         assert list(result.keys()) == ["c"]
 
     def test_nested_tensordict_excluded(self):
-        nested = TensorDict({"x": torch.randn(4, 2), "y": torch.randn(4, 3)}, shape=(4,))
+        nested = TensorDict(
+            {"x": torch.randn(4, 2), "y": torch.randn(4, 3)}, shape=(4,)
+        )
         td = TensorDict({"nested": nested, "scalar": torch.randn(4)}, shape=(4,))
         result = td.exclude("nested")
         assert list(result.keys()) == ["scalar"]
@@ -46,12 +56,16 @@ class TestExclude:
             td.exclude("missing")
 
     def test_preserves_shape(self):
-        td = TensorDict({"x": torch.randn(4, 5, 6), "y": torch.randn(4, 5)}, shape=(4, 5))
+        td = TensorDict(
+            {"x": torch.randn(4, 5, 6), "y": torch.randn(4, 5)}, shape=(4, 5)
+        )
         result = td.exclude("y")
         assert result.shape == torch.Size([4, 5])
 
     def test_preserves_device(self):
-        td = TensorDict({"x": torch.randn(4), "y": torch.randn(4)}, shape=(4,), device="cpu")
+        td = TensorDict(
+            {"x": torch.randn(4), "y": torch.randn(4)}, shape=(4,), device="cpu"
+        )
         result = td.exclude("y")
         assert result.device == td.device
 
@@ -68,7 +82,11 @@ class TestExclude:
 class TestExcludeCompile:
     def test_exclude_compiled(self):
         td = TensorDict(
-            {"obs": torch.randn(4, 10), "act": torch.randn(4, 3), "rew": torch.randn(4)},
+            {
+                "obs": torch.randn(4, 10),
+                "act": torch.randn(4, 3),
+                "rew": torch.randn(4),
+            },
             shape=(4,),
         )
 

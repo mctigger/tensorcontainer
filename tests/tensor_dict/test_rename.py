@@ -8,14 +8,18 @@ from tests.conftest import skipif_no_compile
 
 class TestRename:
     def test_single_key(self):
-        td = TensorDict({"obs": torch.randn(4, 10), "act": torch.randn(4, 3)}, shape=(4,))
+        td = TensorDict(
+            {"obs": torch.randn(4, 10), "act": torch.randn(4, 3)}, shape=(4,)
+        )
         result = td.rename({"obs": "observation"})
         assert set(result.keys()) == {"observation", "act"}
         assert torch.equal(result["observation"], td["obs"])
         assert torch.equal(result["act"], td["act"])
 
     def test_multiple_keys(self):
-        td = TensorDict({"obs": torch.randn(4, 10), "act": torch.randn(4, 3)}, shape=(4,))
+        td = TensorDict(
+            {"obs": torch.randn(4, 10), "act": torch.randn(4, 3)}, shape=(4,)
+        )
         result = td.rename({"obs": "observation", "act": "action"})
         assert set(result.keys()) == {"observation", "action"}
         assert torch.equal(result["observation"], td["obs"])
