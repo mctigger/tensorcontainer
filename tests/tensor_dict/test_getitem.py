@@ -44,8 +44,22 @@ def zero_dim_td():
 BASIC_INDICES = [0, -1, slice(0, 2), slice(None, -1), slice(None, None, 2), ..., None]
 ADVANCED_INDICES = [[0, 1], torch.tensor([0]), torch.tensor([0, 1])]
 BOOLEAN_INDICES = [torch.tensor([True, False])]
-MULTIDIM_INDICES = [(1, slice(None)), (slice(None), 1), (slice(0, 2), slice(None))]
-EDGE_CASE_INDICES = [slice(0, 0), slice(1, 1)]
+MULTIDIM_INDICES = [
+    (1, slice(None)),
+    (slice(None), 1),
+    (slice(0, 2), slice(None)),
+    (-1, -1),
+    (0, ...),
+    (None, 0),
+    (0, None),
+    (None, slice(None)),
+]
+EDGE_CASE_INDICES = [
+    slice(0, 0),
+    slice(1, 1),
+    torch.tensor([], dtype=torch.long),
+    torch.tensor([False, False]),
+]
 
 ALL_GETITEM_INDICES = (
     BASIC_INDICES
@@ -122,7 +136,9 @@ class TestGetitemBasic:
 
     def test_getitem_single_dim_container(self):
         """Int, slice, and tensor indexing work correctly on a 1-dim container."""
-        td = TensorDict({"a": torch.arange(5).float(), "b": torch.zeros(5, 3)}, shape=(5,))
+        td = TensorDict(
+            {"a": torch.arange(5).float(), "b": torch.zeros(5, 3)}, shape=(5,)
+        )
         assert td[0].shape == torch.Size([])
         assert td[:3].shape == torch.Size([3])
         assert td[torch.tensor([1, 3])].shape == torch.Size([2])
@@ -131,7 +147,9 @@ class TestGetitemBasic:
 class TestGetitemIsolation:
     """Tests that slicing produces structurally independent containers."""
 
-    def test_modify_top_level_structure_on_slice_does_not_affect_original(self, nested_dict):
+    def test_modify_top_level_structure_on_slice_does_not_affect_original(
+        self, nested_dict
+    ):
         """Adding or deleting top-level keys in a slice leaves the original unchanged."""
         data = nested_dict((2, 2))
         td = TensorDict(data, shape=(2, 2))
@@ -147,7 +165,9 @@ class TestGetitemIsolation:
         assert "y" not in sliced
         assert "y" in td
 
-    def test_modify_nested_structure_on_slice_does_not_affect_original(self, nested_dict):
+    def test_modify_nested_structure_on_slice_does_not_affect_original(
+        self, nested_dict
+    ):
         """Adding or deleting nested keys in a slice leaves the original unchanged."""
         data = nested_dict((2, 2))
         td = TensorDict(data, shape=(2, 2))
@@ -228,6 +248,21 @@ class TestGetitemSlicing:
         torch.testing.assert_close(result["a"], a[index])
         torch.testing.assert_close(result["b"], b[index])
 
+    @pytest.mark.xfail(
+        reason="tracking[ellipsis-event-dim-indexing]: (..., 0) applies index to event dims incorrectly for tensors with trailing dims beyond batch shape",
+        strict=True,
+    )
+    def test_getitem_ellipsis_at_start(self):
+        """Ellipsis at the start of a tuple index should expand over leading batch dims."""
+        a = torch.arange(30).reshape(2, 3, 5).float()
+        b = torch.arange(6).reshape(2, 3).float()
+        td = TensorDict({"a": a, "b": b}, shape=(2, 3))
+        index = (..., 0)
+        result = td[index]
+        assert_tensor_indexing_parity(result, (2, 3), index)
+        torch.testing.assert_close(result["a"], a[index])
+        torch.testing.assert_close(result["b"], b[index])
+
 
 class TestGetitemErrors:
     """Tests that invalid indices raise appropriate errors."""
@@ -250,3 +285,47 @@ class TestGetitemErrors:
         td = TensorDict({"a": torch.zeros(2, 3)}, shape=(2, 3))
         with pytest.raises(IndexError, match="single ellipsis"):
             td[..., ..., 0]
+
+    def test_int_index_on_zero_dim_raises_error(self, zero_dim_td):
+        """Integer-tensor indexing a 0-dim container raises IndexError (matches torch)."""
+        with pytest.raises(IndexError, match="too many indices"):
+            zero_dim_td[torch.tensor(0)]
+
+        # torch.Tensor parity
+        with pytest.raises(IndexError):
+            torch.tensor(5.0)[torch.tensor(0)]
+
+
+class TestGetitemMultidimBoolean:
+    """Tests for multi-dimensional boolean mask indexing."""
+
+    def test_getitem_2d_boolean_mask(self):
+        """A 2-D boolean mask indexes across both batch dims at once."""
+        a = torch.arange(30).reshape(2, 3, 5).float()
+        b = torch.arange(6).reshape(2, 3).float()
+        td = TensorDict({"a": a, "b": b}, shape=(2, 3))
+        mask = torch.tensor([[True, False, True], [False, True, False]])
+        result = td[mask]
+        assert_tensor_indexing_parity(result, (2, 3), mask)
+        torch.testing.assert_close(result["a"], a[mask])
+        torch.testing.assert_close(result["b"], b[mask])
+
+
+class TestGetitemHighRank:
+    """Tests indexing on containers with 3+ batch dimensions."""
+
+    def test_middle_ellipsis_on_3d_container(self):
+        """Ellipsis in the middle expands correctly for a 3-dim container."""
+        a = torch.arange(24).reshape(2, 3, 4).float()
+        td = TensorDict({"a": a}, shape=(2, 3, 4))
+        result = td[0, ..., 1]
+        assert_tensor_indexing_parity(result, (2, 3, 4), (0, ..., 1))
+        torch.testing.assert_close(result["a"], a[0, ..., 1])
+
+    def test_none_with_ellipsis_on_3d_container(self):
+        """None combined with ellipsis on a 3-dim container adds a dim correctly."""
+        a = torch.arange(24).reshape(2, 3, 4).float()
+        td = TensorDict({"a": a}, shape=(2, 3, 4))
+        result = td[None, ..., 0]
+        assert_tensor_indexing_parity(result, (2, 3, 4), (None, ..., 0))
+        torch.testing.assert_close(result["a"], a[None, ..., 0])
