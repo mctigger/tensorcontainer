@@ -705,6 +705,8 @@ class TensorContainer(TensorContainerProtocol):
         """
         if item is Ellipsis or item is None:
             return 0
+        if isinstance(item, bool):
+            return 0
         if isinstance(item, torch.Tensor) and item.dtype == torch.bool:
             return item.ndim
 
@@ -868,12 +870,9 @@ class TensorContainer(TensorContainerProtocol):
             >>> indices = torch.tensor([0, 2, 1])
             >>> reordered = container[indices]  # shape becomes (3, 3)
         """
-        if isinstance(key, tuple):
-            key = self.transform_ellipsis_index(self.shape, key)
-        elif self.ndim == 0:
-            raise IndexError(
-                "Cannot index a 0-dimensional TensorContainer with a single index. Use a tuple of indices matching the batch shape, or an empty tuple for a scalar."
-            )
+        if not isinstance(key, tuple):
+            key = (key,)
+        key = self.transform_ellipsis_index(self.shape, key)
 
         return self._tree_map(lambda x: x[key], self)
 

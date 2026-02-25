@@ -94,6 +94,6 @@ def test_mask_shape_mismatch(simple_td):
     # Mask has wrong number of dimensions
     with pytest.raises(
         IndexError,
-        match="The shape of the mask.*does not match the shape of the indexed tensor",
+        match="too many indices for container: container is 1-dimensional, but 2 were indexed",
     ):
         simple_td[torch.ones(4, 1, dtype=torch.bool)]

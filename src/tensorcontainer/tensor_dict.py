@@ -19,11 +19,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import (
     Any,
+    Callable,
     Union,
     cast,
     overload,
     get_args,
 )
+from typing_extensions import Self
 from collections.abc import Iterable, Mapping
 
 from torch import Tensor
@@ -400,3 +402,126 @@ class TensorDict(
                 out[prefix[:-1]] = data
 
         return TensorDict(out, self.shape, self.device)
+
+    def like(self, data: Mapping[str, Any], device: DeviceLike | None = None) -> Self:
+        """Create a new TensorDict with the same shape and device, but different data.
+
+        Args:
+            data: Mapping from string keys to tensors or nested structures.
+            device: Optional device override. If None, uses self.device.
+
+        Returns:
+            TensorDict: New instance with the caller's shape and device.
+
+        Examples:
+            >>> td = TensorDict({'obs': torch.randn(4, 10), 'act': torch.randn(4, 3)}, shape=(4,))
+            >>> td2 = td.like({'obs': td['obs']})
+            >>> list(td2.keys())
+            ['obs']
+            >>> td2.shape
+            torch.Size([4])
+        """
+        target_device = device if device is not None else self.device
+        return type(self)(data, self.shape, target_device)
+
+    def select(self, *keys: str) -> Self:
+        """Return new TensorDict with only the specified keys.
+
+        Args:
+            *keys: Keys to select (top-level only).
+
+        Returns:
+            New TensorDict containing only the specified keys.
+
+        Raises:
+            KeyError: If any key is not found.
+
+        Examples:
+            >>> td = TensorDict({'obs': t1, 'act': t2, 'rew': t3}, shape=(4,))
+            >>> td.select('obs', 'act')
+            TensorDict({'obs': ..., 'act': ...}, shape=(4,))
+        """
+        missing = sorted(set(keys) - set(self.keys()))
+        if missing:
+            raise KeyError(f"Keys not found: {missing}")
+        return type(self)(
+            {k: self.data[k] for k in keys},
+            self.shape,
+            self.device,
+        )
+
+    def exclude(self, *keys: str) -> Self:
+        """Return new TensorDict without the specified keys.
+
+        Args:
+            *keys: Keys to exclude (top-level only).
+
+        Returns:
+            New TensorDict with specified keys removed.
+
+        Raises:
+            KeyError: If any key is not found.
+
+        Examples:
+            >>> td = TensorDict({'obs': t1, 'act': t2, 'rew': t3}, shape=(4,))
+            >>> td.exclude('rew')
+            TensorDict({'obs': ..., 'act': ...}, shape=(4,))
+        """
+        keys_set = set(keys)
+        missing = sorted(keys_set - set(self.keys()))
+        if missing:
+            raise KeyError(f"Keys not found: {missing}")
+        return type(self)(
+            {k: v for k, v in self.data.items() if k not in keys_set},
+            self.shape,
+            self.device,
+        )
+
+    def apply(self, fn: Callable[[Tensor], Tensor]) -> Self:
+        """Apply a function to all leaf tensors in the container.
+
+        Recursively applies fn to all tensors, including those in
+        nested TensorDicts.
+
+        Args:
+            fn: Function that takes a tensor and returns a tensor.
+
+        Returns:
+            New TensorDict with fn applied to all leaf tensors.
+
+        Examples:
+            >>> td = TensorDict({'obs': t1, 'nested': {'a': t2}}, shape=(4,))
+            >>> td.apply(lambda x: x * 2)  # Doubles all tensors
+        """
+        return TensorContainer._tree_map(fn, self)
+
+    def rename(self, mapping: Mapping[str, str]) -> Self:
+        """Return new TensorDict with keys renamed according to mapping.
+
+        Args:
+            mapping: Dict mapping old key names to new key names (top-level only).
+
+        Returns:
+            New TensorDict with renamed keys.
+
+        Raises:
+            KeyError: If any key in mapping is not found.
+            ValueError: If renaming would create duplicate keys.
+
+        Examples:
+            >>> td = TensorDict({'obs': t1, 'act': t2}, shape=(4,))
+            >>> td.rename({'obs': 'observation', 'act': 'action'})
+            TensorDict({'observation': ..., 'action': ...}, shape=(4,))
+        """
+        missing = sorted(set(mapping.keys()) - set(self.keys()))
+        if missing:
+            raise KeyError(f"Keys not found: {missing}")
+
+        new_data = {}
+        for k, v in self.data.items():
+            new_key = mapping.get(k, k)
+            if new_key in new_data:
+                raise ValueError(f"Renaming would create duplicate key: {new_key}")
+            new_data[new_key] = v
+
+        return type(self)(new_data, self.shape, self.device)

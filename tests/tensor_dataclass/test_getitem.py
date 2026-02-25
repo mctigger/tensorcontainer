@@ -342,6 +342,6 @@ class TestGetItem:
         )
         with pytest.raises(
             IndexError,
-            match="Cannot index a 0-dimensional TensorContainer with a single index",
+            match="too many indices for container: container is 0-dimensional, but 1 were indexed",
         ):
             _ = tdc[0]
