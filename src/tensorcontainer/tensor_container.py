@@ -432,6 +432,11 @@ class TensorContainer(TensorContainerProtocol):
             that internally use `_tree_map` to provide their functionality.
         """
 
+        # When compiling, skip error-wrapping overhead — try/except and
+        # tree_map_with_path add complexity that dynamo doesn't need.
+        if torch.compiler.is_compiling():
+            return pytree.tree_map(func, tree, *rests, is_leaf=is_leaf)
+
         def func_with_error_path(keypath, x, *xs):
             """
             This function wraps the given func just to provide error messages
