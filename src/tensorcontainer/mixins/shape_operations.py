@@ -56,7 +56,9 @@ class TensorShapeOperationsMixin(TensorContainerProtocol):
             >>> # After view(2, 6): tensor.shape == (2, 6, 128)
         """
         if torch.compiler.is_compiling():
-            return pytree.tree_map(lambda x: x.view(*shape, *x.shape[self.ndim :]), self)
+            return pytree.tree_map(
+                lambda x: x.view(*shape, *x.shape[self.ndim :]), self
+            )
         return self._tree_map(lambda x: x.view(*shape, *x.shape[self.ndim :]), self)
 
     def reshape(self, *shape: int) -> Self:
@@ -82,7 +84,9 @@ class TensorShapeOperationsMixin(TensorContainerProtocol):
             >>> reshaped = transposed.reshape(6, 2)     # Works (reshape can copy)
         """
         if torch.compiler.is_compiling():
-            return pytree.tree_map(lambda x: x.reshape(*shape, *x.shape[self.ndim :]), self)
+            return pytree.tree_map(
+                lambda x: x.reshape(*shape, *x.shape[self.ndim :]), self
+            )
         return self._tree_map(lambda x: x.reshape(*shape, *x.shape[self.ndim :]), self)
 
     def expand(self, *shape: int) -> Self:
@@ -98,7 +102,9 @@ class TensorShapeOperationsMixin(TensorContainerProtocol):
             TensorContainer: Container with expanded batch dimensions
         """
         if torch.compiler.is_compiling():
-            return pytree.tree_map(lambda x: x.expand(*shape, *x.shape[self.ndim :]), self)
+            return pytree.tree_map(
+                lambda x: x.expand(*shape, *x.shape[self.ndim :]), self
+            )
         return self._tree_map(lambda x: x.expand(*shape, *x.shape[self.ndim :]), self)
 
     def permute(self, *dims: int) -> Self:

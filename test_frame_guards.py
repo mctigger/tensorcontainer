@@ -24,7 +24,9 @@ def run(name, fn):
     td = _get_td()
     try:
         with torch._dynamo.config.patch(
-            recompile_limit=0, cache_size_limit=64, fail_on_recompile_limit_hit=True,
+            recompile_limit=0,
+            cache_size_limit=64,
+            fail_on_recompile_limit_hit=True,
         ):
             fn(td)
             fn(td)
@@ -39,13 +41,22 @@ def run_direct(name, map_fn):
     td = _get_td()
     compiled = torch.compile(map_fn, fullgraph=True)
     fns = [
-        lambda x: x.abs(), lambda x: x.neg(), lambda x: x.float(),
-        lambda x: x.double(), lambda x: x.clone(), lambda x: x.detach(),
-        lambda x: x.sqrt(), lambda x: x.half(), lambda x: x.long(), lambda x: x.int(),
+        lambda x: x.abs(),
+        lambda x: x.neg(),
+        lambda x: x.float(),
+        lambda x: x.double(),
+        lambda x: x.clone(),
+        lambda x: x.detach(),
+        lambda x: x.sqrt(),
+        lambda x: x.half(),
+        lambda x: x.long(),
+        lambda x: x.int(),
     ]
     try:
         with torch._dynamo.config.patch(
-            recompile_limit=8, cache_size_limit=8, fail_on_recompile_limit_hit=True,
+            recompile_limit=8,
+            cache_size_limit=8,
+            fail_on_recompile_limit_hit=True,
         ):
             for f in fns:
                 compiled(f, td)

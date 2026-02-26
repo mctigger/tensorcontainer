@@ -33,6 +33,7 @@ def _get_td():
 
 # --- Named callables for fan-out tests ---
 
+
 def _clone_leaf(x):
     return x.clone()
 
@@ -206,8 +207,16 @@ class TestDynamicCallableFanOut:
         compiled_tree_map = torch.compile(TensorDict._tree_map, fullgraph=True)
 
         all_fns = [
-            _clone_leaf, _detach_leaf, _float_leaf, _double_leaf, _half_leaf,
-            _long_leaf, _int_leaf, _abs_leaf, _neg_leaf, _sqrt_leaf,
+            _clone_leaf,
+            _detach_leaf,
+            _float_leaf,
+            _double_leaf,
+            _half_leaf,
+            _long_leaf,
+            _int_leaf,
+            _abs_leaf,
+            _neg_leaf,
+            _sqrt_leaf,
         ]
 
         with torch._dynamo.config.patch(
