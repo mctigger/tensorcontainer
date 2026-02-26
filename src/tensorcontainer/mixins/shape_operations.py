@@ -7,6 +7,7 @@ of tensor containers while preserving event dimensions.
 from __future__ import annotations
 
 import torch
+import torch.utils._pytree as pytree
 from typing_extensions import Self
 
 from tensorcontainer.protocols import TensorContainerProtocol
@@ -54,6 +55,10 @@ class TensorShapeOperationsMixin(TensorContainerProtocol):
             >>> # Original: tensor.shape == (4, 3, 128)  # event dims (128,)
             >>> # After view(2, 6): tensor.shape == (2, 6, 128)
         """
+        if torch.compiler.is_compiling():
+            return pytree.tree_map(
+                lambda x: x.view(*shape, *x.shape[self.ndim :]), self
+            )
         return self._tree_map(lambda x: x.view(*shape, *x.shape[self.ndim :]), self)
 
     def reshape(self, *shape: int) -> Self:
@@ -78,6 +83,10 @@ class TensorShapeOperationsMixin(TensorContainerProtocol):
             >>> transposed = container.transpose(0, 1)  # Non-contiguous
             >>> reshaped = transposed.reshape(6, 2)     # Works (reshape can copy)
         """
+        if torch.compiler.is_compiling():
+            return pytree.tree_map(
+                lambda x: x.reshape(*shape, *x.shape[self.ndim :]), self
+            )
         return self._tree_map(lambda x: x.reshape(*shape, *x.shape[self.ndim :]), self)
 
     def expand(self, *shape: int) -> Self:
@@ -92,6 +101,10 @@ class TensorShapeOperationsMixin(TensorContainerProtocol):
         Returns:
             TensorContainer: Container with expanded batch dimensions
         """
+        if torch.compiler.is_compiling():
+            return pytree.tree_map(
+                lambda x: x.expand(*shape, *x.shape[self.ndim :]), self
+            )
         return self._tree_map(lambda x: x.expand(*shape, *x.shape[self.ndim :]), self)
 
     def permute(self, *dims: int) -> Self:
@@ -117,6 +130,10 @@ class TensorShapeOperationsMixin(TensorContainerProtocol):
                 raise RuntimeError(
                     f"permute(): dimension out of range (expected to be in range of [0, {self.ndim - 1}], but got {dim})"
                 )
+        if torch.compiler.is_compiling():
+            return pytree.tree_map(
+                lambda x: x.permute(*dims, *range(self.ndim, x.ndim)), self
+            )
         return self._tree_map(
             lambda x: x.permute(*dims, *range(self.ndim, x.ndim)), self
         )
@@ -168,6 +185,8 @@ class TensorShapeOperationsMixin(TensorContainerProtocol):
         Returns:
             A new container with the specified dimensions transposed.
         """
+        if torch.compiler.is_compiling():
+            return pytree.tree_map(lambda x: x.transpose(dim0, dim1), self)
         return self._tree_map(lambda x: x.transpose(dim0, dim1), self)
 
     def unsqueeze(self, dim: int) -> Self:

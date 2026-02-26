@@ -6,6 +6,8 @@ to different data types.
 
 from __future__ import annotations
 
+import torch
+import torch.utils._pytree as pytree
 from typing_extensions import Self
 
 from tensorcontainer.protocols import TensorContainerProtocol
@@ -39,6 +41,8 @@ class TensorTypeOperationsMixin(TensorContainerProtocol):
             >>> float_container = container.float()
             >>> # float_container['a'].dtype == torch.float32
         """
+        if torch.compiler.is_compiling():
+            return pytree.tree_map(lambda x: x.float(), self)
         return self._tree_map(lambda x: x.float(), self)
 
     def double(self) -> Self:
@@ -52,6 +56,8 @@ class TensorTypeOperationsMixin(TensorContainerProtocol):
             >>> double_container = container.double()
             >>> # double_container['a'].dtype == torch.float64
         """
+        if torch.compiler.is_compiling():
+            return pytree.tree_map(lambda x: x.double(), self)
         return self._tree_map(lambda x: x.double(), self)
 
     def half(self) -> Self:
@@ -65,6 +71,8 @@ class TensorTypeOperationsMixin(TensorContainerProtocol):
             >>> half_container = container.half()
             >>> # half_container['a'].dtype == torch.float16
         """
+        if torch.compiler.is_compiling():
+            return pytree.tree_map(lambda x: x.half(), self)
         return self._tree_map(lambda x: x.half(), self)
 
     def long(self) -> Self:
@@ -78,6 +86,8 @@ class TensorTypeOperationsMixin(TensorContainerProtocol):
             >>> long_container = container.long()
             >>> # long_container['a'].dtype == torch.int64
         """
+        if torch.compiler.is_compiling():
+            return pytree.tree_map(lambda x: x.long(), self)
         return self._tree_map(lambda x: x.long(), self)
 
     def int(self) -> Self:
@@ -92,4 +102,6 @@ class TensorTypeOperationsMixin(TensorContainerProtocol):
             >>> # int_container['a'].dtype == torch.int32
             >>> # int_container['a'] == tensor([1, 2, 3])
         """
+        if torch.compiler.is_compiling():
+            return pytree.tree_map(lambda x: x.int(), self)
         return self._tree_map(lambda x: x.int(), self)

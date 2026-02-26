@@ -83,6 +83,8 @@ class TensorDeviceOperationsMixin(TensorContainerProtocol):
             >>> detached = container.detach()
             >>> # detached['a'].requires_grad == False
         """
+        if torch.compiler.is_compiling():
+            return pytree.tree_map(lambda x: x.detach(), self)
         return self._tree_map(lambda x: x.detach(), self)
 
     def clone(self, *, memory_format: torch.memory_format | None = None) -> Self:
@@ -108,6 +110,8 @@ class TensorDeviceOperationsMixin(TensorContainerProtocol):
             >>> # Clone preserves independence
             >>> cloned[0] = new_data  # Original container unchanged
         """
+        if torch.compiler.is_compiling():
+            return pytree.tree_map(lambda x: x.clone(memory_format=memory_format), self)
         cloned_td = self._tree_map(lambda x: x.clone(memory_format=memory_format), self)
         return cloned_td
 
@@ -126,6 +130,8 @@ class TensorDeviceOperationsMixin(TensorContainerProtocol):
             >>> # copied and container share the same tensor data
             >>> # but have independent container structures
         """
+        if torch.compiler.is_compiling():
+            return pytree.tree_map(lambda x: x, self)
         return self._tree_map(lambda x: x, self)
 
     def cpu(self) -> Self:

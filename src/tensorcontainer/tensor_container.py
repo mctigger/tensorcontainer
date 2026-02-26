@@ -432,6 +432,9 @@ class TensorContainer(TensorContainerProtocol):
             that internally use `_tree_map` to provide their functionality.
         """
 
+        # When compiling, skip error-wrapping overhead — try/except and
+        # tree_map_with_path add complexity that dynamo doesn't need.
+
         def func_with_error_path(keypath, x, *xs):
             """
             This function wraps the given func just to provide error messages
@@ -874,6 +877,8 @@ class TensorContainer(TensorContainerProtocol):
             key = (key,)
         key = self.transform_ellipsis_index(self.shape, key)
 
+        if torch.compiler.is_compiling():
+            return pytree.tree_map(lambda x: x[key], self)
         return self._tree_map(lambda x: x[key], self)
 
     def __setitem__(self: Self, index: IndexType, value: Self) -> None:
@@ -934,6 +939,8 @@ def _stack(
         )
 
     # Pytree handles the stacking of individual tensors and metadata consistency
+    if torch.compiler.is_compiling():
+        return pytree.tree_map(lambda *x: torch.stack(x, dim), *tensors)
     result_td = TensorContainer._tree_map(lambda *x: torch.stack(x, dim), *tensors)
 
     return result_td
@@ -959,6 +966,8 @@ def _cat(
 
     # Create a new TensorContainer of the same type as the first one
     # and apply torch.cat to its internal tensors
+    if torch.compiler.is_compiling():
+        return pytree.tree_map(lambda *x: torch.cat(x, dim), *tensors)
     result_td = TensorContainer._tree_map(lambda *x: torch.cat(x, dim), *tensors)
 
     return result_td
