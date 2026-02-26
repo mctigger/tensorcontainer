@@ -111,9 +111,9 @@ The `is_compiling()` branch is still useful for eliminating `try/except` overhea
 
 The problem only arises when `pytree.tree_map` is called **inside** a Python function (`_tree_map`) that Dynamo compiles as its own frame. Then the guard is on `_tree_map`'s `func` parameter, not on `pytree.tree_map`'s.
 
-## Fix
+## Fix (implemented)
 
-Each method must call `pytree.tree_map` directly in compile mode, bypassing `_tree_map` entirely:
+Each method calls `pytree.tree_map` directly when `torch.compiler.is_compiling()` returns `True`, bypassing `_tree_map` entirely:
 
 ```python
 def abs(self) -> Self:
@@ -146,3 +146,62 @@ Recommended workarounds for users:
 **`mixins/shape_operations.py`** (5): `view`, `reshape`, `expand`, `permute`, `transpose`
 
 **`tensor_container.py`** (3): `__getitem__`, `_stack`, `_cat`
+
+## Verification
+
+### Integration test
+
+The fix was verified against the original failing command:
+
+```bash
+python scripts/benchmark_unsupervised.py \
+  +experiment/miniworld_maze=nine_rooms_episodic_large_goals \
+  +execution=local +preset=leg \
+  +preset/deployment/miniworld_maze=visual_small \
+  execution.compile=reduce-overhead
+```
+
+This previously raised `RecompileError` on `_tree_map`. After the fix, compilation
+succeeds and training proceeds. Note: `reduce-overhead` mode sets
+`torch._dynamo.config.error_on_recompile = True`, which makes any recompilation
+a hard error. Normal recompilations (e.g., Dynamo guarding on `requires_grad`
+for individual tensors) still occur, but these are standard Dynamo behavior — they
+only become errors if `error_on_recompile` is set.
+
+### Unit tests
+
+Tests are in `tests/test_compile_recompilation.py`.
+
+#### Testing challenge: Dynamo inlining
+
+The bug only manifests when Dynamo compiles `_tree_map` as a **separate frame**.
+In simple test functions with `fullgraph=True`, Dynamo inlines `_tree_map` into
+the caller's graph — eliminating the frame boundary and the callable-identity
+guard entirely. This means a naive test that compiles a function calling 12+
+TensorContainer methods will **pass even without the fix**.
+
+We confirmed this empirically: removing all `is_compiling()` fast paths and
+running the `fullgraph=True` tests still produced 0 failures.
+
+#### Test strategy
+
+Instead of trying to force Dynamo to create a separate frame (which depends on
+graph complexity, inlining budget, and PyTorch version), the tests verify the
+fix mechanism directly:
+
+1. **`test_methods_bypass_tree_map_when_compiling`**: Patches `_tree_map` with a
+   counting wrapper, compiles a function that calls 12 different methods, and
+   asserts `_tree_map` was called **0 times** during compiled execution. This
+   works because `torch.compiler.is_compiling()` returns `True` inside the
+   compiled region — methods with the fast path call `pytree.tree_map` directly.
+   **Without the fix, this test fails** (`_tree_map` is called 12 times).
+
+2. **`test_tree_map_directly_compiled_with_many_callables_hits_limit`**: Baseline
+   test confirming the underlying Dynamo behavior still exists. Directly compiles
+   `_tree_map` and calls it with 10 different lambdas — asserts
+   `FailOnRecompileLimitHit` is raised after 8. If a future PyTorch version
+   removes callable-identity guards, this test will fail, signaling the fast
+   paths are no longer needed (but remain harmless).
+
+3. **`test_compiled_output_matches_eager`**: Correctness test — verifies compiled
+   output matches eager output for all modified operations.

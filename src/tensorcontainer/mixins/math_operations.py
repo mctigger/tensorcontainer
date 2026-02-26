@@ -6,6 +6,8 @@ tensors in the container.
 
 from __future__ import annotations
 
+import torch
+import torch.utils._pytree as pytree
 from typing_extensions import Self
 
 from tensorcontainer.protocols import TensorContainerProtocol
@@ -40,6 +42,8 @@ class TensorMathOperationsMixin(TensorContainerProtocol):
             >>> abs_container = container.abs()
             >>> # abs_container['a'] == tensor([1, 2, 3])
         """
+        if torch.compiler.is_compiling():
+            return pytree.tree_map(lambda x: x.abs(), self)
         return self._tree_map(lambda x: x.abs(), self)
 
     def add(self, other) -> Self:
@@ -56,6 +60,8 @@ class TensorMathOperationsMixin(TensorContainerProtocol):
             >>> result = container.add(10)
             >>> # result['a'] == tensor([11, 12, 13])
         """
+        if torch.compiler.is_compiling():
+            return pytree.tree_map(lambda x: x.add(other), self)
         return self._tree_map(lambda x: x.add(other), self)
 
     def sub(self, other) -> Self:
@@ -72,6 +78,8 @@ class TensorMathOperationsMixin(TensorContainerProtocol):
             >>> result = container.sub(5)
             >>> # result['a'] == tensor([5, 15, 25])
         """
+        if torch.compiler.is_compiling():
+            return pytree.tree_map(lambda x: x.sub(other), self)
         return self._tree_map(lambda x: x.sub(other), self)
 
     def mul(self, other) -> Self:
@@ -88,6 +96,8 @@ class TensorMathOperationsMixin(TensorContainerProtocol):
             >>> result = container.mul(2)
             >>> # result['a'] == tensor([2, 4, 6])
         """
+        if torch.compiler.is_compiling():
+            return pytree.tree_map(lambda x: x.mul(other), self)
         return self._tree_map(lambda x: x.mul(other), self)
 
     def div(self, other) -> Self:
@@ -104,6 +114,8 @@ class TensorMathOperationsMixin(TensorContainerProtocol):
             >>> result = container.div(2)
             >>> # result['a'] == tensor([5, 10, 15])
         """
+        if torch.compiler.is_compiling():
+            return pytree.tree_map(lambda x: x.div(other), self)
         return self._tree_map(lambda x: x.div(other), self)
 
     def pow(self, exponent) -> Self:
@@ -120,6 +132,8 @@ class TensorMathOperationsMixin(TensorContainerProtocol):
             >>> result = container.pow(2)
             >>> # result['a'] == tensor([4, 9, 16])
         """
+        if torch.compiler.is_compiling():
+            return pytree.tree_map(lambda x: x.pow(exponent), self)
         return self._tree_map(lambda x: x.pow(exponent), self)
 
     def sqrt(self) -> Self:
@@ -133,6 +147,8 @@ class TensorMathOperationsMixin(TensorContainerProtocol):
             >>> result = container.sqrt()
             >>> # result['a'] == tensor([2, 3, 4])
         """
+        if torch.compiler.is_compiling():
+            return pytree.tree_map(lambda x: x.sqrt(), self)
         return self._tree_map(lambda x: x.sqrt(), self)
 
     def log(self) -> Self:
@@ -146,6 +162,8 @@ class TensorMathOperationsMixin(TensorContainerProtocol):
             >>> result = container.log()
             >>> # result['a'] == tensor([0, 0.693, 1.099])
         """
+        if torch.compiler.is_compiling():
+            return pytree.tree_map(lambda x: x.log(), self)
         return self._tree_map(lambda x: x.log(), self)
 
     def neg(self) -> Self:
@@ -159,6 +177,8 @@ class TensorMathOperationsMixin(TensorContainerProtocol):
             >>> result = container.neg()
             >>> # result['a'] == tensor([-1, 2, -3])
         """
+        if torch.compiler.is_compiling():
+            return pytree.tree_map(lambda x: x.neg(), self)
         return self._tree_map(lambda x: x.neg(), self)
 
     def clamp(self, min, max) -> Self:
@@ -176,4 +196,6 @@ class TensorMathOperationsMixin(TensorContainerProtocol):
             >>> result = container.clamp(2, 8)
             >>> # result['a'] == tensor([2, 5, 8])
         """
+        if torch.compiler.is_compiling():
+            return pytree.tree_map(lambda x: x.clamp(min, max), self)
         return self._tree_map(lambda x: x.clamp(min, max), self)
