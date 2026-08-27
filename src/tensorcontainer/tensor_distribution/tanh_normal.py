@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from functools import cached_property
 from typing import Any
 
@@ -11,6 +12,7 @@ from torch.distributions import (
     TransformedDistribution,
     constraints,
 )
+from torch.nn import functional as F
 from .utils import broadcast_all
 
 from ..distributions.sampling import SamplingDistribution
@@ -18,8 +20,23 @@ from .base import TensorDistribution
 
 
 class ClampedTanhTransform(torch.distributions.transforms.Transform):
-    """
-    Transform that applies tanh and clamps the output between -1 and 1.
+    """Tanh transform whose inverse and log-determinant stay finite at saturation.
+
+    ``torch.tanh`` rounds to exactly ``±1`` once ``|x|`` exceeds about 9 in float32,
+    which a Normal with a scale of a few units samples routinely. Recovering ``x``
+    from such a ``y`` with a bare ``atanh`` gives ``±inf``, and every density built on
+    it -- ``log_prob``, hence the Monte-Carlo ``entropy`` and argmax ``mode`` of
+    :class:`~tensorcontainer.distributions.sampling.SamplingDistribution` -- turns
+    non-finite, with NaN gradients. Two guards keep the transform well-defined on the
+    closed interval; both follow the ``TanhBijector`` of DreamerV2:
+
+    * ``_inverse`` clamps ``y`` to the largest magnitude strictly below 1 that its
+      dtype can represent before ``atanh``, so ``x`` is finite (about 8.7 for float32).
+    * ``log_abs_det_jacobian`` uses the softplus identity
+      ``log(1 - tanh(x)^2) = 2 (log 2 - x - softplus(-2x))``, evaluated on ``x``, which
+      is exact and well-conditioned for every finite ``x``. The previous
+      ``log(1 - y^2 + eps)`` was capped at ``log eps`` for saturated ``y`` and its
+      derivative in ``y`` grows like ``1 / eps`` there.
     """
 
     domain = constraints.real
@@ -37,16 +54,17 @@ class ClampedTanhTransform(torch.distributions.transforms.Transform):
         return torch.tanh(x)
 
     def _inverse(self, y):
-        # Arctanh
-        return torch.atanh(y)
+        # The largest value below 1 that the dtype represents is 1 - eps / 2 (eps is
+        # the spacing just above 1). Clamping there keeps atanh finite and makes the
+        # gradient through a saturated sample zero instead of infinite.
+        bound = 1.0 - torch.finfo(y.dtype).eps / 2
+        return torch.atanh(y.clamp(-bound, bound))
 
     def log_abs_det_jacobian(self, x, y):
-        # |det J| = 1 - tanh^2(x)
-        # log|det J| = log(1 - tanh^2(x))
-        # Use y = tanh(x) instead of recomputing tanh(x) for numerical stability
-        return torch.log(
-            1 - y.pow(2) + 1e-6
-        )  # Adding small epsilon for numerical stability
+        # log|dy/dx| = log(1 - tanh(x)^2) = 2 * (log 2 - x - softplus(-2x)).
+        # Written in x rather than y: y = tanh(x) is exactly ±1 in floating point
+        # long before x is large, so 1 - y^2 underflows to 0 while this form does not.
+        return 2.0 * (math.log(2.0) - x - F.softplus(-2.0 * x))
 
 
 class TensorTanhNormal(TensorDistribution):
