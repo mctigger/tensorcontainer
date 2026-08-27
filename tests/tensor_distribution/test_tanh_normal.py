@@ -1,6 +1,10 @@
+import math
+
 import torch
+from torch.distributions import Normal, TanhTransform, TransformedDistribution
 
 from src.tensorcontainer.tensor_distribution.tanh_normal import (
+    ClampedTanhTransform,
     TensorTanhNormal,
 )
 from tests.compile_utils import run_and_compare_compiled
@@ -156,3 +160,97 @@ class TestTensorTanhNormal:
         assert dist_tensor.mean.shape == expected_shape
         assert dist_tensor.variance.shape == expected_shape
         assert dist_tensor.stddev.shape == expected_shape
+
+
+class TestClampedTanhTransform:
+    def test_inverse_is_finite_on_the_bounds(self):
+        transform = ClampedTanhTransform()
+        y = torch.tensor([1.0, -1.0, 0.0])
+        x = transform.inv(y)
+        assert torch.isfinite(x).all()
+        torch.testing.assert_close(torch.tanh(x), y)
+
+    def test_inverse_is_finite_on_the_bounds_in_half_precision(self):
+        transform = ClampedTanhTransform()
+        for dtype in (torch.float16, torch.bfloat16, torch.float64):
+            x = transform.inv(torch.tensor([1.0, -1.0], dtype=dtype))
+            assert torch.isfinite(x).all(), dtype
+
+    def test_log_abs_det_jacobian_matches_torch_tanh_transform(self):
+        transform = ClampedTanhTransform()
+        x = torch.linspace(-12.0, 12.0, 49)
+        y = torch.tanh(x)
+        torch.testing.assert_close(
+            transform.log_abs_det_jacobian(x, y),
+            TanhTransform().log_abs_det_jacobian(x, y),
+        )
+
+    def test_log_abs_det_jacobian_is_finite_and_decreasing_past_saturation(self):
+        # y = tanh(x) is exactly 1.0 in float32 for these x; the log-det must keep
+        # tracking log(4) - 2x instead of flattening out at a floor.
+        transform = ClampedTanhTransform()
+        x = torch.tensor([10.0, 20.0, 40.0])
+        y = torch.tanh(x)
+        assert (y == 1.0).all()
+        log_det = transform.log_abs_det_jacobian(x, y)
+        assert torch.isfinite(log_det).all()
+        torch.testing.assert_close(log_det, math.log(4.0) - 2.0 * x)
+
+
+class TestTensorTanhNormalSaturation:
+    """A tanh-squashed Normal with a scale of a few units saturates float32 tanh."""
+
+    def test_log_prob_matches_torch_off_saturation(self):
+        loc = torch.tensor([0.0, 1.0, -2.0])
+        scale = torch.tensor([1.0, 0.5, 2.0])
+        dist = TensorTanhNormal(loc, scale)
+        reference = TransformedDistribution(Normal(loc, scale), [TanhTransform()])
+
+        value = torch.tanh(torch.linspace(-4.0, 4.0, 33)).unsqueeze(-1).expand(-1, 3)
+        torch.testing.assert_close(
+            dist.log_prob(value), reference.log_prob(value), rtol=1e-5, atol=1e-5
+        )
+
+    def test_log_prob_is_finite_on_saturated_values(self):
+        loc = torch.zeros(4)
+        scale = torch.full((4,), 5.0)
+        dist = TensorTanhNormal(loc, scale)
+
+        value = torch.tensor([1.0, -1.0, 1.0, -1.0])
+        assert torch.isfinite(dist.log_prob(value)).all()
+
+    def test_rsample_log_prob_round_trip_is_finite(self):
+        torch.manual_seed(0)
+        loc = torch.zeros(256)
+        scale = torch.full((256,), 5.0)
+        dist = TensorTanhNormal(loc, scale)
+
+        samples = dist.rsample(torch.Size((100,)))
+        # The premise of the test: this scale really does saturate float32.
+        assert (samples.abs() == 1.0).any()
+        assert torch.isfinite(dist.log_prob(samples)).all()
+
+    def test_entropy_is_finite_with_finite_gradients(self):
+        torch.manual_seed(0)
+        loc = torch.zeros(64, requires_grad=True)
+        scale = torch.full((64,), 5.0, requires_grad=True)
+        dist = TensorTanhNormal(loc, scale)
+
+        entropy = dist.entropy()
+        assert torch.isfinite(entropy).all()
+        # The support is (-1, 1), so no estimate should exceed log 2 by more than
+        # Monte-Carlo noise.
+        assert (entropy < math.log(2.0) + 0.5).all()
+
+        entropy.sum().backward()
+        assert torch.isfinite(loc.grad).all()
+        assert torch.isfinite(scale.grad).all()
+
+    def test_mode_and_moments_are_finite_at_large_scale(self):
+        loc = torch.zeros(16)
+        scale = torch.full((16,), 5.0)
+        dist = TensorTanhNormal(loc, scale)
+
+        for value in (dist.mode, dist.mean, dist.stddev):
+            assert torch.isfinite(value).all()
+            assert (value.abs() <= 1.0).all()
